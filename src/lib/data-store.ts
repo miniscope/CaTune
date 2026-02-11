@@ -8,6 +8,7 @@ import type {
   ValidationResult,
   ImportStep,
 } from './types';
+import { generateSyntheticDataset } from './chart/mock-traces';
 
 // --- Core Signals ---
 
@@ -51,6 +52,34 @@ const importStep = createMemo<ImportStep>(() => {
   if (!validationResult()) return 'validation';
   return 'ready';
 });
+
+// --- Demo Data ---
+
+function loadDemoData(): void {
+  const fs = 30;
+  const numCells = 20;
+  const numTimepoints = 9000; // 5 minutes at 30 Hz
+  const { data, shape } = generateSyntheticDataset(numCells, numTimepoints, 0.02, 0.4, fs);
+
+  setParsedData({ data, shape, dtype: '<f8', fortranOrder: false });
+  setDimensionsConfirmed(true);
+  setSwapped(false);
+  setSamplingRate(fs);
+  setValidationResult({
+    isValid: true,
+    warnings: [],
+    errors: [],
+    stats: {
+      min: -1,
+      max: 5,
+      mean: 0.5,
+      nanCount: 0,
+      infCount: 0,
+      negativeCount: 0,
+      totalElements: numCells * numTimepoints,
+    },
+  });
+}
 
 // --- Reset ---
 
@@ -97,4 +126,5 @@ export {
   importStep,
   // Actions
   resetImport,
+  loadDemoData,
 };

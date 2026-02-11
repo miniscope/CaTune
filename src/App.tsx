@@ -24,6 +24,7 @@ import {
   validationResult,
   npzArrays,
   resetImport,
+  loadDemoData,
 } from './lib/data-store.ts';
 import { loadCellTraces } from './lib/viz-store.ts';
 
@@ -106,6 +107,15 @@ const App: Component = () => {
         <Show when={npzArrays()}>
           <NpzArraySelector />
         </Show>
+        <div class="demo-data-row">
+          <span class="demo-data-row__divider">or</span>
+          <button class="btn-secondary" onClick={loadDemoData}>
+            Load Demo Data
+          </button>
+          <p class="demo-data-row__hint">
+            20 synthetic cells, 5 min at 30 Hz
+          </p>
+        </div>
       </Show>
 
       {/* Step 2: Confirm Dimensions */}

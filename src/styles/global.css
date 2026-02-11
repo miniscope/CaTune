@@ -571,6 +571,30 @@ a:hover {
 }
 
 /* ========================
+   Demo Data Row
+   ======================== */
+.demo-data-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.demo-data-row__divider {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.demo-data-row__hint {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+/* ========================
    Ready Card
    ======================== */
 .ready-card {

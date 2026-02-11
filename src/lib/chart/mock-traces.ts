@@ -1,77 +1,148 @@
 /**
- * Synthetic calcium trace generator for development visualization.
- * Generates mock deconvolved (spikes) and reconvolution (convolved fit) data
- * so the multi-panel trace view has something to display before the real solver
- * is wired in Phase 4.
+ * Realistic synthetic calcium trace generator.
+ *
+ * Pipeline: Markov chain spike train → convolve with calcium kernel → add noise.
+ * Produces traces that resemble real calcium imaging data for development and testing.
  */
 
 import { computeKernel } from './kernel-math';
 
+/** Seeded PRNG (xorshift32) for reproducible synthetic data. */
+function createRng(seed: number) {
+  let s = seed | 0 || 1;
+  return {
+    /** Returns uniform [0, 1). */
+    next(): number {
+      s ^= s << 13;
+      s ^= s >> 17;
+      s ^= s << 5;
+      return (s >>> 0) / 4294967296;
+    },
+    /** Returns standard normal via Box-Muller. */
+    gaussian(): number {
+      const u1 = this.next() || 1e-10;
+      const u2 = this.next();
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    },
+  };
+}
+
 /**
- * Generate mock deconvolved and reconvolution traces from a raw fluorescence signal.
+ * Generate a realistic synthetic calcium trace.
  *
- * Strategy:
- * - Place random spikes (~2% of timepoints) with amplitude 1.0
- * - Convolve spikes with double-exponential kernel to produce reconvolution
+ * 1. Markov chain spike train: two-state (silent/active) with transition
+ *    probabilities producing bursty firing patterns.
+ * 2. Convolve spike train with double-exponential calcium kernel.
+ * 3. Add baseline drift (slow sinusoid) and Gaussian noise.
  *
- * This is development-only; Phase 4 replaces with real solver output.
- *
- * @param rawTrace - The actual raw fluorescence trace (used for length reference)
+ * @param numTimepoints - Length of trace to generate
  * @param tauRise - Rise time constant in seconds
  * @param tauDecay - Decay time constant in seconds
  * @param fs - Sampling rate in Hz
- * @returns Object with deconvolved (spike train) and reconvolution (fit) traces
+ * @param seed - RNG seed for reproducibility (default 42)
+ * @param snr - Signal-to-noise ratio (default 8)
+ * @returns Object with raw (noisy fluorescence), spikes (ground truth), and clean (noiseless convolution)
  */
-export function generateMockTraces(
-  rawTrace: Float64Array,
+export function generateSyntheticTrace(
+  numTimepoints: number,
   tauRise: number,
   tauDecay: number,
   fs: number,
-): { deconvolved: Float64Array; reconvolution: Float64Array } {
-  const n = rawTrace.length;
+  seed: number = 42,
+  snr: number = 8,
+): { raw: Float64Array; spikes: Float64Array; clean: Float64Array } {
+  const rng = createRng(seed);
 
-  // Generate spike train: ~2% of timepoints have a spike
-  const deconvolved = new Float64Array(n);
-  // Use a simple deterministic seeded approach based on trace values
-  // so it is reproducible for same input
-  for (let i = 0; i < n; i++) {
-    // Simple hash-like deterministic pseudo-random based on index and trace value
-    const hash = Math.abs(Math.sin(i * 12.9898 + 78.233) * 43758.5453);
-    const frac = hash - Math.floor(hash);
-    if (frac < 0.02) {
-      deconvolved[i] = 1.0;
+  // --- Markov chain spike generation ---
+  // Two states: 0 = silent, 1 = active (bursting)
+  // Transition probabilities per timestep
+  const dt = 1 / fs;
+  const pSilentToActive = 0.02 * dt * fs; // ~2% chance per frame to start bursting
+  const pActiveToSilent = 0.15 * dt * fs; // bursts last ~6-7 frames on average
+  const pSpikeWhenActive = 0.7; // high spike probability during burst
+  const pSpikeWhenSilent = 0.005; // rare isolated spikes
+
+  const spikes = new Float64Array(numTimepoints);
+  let state = 0; // start silent
+
+  for (let i = 0; i < numTimepoints; i++) {
+    // State transition
+    if (state === 0) {
+      if (rng.next() < pSilentToActive) state = 1;
+    } else {
+      if (rng.next() < pActiveToSilent) state = 0;
+    }
+
+    // Spike generation with variable amplitude
+    const pSpike = state === 1 ? pSpikeWhenActive : pSpikeWhenSilent;
+    if (rng.next() < pSpike) {
+      // Amplitude: log-normal distributed (mean ~1, occasional large transients)
+      spikes[i] = Math.exp(0.3 * rng.gaussian());
     }
   }
 
-  // Compute kernel for convolution
+  // --- Convolve with calcium kernel ---
   const kernel = computeKernel(tauRise, tauDecay, fs);
   const kernelY = kernel.y;
   const kLen = kernelY.length;
 
-  // Direct convolution: reconvolution[t] = sum_k deconvolved[t-k] * kernel[k]
-  const reconvolution = new Float64Array(n);
-  for (let t = 0; t < n; t++) {
+  const clean = new Float64Array(numTimepoints);
+  for (let t = 0; t < numTimepoints; t++) {
     let sum = 0;
     const jMax = Math.min(kLen, t + 1);
     for (let k = 0; k < jMax; k++) {
-      sum += deconvolved[t - k] * kernelY[k];
+      sum += spikes[t - k] * kernelY[k];
     }
-    reconvolution[t] = sum;
+    clean[t] = sum;
   }
 
-  // Scale reconvolution to roughly match raw trace amplitude
-  let rawMax = 0;
-  let reconvMax = 0;
-  for (let i = 0; i < n; i++) {
-    if (Math.abs(rawTrace[i]) > rawMax) rawMax = Math.abs(rawTrace[i]);
-    if (reconvolution[i] > reconvMax) reconvMax = reconvolution[i];
+  // --- Add baseline drift + noise ---
+  // Slow baseline drift (mimics photobleaching / motion artifacts)
+  const driftPeriod = numTimepoints / (2 + rng.next() * 2); // 2-4 slow cycles
+  const driftAmp = 0.1; // 10% of signal range
+
+  // Compute signal amplitude for noise scaling
+  let signalMax = 0;
+  for (let i = 0; i < numTimepoints; i++) {
+    if (clean[i] > signalMax) signalMax = clean[i];
   }
-  if (reconvMax > 0 && rawMax > 0) {
-    const scale = rawMax / reconvMax * 0.8; // 80% of raw amplitude for visual clarity
-    for (let i = 0; i < n; i++) {
-      reconvolution[i] *= scale;
-    }
+  const noiseStd = signalMax / snr;
+
+  const raw = new Float64Array(numTimepoints);
+  for (let i = 0; i < numTimepoints; i++) {
+    const drift = driftAmp * signalMax * Math.sin((2 * Math.PI * i) / driftPeriod);
+    const noise = noiseStd * rng.gaussian();
+    raw[i] = clean[i] + drift + noise;
   }
 
-  return { deconvolved, reconvolution };
+  return { raw, spikes, clean };
+}
+
+/**
+ * Generate multiple synthetic traces with different seeds (simulating multiple cells).
+ * Returns a flat Float64Array in row-major [cells, timepoints] layout, matching .npy format.
+ */
+export function generateSyntheticDataset(
+  numCells: number,
+  numTimepoints: number,
+  tauRise: number = 0.02,
+  tauDecay: number = 0.4,
+  fs: number = 30,
+  baseSeed: number = 42,
+): { data: Float64Array; shape: [number, number] } {
+  const data = new Float64Array(numCells * numTimepoints);
+
+  for (let c = 0; c < numCells; c++) {
+    const { raw } = generateSyntheticTrace(
+      numTimepoints,
+      tauRise,
+      tauDecay,
+      fs,
+      baseSeed + c * 7919, // different prime-offset seed per cell
+      6 + (c % 5) * 2, // varying SNR across cells (6-14)
+    );
+    data.set(raw, c * numTimepoints);
+  }
+
+  return { data, shape: [numCells, numTimepoints] };
 }
