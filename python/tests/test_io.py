@@ -1,0 +1,180 @@
+"""Tests for save_for_tuning and load_tuning_data I/O functions.
+
+Covers round-trip fidelity, format compatibility with CaTune's browser
+.npy parser, metadata content, and error handling.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import numpy.testing as npt
+import pytest
+
+from catune import load_tuning_data, save_for_tuning
+
+
+# ---------------------------------------------------------------------------
+# Test 1: Save/load round-trip
+# ---------------------------------------------------------------------------
+
+def test_save_load_roundtrip(tmp_path: Path):
+    """Save random (5, 1000) array, load back, assert_allclose."""
+    rng = np.random.default_rng(42)
+    traces = rng.standard_normal((5, 1000))
+    path = str(tmp_path / "test_data")
+
+    save_for_tuning(traces, 30.0, path)
+    loaded, meta = load_tuning_data(path)
+
+    npt.assert_allclose(loaded, traces.astype(np.float64))
+    assert meta["sampling_rate_hz"] == 30.0
+
+
+# ---------------------------------------------------------------------------
+# Test 2: Creates both .npy and .json
+# ---------------------------------------------------------------------------
+
+def test_save_creates_npy_and_json(tmp_path: Path):
+    """Verify both files exist after save."""
+    traces = np.zeros((2, 100))
+    path = str(tmp_path / "output")
+
+    save_for_tuning(traces, 30.0, path)
+
+    assert Path(f"{path}.npy").exists(), ".npy file missing"
+    assert Path(f"{path}_metadata.json").exists(), "_metadata.json file missing"
+
+
+# ---------------------------------------------------------------------------
+# Test 3: Metadata contains required fields
+# ---------------------------------------------------------------------------
+
+def test_metadata_contains_required_fields(tmp_path: Path):
+    """Check schema_version, sampling_rate_hz, num_cells, num_timepoints, dtype."""
+    traces = np.zeros((3, 500))
+    path = str(tmp_path / "meta_test")
+
+    save_for_tuning(traces, 25.0, path)
+    _, meta = load_tuning_data(path)
+
+    assert meta["schema_version"] == "1.0.0"
+    assert meta["sampling_rate_hz"] == 25.0
+    assert meta["num_cells"] == 3
+    assert meta["num_timepoints"] == 500
+    assert meta["dtype"] == "<f8"
+
+
+# ---------------------------------------------------------------------------
+# Test 4: Custom metadata preserved
+# ---------------------------------------------------------------------------
+
+def test_custom_metadata_preserved(tmp_path: Path):
+    """Pass metadata={'indicator': 'GCaMP7f'}, verify in loaded metadata."""
+    traces = np.zeros((1, 100))
+    path = str(tmp_path / "custom")
+
+    save_for_tuning(traces, 30.0, path, metadata={"indicator": "GCaMP7f"})
+    _, meta = load_tuning_data(path)
+
+    assert meta["indicator"] == "GCaMP7f"
+    # Built-in keys should also be present
+    assert meta["schema_version"] == "1.0.0"
+
+
+# ---------------------------------------------------------------------------
+# Test 5: 1D input becomes 2D
+# ---------------------------------------------------------------------------
+
+def test_1d_input_becomes_2d(tmp_path: Path):
+    """Save 1D array, load back, verify shape is (1, n)."""
+    trace_1d = np.random.default_rng(0).standard_normal(200)
+    path = str(tmp_path / "one_d")
+
+    save_for_tuning(trace_1d, 30.0, path)
+    loaded, meta = load_tuning_data(path)
+
+    assert loaded.shape == (1, 200), f"Expected (1, 200), got {loaded.shape}"
+    assert meta["num_cells"] == 1
+    assert meta["num_timepoints"] == 200
+
+
+# ---------------------------------------------------------------------------
+# Test 6: Float64 enforcement
+# ---------------------------------------------------------------------------
+
+def test_float64_enforcement(tmp_path: Path):
+    """Save float32 array, load back, verify dtype is float64."""
+    traces = np.zeros((2, 50), dtype=np.float32)
+    path = str(tmp_path / "f32")
+
+    save_for_tuning(traces, 30.0, path)
+    loaded, _ = load_tuning_data(path)
+
+    assert loaded.dtype == np.float64, f"Expected float64, got {loaded.dtype}"
+
+
+# ---------------------------------------------------------------------------
+# Test 7: C-contiguous enforcement
+# ---------------------------------------------------------------------------
+
+def test_c_contiguous_enforcement(tmp_path: Path):
+    """Save Fortran-order array, load back, verify C-contiguous."""
+    traces = np.asfortranarray(np.zeros((3, 100)))
+    assert not traces.flags["C_CONTIGUOUS"]
+
+    path = str(tmp_path / "fortran")
+    save_for_tuning(traces, 30.0, path)
+    loaded, _ = load_tuning_data(path)
+
+    assert loaded.flags["C_CONTIGUOUS"], "Loaded array should be C-contiguous"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Load missing file raises FileNotFoundError
+# ---------------------------------------------------------------------------
+
+def test_load_missing_file_raises(tmp_path: Path):
+    """Attempt load from nonexistent path, expect FileNotFoundError."""
+    with pytest.raises(FileNotFoundError, match="not found"):
+        load_tuning_data(str(tmp_path / "nonexistent"))
+
+
+# ---------------------------------------------------------------------------
+# Test 9: .npy format compatible with CaTune browser parser
+# ---------------------------------------------------------------------------
+
+def test_npy_format_compatible(tmp_path: Path):
+    """Verify saved .npy is Float64, C-contiguous, little-endian."""
+    traces = np.random.default_rng(1).standard_normal((2, 50))
+    path = str(tmp_path / "compat")
+
+    save_for_tuning(traces, 30.0, path)
+
+    # Load and inspect directly
+    loaded = np.load(f"{path}.npy")
+    assert loaded.dtype == np.dtype("<f8"), f"Expected <f8, got {loaded.dtype}"
+    assert loaded.flags["C_CONTIGUOUS"], "Array should be C-contiguous"
+    assert not loaded.flags["F_CONTIGUOUS"] or loaded.shape[0] == 1, (
+        "Array should not be Fortran-contiguous for multi-row"
+    )
+
+    # Verify the .npy header directly
+    with open(f"{path}.npy", "rb") as f:
+        # Read magic bytes
+        magic = f.read(6)
+        assert magic == b"\x93NUMPY"
+        # Read version
+        version = f.read(2)
+        major = version[0]
+        # Read header
+        if major == 1:
+            header_len = int.from_bytes(f.read(2), "little")
+        else:
+            header_len = int.from_bytes(f.read(4), "little")
+        header = f.read(header_len).decode("ascii").strip()
+
+    assert "'fortran_order': False" in header
+    assert "'<f8'" in header or "'float64'" in header
