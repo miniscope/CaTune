@@ -2,6 +2,7 @@
 // Conditionally renders components based on importStep
 
 import type { Component } from 'solid-js';
+import type { ParamSnapshot } from './lib/param-history.ts';
 import { Show, createMemo, createEffect, on } from 'solid-js';
 import { FileDropZone } from './components/FileDropZone.tsx';
 import { NpzArraySelector } from './components/NpzArraySelector.tsx';
@@ -12,6 +13,9 @@ import { TracePreview } from './components/TracePreview.tsx';
 import { TracePanelStack } from './components/traces/TracePanelStack.tsx';
 import { KernelDisplay } from './components/traces/KernelDisplay.tsx';
 import { ParameterPanel } from './components/controls/ParameterPanel.tsx';
+import { MultiTraceView } from './components/traces/MultiTraceView.tsx';
+import { CellSelector } from './components/controls/CellSelector.tsx';
+import { ExportPanel } from './components/controls/ExportPanel.tsx';
 import { startTuningLoop, commitToHistory } from './lib/tuning-orchestrator.ts';
 import {
   importStep,
@@ -26,7 +30,23 @@ import {
   resetImport,
   loadDemoData,
 } from './lib/data-store.ts';
-import { loadCellTraces } from './lib/viz-store.ts';
+import {
+  loadCellTraces,
+  selectedCell,
+  tauRise,
+  tauDecay,
+  lambda,
+  pinnedParams,
+  pinCurrentSnapshot,
+  unpinSnapshot,
+} from './lib/viz-store.ts';
+import {
+  computeAndCacheRanking,
+  updateCellSelection,
+  selectedCells,
+} from './lib/multi-cell-store.ts';
+import { solveSelectedCells } from './lib/multi-cell-solver.ts';
+import './styles/multi-trace.css';
 
 const STEP_LABELS: Record<string, { num: number; label: string }> = {
   'drop':          { num: 1, label: 'Load Data' },
@@ -53,6 +73,36 @@ const App: Component = () => {
     return `${d.toFixed(1)}s`;
   });
 
+  // Trigger batch re-solve for selected cells with current parameters
+  const triggerBatchSolve = () => {
+    const data = parsedData();
+    const shape = effectiveShape();
+    const cells = selectedCells();
+    if (!data || !shape || cells.length === 0) return;
+    solveSelectedCells(
+      cells,
+      { tauRise: tauRise(), tauDecay: tauDecay(), lambda: lambda(), fs: samplingRate() ?? 30 },
+      data,
+      shape,
+      swapped(),
+    );
+  };
+
+  // Wrap commitToHistory to also trigger batch re-solve on parameter commit
+  const handleCommit = (snapshot: ParamSnapshot) => {
+    commitToHistory(snapshot);
+    triggerBatchSolve();
+  };
+
+  // Handle mini-panel click to switch primary cell
+  const handleCellClick = (cellIndex: number) => {
+    const data = parsedData();
+    const shape = effectiveShape();
+    if (data && shape) {
+      loadCellTraces(cellIndex, data, shape, swapped());
+    }
+  };
+
   // Load first cell's traces and start tuning loop when import reaches 'ready'
   createEffect(
     on(importStep, (currentStep) => {
@@ -62,6 +112,11 @@ const App: Component = () => {
         if (data && shape) {
           loadCellTraces(0, data, shape, swapped());
           startTuningLoop();
+          // Initialize multi-cell ranking and selection
+          computeAndCacheRanking();
+          updateCellSelection();
+          // Trigger initial batch solve after a short delay to let the primary cell solve first
+          setTimeout(triggerBatchSolve, 100);
         }
       }
     }),
@@ -197,13 +252,34 @@ const App: Component = () => {
           <h2 class="viz-header__title">Trace Visualization</h2>
           <Show when={effectiveShape()}>
             <p class="viz-header__subtitle">
-              Cell 1 of {effectiveShape()![0].toLocaleString()}
+              Cell {selectedCell() + 1} of {effectiveShape()![0].toLocaleString()}
             </p>
           </Show>
         </div>
 
-        <ParameterPanel onCommit={commitToHistory} />
+        <ParameterPanel onCommit={handleCommit} />
+
+        <div class="viz-toolbar">
+          <button
+            class={`btn-secondary btn-small ${pinnedParams() ? 'btn-active' : ''}`}
+            onClick={() => pinnedParams() ? unpinSnapshot() : pinCurrentSnapshot()}
+          >
+            {pinnedParams() ? 'Unpin Snapshot' : 'Pin for Comparison'}
+          </button>
+          <Show when={pinnedParams()}>
+            <span class="viz-toolbar__pin-info">
+              Pinned: rise={((pinnedParams()!.tauRise) * 1000).toFixed(1)}ms,
+              decay={((pinnedParams()!.tauDecay) * 1000).toFixed(1)}ms,
+              lambda={pinnedParams()!.lambda.toExponential(2)}
+            </span>
+          </Show>
+          <ExportPanel />
+        </div>
+
         <TracePanelStack />
+
+        <CellSelector onSelectionChange={triggerBatchSolve} />
+        <MultiTraceView onCellClick={handleCellClick} />
         <KernelDisplay />
       </section>
     </Show>
