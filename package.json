@@ -1,0 +1,24 @@
+{
+  "name": "catune",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "fflate": "^0.8.0",
+    "solid-js": "^1.9.11"
+  },
+  "devDependencies": {
+    "jsdom": "^28.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.3.0",
+    "vite-plugin-solid": "^2.11.10",
+    "vitest": "^4.0.0"
+  }
+}
