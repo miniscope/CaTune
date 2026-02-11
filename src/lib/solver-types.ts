@@ -1,0 +1,35 @@
+/** Solver parameter configuration for calcium deconvolution. */
+export interface SolverParams {
+  tauRise: number;   // seconds (e.g., 0.02)
+  tauDecay: number;  // seconds (e.g., 0.4)
+  lambda: number;    // sparsity penalty (e.g., 0.01)
+  fs: number;        // sampling rate in Hz (e.g., 30)
+}
+
+/** Intermediate result emitted during solver iteration for live visualization. */
+export interface IntermediateResult {
+  solution: Float64Array;
+  reconvolution: Float64Array;
+  iteration: number;
+}
+
+/** Final result returned after solver convergence or termination. */
+export interface SolveResult {
+  solution: Float64Array;
+  reconvolution: Float64Array;
+  state: Uint8Array;          // serialized warm-start state
+  iterations: number;
+  converged: boolean;
+}
+
+/** Strategy for initializing the solver on a new solve request. */
+export type WarmStartStrategy = 'warm' | 'warm-no-momentum' | 'cold';
+
+/** Full solve request message sent to the worker. */
+export interface SolveRequest {
+  trace: Float64Array;
+  params: SolverParams;
+  warmStartState: Uint8Array | null;
+  warmStartStrategy: WarmStartStrategy;
+  jobId: number;
+}
