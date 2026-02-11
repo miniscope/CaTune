@@ -4,7 +4,7 @@
 import { createSignal, Show } from 'solid-js';
 import { parseNpy } from '../lib/npy-parser.ts';
 import { parseNpz } from '../lib/npz-parser.ts';
-import type { NpyResult, NumericTypedArray } from '../lib/types.ts';
+import type { NpyResult } from '../lib/types.ts';
 import {
   rawFile,
   setRawFile,
@@ -13,23 +13,7 @@ import {
   setImportError,
   importError,
 } from '../lib/data-store.ts';
-
-/**
- * Transpose a 2D Fortran-order typed array into C order.
- * For a (rows, cols) Fortran-order array, data is column-major.
- * We rewrite it as row-major (C order).
- */
-function transposeFortranToC(data: NumericTypedArray, rows: number, cols: number): NumericTypedArray {
-  const Constructor = data.constructor as new (length: number) => NumericTypedArray;
-  const result = new Constructor(data.length);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      // Fortran: data[c * rows + r], C: result[r * cols + c]
-      (result as any)[r * cols + c] = (data as any)[c * rows + r];
-    }
-  }
-  return result;
-}
+import { transposeFortranToC } from '../lib/array-utils.ts';
 
 /**
  * Process a parsed NpyResult: handle Fortran order, then store in data store.

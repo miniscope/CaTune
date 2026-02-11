@@ -2,28 +2,14 @@
 // Lets user select which array to use for traces
 
 import { For, Show, createMemo } from 'solid-js';
-import { parseNpy } from '../lib/npy-parser.ts';
-import type { NpyResult, NumericTypedArray } from '../lib/types.ts';
+import type { NpyResult } from '../lib/types.ts';
 import {
   npzArrays,
   setParsedData,
   setSelectedNpzArray,
   setImportError,
 } from '../lib/data-store.ts';
-
-/**
- * Transpose Fortran-order data to C order.
- */
-function transposeFortranToC(data: NumericTypedArray, rows: number, cols: number): NumericTypedArray {
-  const Constructor = data.constructor as new (length: number) => NumericTypedArray;
-  const result = new Constructor(data.length);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      (result as any)[r * cols + c] = (data as any)[c * rows + r];
-    }
-  }
-  return result;
-}
+import { transposeFortranToC } from '../lib/array-utils.ts';
 
 function processNpyResult(result: NpyResult): NpyResult {
   if (result.fortranOrder && result.shape.length === 2) {

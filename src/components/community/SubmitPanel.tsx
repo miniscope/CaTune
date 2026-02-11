@@ -178,7 +178,7 @@ export function SubmitPanel() {
         fps: fs,
         dataset_hash: datasetHash,
         quality_score: qualityScore,
-        catune_version: '0.0.1',
+        catune_version: import.meta.env.VITE_APP_VERSION || 'dev',
       };
 
       const result = await submitParameters(payload);

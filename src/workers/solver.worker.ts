@@ -9,6 +9,9 @@ import type {
 
 let solver: Solver | null = null;
 
+const INTERMEDIATE_INTERVAL_MS = 100;
+const BATCH_SIZE = 10;
+
 const api = {
   /** Initialize the WASM module and create a Solver instance. */
   async initialize(): Promise<void> {
@@ -48,8 +51,6 @@ const api = {
 
     // Iteration loop
     let lastIntermediateTime = performance.now();
-    const INTERMEDIATE_INTERVAL_MS = 100;
-    const BATCH_SIZE = 10;
 
     while (!solver.converged()) {
       solver.step_batch(BATCH_SIZE);

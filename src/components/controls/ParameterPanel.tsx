@@ -10,30 +10,19 @@ import {
   PARAM_RANGES,
   sliderToLambda,
   lambdaToSlider,
-} from '../../lib/param-history';
-import type { ParamSnapshot } from '../../lib/param-history';
+} from '../../lib/param-config';
 import { ParameterSlider } from './ParameterSlider';
 import { ConvergenceIndicator } from './ConvergenceIndicator';
 import '../../styles/controls.css';
 
 export interface ParameterPanelProps {
-  /** Called when any slider commits (onChange). Provides the full parameter
-   *  snapshot for undo history. */
-  onCommit?: (snapshot: ParamSnapshot) => void;
-}
-
-/** Collect current parameter values into a snapshot. */
-function collectSnapshot(): ParamSnapshot {
-  return {
-    tauRise: tauRise(),
-    tauDecay: tauDecay(),
-    lambda: lambda(),
-  };
+  /** Called when any slider commits (onChange). Triggers batch re-solve. */
+  onBatchSolve?: () => void;
 }
 
 export function ParameterPanel(props: ParameterPanelProps) {
   const handleCommit = () => {
-    props.onCommit?.(collectSnapshot());
+    props.onBatchSolve?.();
   };
 
   return (

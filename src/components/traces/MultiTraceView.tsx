@@ -5,8 +5,12 @@
  */
 
 import { For, Show, createMemo } from 'solid-js';
+
 import { TracePanel } from './TracePanel';
+
 import { downsampleMinMax } from '../../lib/chart/downsample';
+import { makeTimeAxis } from '../../lib/chart/time-axis';
+import { createRawSeries, createFitSeries } from '../../lib/chart/series-config';
 import {
   multiCellResults,
   multiCellSolving,
@@ -14,6 +18,7 @@ import {
 } from '../../lib/multi-cell-store';
 import { samplingRate } from '../../lib/data-store';
 import { selectedCell } from '../../lib/viz-store';
+
 import '../../styles/multi-trace.css';
 
 export interface MultiTraceViewProps {
@@ -48,13 +53,7 @@ export function MultiTraceView(props: MultiTraceViewProps) {
           <For each={entries()}>
             {([cellIndex, traces]) => {
               const data = createMemo<[number[], ...number[][]]>(() => {
-                const fs = samplingRate() ?? 30;
-                const dt = 1 / fs;
-                const len = traces.raw.length;
-                const x = new Float64Array(len);
-                for (let i = 0; i < len; i++) {
-                  x[i] = i * dt;
-                }
+                const x = makeTimeAxis(traces.raw.length, samplingRate() ?? 30);
 
                 const [dsX, dsRaw] = downsampleMinMax(
                   x,
@@ -80,19 +79,7 @@ export function MultiTraceView(props: MultiTraceViewProps) {
                   <div class="mini-panel__label">Cell {cellIndex + 1}</div>
                   <TracePanel
                     data={() => data()}
-                    series={[
-                      {},
-                      {
-                        label: 'Raw',
-                        stroke: 'hsl(200, 60%, 50%)',
-                        width: 1,
-                      },
-                      {
-                        label: 'Fit',
-                        stroke: 'hsl(30, 90%, 60%)',
-                        width: 1,
-                      },
-                    ]}
+                    series={[{}, createRawSeries(), createFitSeries()]}
                     height={80}
                     syncKey={SYNC_KEY}
                   />

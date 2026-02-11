@@ -2,6 +2,7 @@
 // Pure functions for selecting which cells to display in multi-trace view
 
 import type { NpyResult } from './types';
+import { extractCellTrace } from './array-utils';
 
 /**
  * Rank all cells by activity level (variance of raw trace).
@@ -27,18 +28,12 @@ export function rankCellsByActivity(
   const variances: { cellIndex: number; variance: number }[] = [];
 
   for (let c = 0; c < numCells; c++) {
+    const trace = extractCellTrace(c, data, shape, isSwapped);
     let sum = 0;
     let sumSq = 0;
 
     for (let t = 0; t < numTimepoints; t++) {
-      let val: number;
-      if (isSwapped) {
-        // Original layout [timepoints, cells]: cell c = column c
-        val = Number(data.data[t * numCells + c]);
-      } else {
-        // Normal layout [cells, timepoints]: cell c = row c
-        val = Number(data.data[c * numTimepoints + t]);
-      }
+      const val = trace[t];
       sum += val;
       sumSq += val * val;
     }
