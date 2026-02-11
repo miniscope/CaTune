@@ -3,7 +3,7 @@
 
 import type { Component } from 'solid-js';
 import type { ParamSnapshot } from './lib/param-history.ts';
-import { Show, createMemo, createEffect, on } from 'solid-js';
+import { Show, createMemo, createEffect, createSignal, on } from 'solid-js';
 import { FileDropZone } from './components/FileDropZone.tsx';
 import { NpzArraySelector } from './components/NpzArraySelector.tsx';
 import { DimensionConfirmation } from './components/DimensionConfirmation.tsx';
@@ -16,7 +16,12 @@ import { ParameterPanel } from './components/controls/ParameterPanel.tsx';
 import { MultiTraceView } from './components/traces/MultiTraceView.tsx';
 import { CellSelector } from './components/controls/CellSelector.tsx';
 import { ExportPanel } from './components/controls/ExportPanel.tsx';
+import { TutorialLauncher } from './components/tutorial/TutorialLauncher.tsx';
+import { TutorialPanel } from './components/tutorial/TutorialPanel.tsx';
 import { startTuningLoop, commitToHistory } from './lib/tuning-orchestrator.ts';
+import { isTutorialActive } from './lib/tutorial/tutorial-store.ts';
+import { startTutorial } from './lib/tutorial/tutorial-engine.ts';
+import { getTutorialById } from './lib/tutorial/content/index.ts';
 import {
   importStep,
   rawFile,
@@ -58,10 +63,42 @@ const STEP_LABELS: Record<string, { num: number; label: string }> = {
 
 const TOTAL_STEPS = 4;
 
+const BANNER_DISMISSED_KEY = 'catune-tutorial-dismissed';
+
 const App: Component = () => {
   const step = () => importStep();
   const stepInfo = () => STEP_LABELS[step()] ?? { num: 1, label: 'Load Data' };
   const hasFile = () => !!rawFile();
+
+  // Tutorial panel state
+  const [tutorialOpen, setTutorialOpen] = createSignal(false);
+
+  // First-time banner: show if not dismissed and data is loaded
+  const [bannerDismissed, setBannerDismissed] = createSignal(
+    (() => { try { return localStorage.getItem(BANNER_DISMISSED_KEY) === 'true'; } catch { return false; } })()
+  );
+  const showBanner = () => importStep() === 'ready' && !bannerDismissed();
+
+  const dismissBanner = () => {
+    setBannerDismissed(true);
+    try { localStorage.setItem(BANNER_DISMISSED_KEY, 'true'); } catch { /* ignore */ }
+  };
+
+  const launchBasicsTutorial = () => {
+    const basics = getTutorialById('basics');
+    if (basics) {
+      startTutorial(basics);
+      dismissBanner();
+      setTutorialOpen(false);
+    }
+  };
+
+  // Close tutorial panel when a tutorial becomes active
+  createEffect(
+    on(isTutorialActive, (active) => {
+      if (active) setTutorialOpen(false);
+    }),
+  );
 
   const durationDisplay = createMemo(() => {
     const d = durationSeconds();
@@ -130,6 +167,7 @@ const App: Component = () => {
         <h1 class="app-header__title">CaTune</h1>
         <p class="app-header__subtitle">
           Calcium Deconvolution Parameter Tuning
+          <TutorialLauncher isOpen={tutorialOpen} onToggle={() => setTutorialOpen((prev) => !prev)} />
         </p>
       </header>
 
@@ -244,6 +282,28 @@ const App: Component = () => {
         </div>
       </Show>
     </main>
+
+    {/* Tutorial panel -- shown when toggled */}
+    <Show when={tutorialOpen()}>
+      <TutorialPanel onClose={() => setTutorialOpen(false)} />
+    </Show>
+
+    {/* First-time banner */}
+    <Show when={showBanner()}>
+      <div class="tutorial-banner">
+        <span class="tutorial-banner__text">
+          New to CaTune? Start with the basics tutorial to learn the parameter tuning workflow.
+        </span>
+        <div class="tutorial-banner__actions">
+          <button class="btn-secondary btn-small" onClick={launchBasicsTutorial}>
+            Start Tutorial
+          </button>
+          <button class="tutorial-banner__dismiss" onClick={dismissBanner} aria-label="Dismiss">
+            &times;
+          </button>
+        </div>
+      </div>
+    </Show>
 
     {/* Visualization section -- full width, outside import-container */}
     <Show when={step() === 'ready'}>

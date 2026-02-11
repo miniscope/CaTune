@@ -59,3 +59,129 @@
 .driver-popover-arrow-side-bottom .driver-popover-arrow {
   border-color: var(--bg-secondary);
 }
+
+/* ========================
+   Tutorial Panel
+   ======================== */
+.tutorial-panel {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* ========================
+   Tutorial Cards
+   ======================== */
+.tutorial-card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.tutorial-card:hover {
+  border-color: var(--accent);
+}
+
+.tutorial-card--locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tutorial-card--locked:hover {
+  border-color: transparent;
+}
+
+.tutorial-card--completed {
+  border-left: 3px solid var(--success);
+}
+
+.tutorial-card__title {
+  font-weight: 600;
+  margin-bottom: var(--space-xs);
+}
+
+.tutorial-card__meta {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.tutorial-card__description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: var(--space-xs);
+}
+
+.tutorial-card__status {
+  font-size: 0.8rem;
+  margin-top: var(--space-xs);
+}
+
+/* ========================
+   Level Badges
+   ======================== */
+.level-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.level-badge--beginner {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--success);
+}
+
+.level-badge--intermediate {
+  background: rgba(83, 199, 240, 0.15);
+  color: var(--accent);
+}
+
+.level-badge--advanced {
+  background: rgba(240, 165, 0, 0.15);
+  color: var(--warning);
+}
+
+/* ========================
+   First-Time Tutorial Banner
+   ======================== */
+.tutorial-banner {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.tutorial-banner__text {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.tutorial-banner__actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.tutorial-banner__dismiss {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: var(--space-xs);
+}

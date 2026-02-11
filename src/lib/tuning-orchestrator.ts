@@ -14,6 +14,8 @@ import {
 import { samplingRate } from './data-store';
 import { ParamHistory } from './param-history';
 import type { ParamSnapshot } from './param-history';
+import { notifyTutorialAction } from './tutorial/tutorial-engine';
+import { isTutorialActive } from './tutorial/tutorial-store';
 
 // --- Module-level state ---
 
@@ -45,6 +47,11 @@ export function startTuningLoop(): void {
       ([tr, td, lam, trace]) => {
         // No data loaded yet -- skip
         if (!trace) return;
+
+        // Notify tutorial engine of parameter changes for interactive step auto-advancement
+        if (isTutorialActive()) {
+          notifyTutorialAction();
+        }
 
         const fs = samplingRate() ?? 30;
 
