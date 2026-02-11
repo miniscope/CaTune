@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 6 of 8 (Tutorial System)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Plan Complete
-Last activity: 2026-02-11 -- 06-01 tutorial engine foundation complete.
+Last activity: 2026-02-11 -- 06-02 tutorial content and selectors complete.
 
-Progress: [███-------] 1/3 Phase 6
+Progress: [██████----] 2/3 Phase 6
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
+- Total plans completed: 16
 - Average duration: 4 min
-- Total execution time: 53 min
+- Total execution time: 57 min
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███-------] 1/3 Phase 6
 | 03-visualization | 2/2 | 8 min | 4 min |
 | 04-interactive-core-loop | 3/3 | 6 min | 2 min |
 | 05-multi-trace-and-export | 3/3 | 7 min | 2 min |
-| 06-tutorial-system | 1/3 | 2 min | 2 min |
+| 06-tutorial-system | 2/3 | 6 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (2 min), 05-02 (2 min), 05-03 (3 min), 06-01 (2 min)
-- Trend: Consistent 2-3 min per plan
+- Last 5 plans: 05-02 (2 min), 05-03 (3 min), 06-01 (2 min), 06-02 (4 min)
+- Trend: Consistent 2-4 min per plan
 
 *Updated after each plan completion*
 
@@ -98,6 +98,9 @@ Recent decisions affecting current work:
 - [06-01]: Driver.js 1.4.0 as tour engine (MIT license, zero deps, 5kb, TypeScript-native)
 - [06-01]: Interactive step blocking via tutorialActionFired signal + onNextClick override
 - [06-01]: notifyTutorialAction auto-advances tour after user performs required action
+- [06-02]: data-tutorial prop added to ParameterSlider interface for passthrough (slider-rise, slider-decay, slider-lambda)
+- [06-02]: Unicode escape sequences for em-dashes and smart quotes in tutorial content (portable)
+- [06-02]: Interactive workflow steps use waitForAction='slider-change' with disableActiveInteraction=false
 
 ### Pending Todos
 
@@ -110,5 +113,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 06-01-PLAN.md
-Resume file: .planning/phases/06-tutorial-system/06-01-SUMMARY.md
+Stopped at: Completed 06-02-PLAN.md
+Resume file: .planning/phases/06-tutorial-system/06-02-SUMMARY.md
