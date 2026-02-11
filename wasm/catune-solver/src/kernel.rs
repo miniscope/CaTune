@@ -50,11 +50,38 @@ pub fn tau_to_ar2(tau_rise: f64, tau_decay: f64, fs: f64) -> (f64, f64) {
 
 /// Compute the Lipschitz constant of the gradient of (1/2)||y - K*s||^2.
 ///
-/// L = sum(k^2 for k in kernel), which is an upper bound on the operator
-/// norm of K^T K for the convolution matrix K. Floored at 1e-10 for safety.
+/// L = max_w |H(w)|^2, where H(w) is the DFT of the kernel. This equals the
+/// largest eigenvalue of K^T K for a circulant convolution matrix, and is a
+/// tight upper bound for the Toeplitz (causal) convolution matrix used in practice.
+///
+/// Computed via direct DFT of the kernel (O(n^2) but kernel is short, ~100-200 samples).
 pub fn compute_lipschitz(kernel: &[f64]) -> f64 {
-    let l: f64 = kernel.iter().map(|k| k * k).sum();
-    l.max(1e-10)
+    let n = kernel.len();
+    if n == 0 {
+        return 1e-10;
+    }
+
+    // Zero-pad to at least 2*n for proper spectral analysis
+    let fft_len = (2 * n).next_power_of_two();
+
+    // Compute max |H(w)|^2 via direct DFT
+    let mut max_power = 0.0_f64;
+    for w in 0..fft_len {
+        let freq = 2.0 * std::f64::consts::PI * (w as f64) / (fft_len as f64);
+        let mut re = 0.0_f64;
+        let mut im = 0.0_f64;
+        for (k, &hk) in kernel.iter().enumerate() {
+            let angle = freq * (k as f64);
+            re += hk * angle.cos();
+            im -= hk * angle.sin();
+        }
+        let power = re * re + im * im;
+        if power > max_power {
+            max_power = power;
+        }
+    }
+
+    max_power.max(1e-10)
 }
 
 #[cfg(test)]
@@ -182,20 +209,31 @@ mod tests {
         assert!(r > 0.0 && r < 1.0, "Rise root r = {} not in (0,1)", r);
     }
 
-    // Test 8: Lipschitz constant is positive and equals sum of kernel squared
+    // Test 8: Lipschitz constant is positive and >= sum of kernel squared
     #[test]
-    fn lipschitz_positive_and_equals_sum_squares() {
+    fn lipschitz_positive_and_valid() {
         let kernel = build_kernel(0.02, 0.4, 30.0);
         let lipschitz = compute_lipschitz(&kernel);
 
         assert!(lipschitz > 0.0, "Lipschitz constant should be positive");
 
-        let manual_sum: f64 = kernel.iter().map(|k| k * k).sum();
+        // The Lipschitz constant (max power spectrum) should be >= sum of squares
+        // (by Parseval's theorem, sum of squares = average power, max >= average)
+        let sum_squares: f64 = kernel.iter().map(|k| k * k).sum();
         assert!(
-            (lipschitz - manual_sum).abs() < 1e-15,
-            "Lipschitz should equal sum of squares: {} vs {}",
+            lipschitz >= sum_squares * 0.99, // allow tiny numerical error
+            "Lipschitz should be >= sum of squares: {} vs {}",
             lipschitz,
-            manual_sum
+            sum_squares
+        );
+
+        // And bounded above by (sum of kernel)^2 (L1 norm squared)
+        let l1_norm: f64 = kernel.iter().map(|k| k.abs()).sum();
+        assert!(
+            lipschitz <= l1_norm * l1_norm * 1.01, // allow tiny numerical error
+            "Lipschitz should be <= L1 norm squared: {} vs {}",
+            lipschitz,
+            l1_norm * l1_norm
         );
     }
 }
