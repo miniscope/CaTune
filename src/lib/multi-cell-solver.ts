@@ -4,9 +4,12 @@
 // to prevent contention with the interactive tuning loop's solver.
 
 import * as Comlink from 'comlink';
+
 import type { NpyResult } from './types';
 import type { SolverParams } from './solver-types';
 import type { CellTraces } from './multi-cell-store';
+
+import { extractCellTrace } from './array-utils';
 import {
   setMultiCellSolving,
   setMultiCellProgress,
@@ -38,7 +41,6 @@ export async function solveSelectedCells(
   shape: [number, number],
   isSwapped: boolean,
 ): Promise<Map<number, CellTraces>> {
-  const [numCells, numTimepoints] = shape;
   const results = new Map<number, CellTraces>();
 
   setMultiCellSolving(true);
@@ -51,19 +53,7 @@ export async function solveSelectedCells(
       const cellIndex = cells[i];
 
       try {
-        // Extract raw trace using same indexing as viz-store loadCellTraces
-        const raw = new Float64Array(numTimepoints);
-
-        if (isSwapped) {
-          for (let t = 0; t < numTimepoints; t++) {
-            raw[t] = Number(data.data[t * numCells + cellIndex]);
-          }
-        } else {
-          const offset = cellIndex * numTimepoints;
-          for (let t = 0; t < numTimepoints; t++) {
-            raw[t] = Number(data.data[offset + t]);
-          }
-        }
+        const raw = extractCellTrace(cellIndex, data, shape, isSwapped);
 
         // Create a copy for transfer (avoids detaching the source)
         const traceCopy = new Float64Array(raw);

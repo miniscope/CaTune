@@ -4,6 +4,7 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import type { NpyResult } from './types';
+import { extractCellTrace } from './array-utils';
 
 // --- Cell selection ---
 
@@ -98,28 +99,12 @@ function loadCellTraces(
   shape: [number, number],
   isSwapped: boolean,
 ): void {
-  const [numCells, numTimepoints] = shape;
+  const [numCells] = shape;
 
   // Guard invalid index
   if (cellIndex < 0 || cellIndex >= numCells) return;
 
-  // Extract raw trace from flat typed array
-  const raw = new Float64Array(numTimepoints);
-
-  if (isSwapped) {
-    // Original layout was [timepoints, cells], data is row-major
-    // After swap: cell i = column i in original = every row's column i
-    const origRows = numTimepoints; // original row count = numTimepoints after swap
-    for (let t = 0; t < numTimepoints; t++) {
-      raw[t] = Number(data.data[t * numCells + cellIndex]);
-    }
-  } else {
-    // Normal layout [cells, timepoints], row-major: cell i = row i
-    const offset = cellIndex * numTimepoints;
-    for (let t = 0; t < numTimepoints; t++) {
-      raw[t] = Number(data.data[offset + t]);
-    }
-  }
+  const raw = extractCellTrace(cellIndex, data, shape, isSwapped);
 
   setRawTrace(raw);
   setSelectedCell(cellIndex);

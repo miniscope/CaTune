@@ -2,8 +2,8 @@
 // Conditionally renders components based on importStep
 
 import type { Component } from 'solid-js';
-import type { ParamSnapshot } from './lib/param-history.ts';
 import { Show, createMemo, createEffect, createSignal, on } from 'solid-js';
+
 import { FileDropZone } from './components/FileDropZone.tsx';
 import { NpzArraySelector } from './components/NpzArraySelector.tsx';
 import { DimensionConfirmation } from './components/DimensionConfirmation.tsx';
@@ -17,13 +17,9 @@ import { MultiTraceView } from './components/traces/MultiTraceView.tsx';
 import { CellSelector } from './components/controls/CellSelector.tsx';
 import { SubmitPanel } from './components/community/SubmitPanel.tsx';
 import { CommunityBrowser } from './components/community/CommunityBrowser.tsx';
-import { supabaseEnabled } from './lib/supabase.ts';
 import { TutorialLauncher } from './components/tutorial/TutorialLauncher.tsx';
 import { TutorialPanel } from './components/tutorial/TutorialPanel.tsx';
-import { startTuningLoop, commitToHistory } from './lib/tuning-orchestrator.ts';
-import { isTutorialActive } from './lib/tutorial/tutorial-store.ts';
-import { startTutorial } from './lib/tutorial/tutorial-engine.ts';
-import { getTutorialById } from './lib/tutorial/content/index.ts';
+
 import {
   importStep,
   rawFile,
@@ -53,6 +49,12 @@ import {
   selectedCells,
 } from './lib/multi-cell-store.ts';
 import { solveSelectedCells } from './lib/multi-cell-solver.ts';
+import { startTuningLoop } from './lib/tuning-orchestrator.ts';
+import { supabaseEnabled } from './lib/supabase.ts';
+import { isTutorialActive } from './lib/tutorial/tutorial-store.ts';
+import { startTutorial } from './lib/tutorial/tutorial-engine.ts';
+import { getTutorialById } from './lib/tutorial/content/index.ts';
+
 import './styles/multi-trace.css';
 import './styles/community.css';
 
@@ -68,6 +70,10 @@ const TOTAL_STEPS = 4;
 
 const BANNER_DISMISSED_KEY = 'catune-tutorial-dismissed';
 
+function loadBannerDismissedState(): boolean {
+  try { return localStorage.getItem(BANNER_DISMISSED_KEY) === 'true'; } catch { return false; }
+}
+
 const App: Component = () => {
   const step = () => importStep();
   const stepInfo = () => STEP_LABELS[step()] ?? { num: 1, label: 'Load Data' };
@@ -77,9 +83,7 @@ const App: Component = () => {
   const [tutorialOpen, setTutorialOpen] = createSignal(false);
 
   // First-time banner: show if not dismissed and data is loaded
-  const [bannerDismissed, setBannerDismissed] = createSignal(
-    (() => { try { return localStorage.getItem(BANNER_DISMISSED_KEY) === 'true'; } catch { return false; } })()
-  );
+  const [bannerDismissed, setBannerDismissed] = createSignal(loadBannerDismissedState());
   const showBanner = () => importStep() === 'ready' && !bannerDismissed();
 
   const dismissBanner = () => {
@@ -126,12 +130,6 @@ const App: Component = () => {
       shape,
       swapped(),
     );
-  };
-
-  // Wrap commitToHistory to also trigger batch re-solve on parameter commit
-  const handleCommit = (snapshot: ParamSnapshot) => {
-    commitToHistory(snapshot);
-    triggerBatchSolve();
   };
 
   // Handle mini-panel click to switch primary cell
@@ -225,11 +223,13 @@ const App: Component = () => {
       {/* Step 3: Sampling Rate */}
       <Show when={step() === 'sampling-rate'}>
         <Show when={effectiveShape()}>
-          <div class="info-summary">
-            <span>{effectiveShape()![0].toLocaleString()} cells</span>
-            <span class="info-summary__sep">&middot;</span>
-            <span>{effectiveShape()![1].toLocaleString()} timepoints</span>
-          </div>
+          {(shape) => (
+            <div class="info-summary">
+              <span>{shape()[0].toLocaleString()} cells</span>
+              <span class="info-summary__sep">&middot;</span>
+              <span>{shape()[1].toLocaleString()} timepoints</span>
+            </div>
+          )}
         </Show>
         <SamplingRateInput />
       </Show>
@@ -237,13 +237,15 @@ const App: Component = () => {
       {/* Step 4: Validation */}
       <Show when={step() === 'validation'}>
         <Show when={effectiveShape()}>
-          <div class="info-summary">
-            <span>{effectiveShape()![0].toLocaleString()} cells</span>
-            <span class="info-summary__sep">&middot;</span>
-            <span>{effectiveShape()![1].toLocaleString()} timepoints</span>
-            <span class="info-summary__sep">&middot;</span>
-            <span>{samplingRate()} Hz</span>
-          </div>
+          {(shape) => (
+            <div class="info-summary">
+              <span>{shape()[0].toLocaleString()} cells</span>
+              <span class="info-summary__sep">&middot;</span>
+              <span>{shape()[1].toLocaleString()} timepoints</span>
+              <span class="info-summary__sep">&middot;</span>
+              <span>{samplingRate()} Hz</span>
+            </div>
+          )}
         </Show>
         <DataValidationReport />
       </Show>
@@ -252,14 +254,18 @@ const App: Component = () => {
       <Show when={step() === 'ready'}>
         <div class="info-summary">
           <Show when={rawFile()}>
-            <span>{rawFile()!.name}</span>
-            <span class="info-summary__sep">&middot;</span>
+            {(file) => (<>
+              <span>{file().name}</span>
+              <span class="info-summary__sep">&middot;</span>
+            </>)}
           </Show>
           <Show when={effectiveShape()}>
-            <span>{effectiveShape()![0].toLocaleString()} cells</span>
-            <span class="info-summary__sep">&middot;</span>
-            <span>{effectiveShape()![1].toLocaleString()} timepoints</span>
-            <span class="info-summary__sep">&middot;</span>
+            {(shape) => (<>
+              <span>{shape()[0].toLocaleString()} cells</span>
+              <span class="info-summary__sep">&middot;</span>
+              <span>{shape()[1].toLocaleString()} timepoints</span>
+              <span class="info-summary__sep">&middot;</span>
+            </>)}
           </Show>
           <span>{samplingRate()} Hz</span>
           <Show when={durationDisplay()}>
@@ -269,11 +275,13 @@ const App: Component = () => {
         </div>
 
         <Show when={validationResult()}>
-          <Show when={validationResult()!.warnings.length > 0}>
-            <p class="text-warning" style="text-align: center; margin-bottom: 12px;">
-              {validationResult()!.warnings.length} warning{validationResult()!.warnings.length > 1 ? 's' : ''}
-            </p>
-          </Show>
+          {(result) => (
+            <Show when={result().warnings.length > 0}>
+              <p class="text-warning" style="text-align: center; margin-bottom: 12px;">
+                {result().warnings.length} warning{result().warnings.length > 1 ? 's' : ''}
+              </p>
+            </Show>
+          )}
         </Show>
 
         <TracePreview />
@@ -314,13 +322,15 @@ const App: Component = () => {
         <div class="viz-header">
           <h2 class="viz-header__title">Trace Visualization</h2>
           <Show when={effectiveShape()}>
-            <p class="viz-header__subtitle">
-              Cell {selectedCell() + 1} of {effectiveShape()![0].toLocaleString()}
-            </p>
+            {(shape) => (
+              <p class="viz-header__subtitle">
+                Cell {selectedCell() + 1} of {shape()[0].toLocaleString()}
+              </p>
+            )}
           </Show>
         </div>
 
-        <ParameterPanel onCommit={handleCommit} />
+        <ParameterPanel onBatchSolve={triggerBatchSolve} />
 
         <div class="viz-toolbar">
           <button
@@ -331,11 +341,13 @@ const App: Component = () => {
             {pinnedParams() ? 'Unpin Snapshot' : 'Pin for Comparison'}
           </button>
           <Show when={pinnedParams()}>
-            <span class="viz-toolbar__pin-info">
-              Pinned: rise={((pinnedParams()!.tauRise) * 1000).toFixed(1)}ms,
-              decay={((pinnedParams()!.tauDecay) * 1000).toFixed(1)}ms,
-              lambda={pinnedParams()!.lambda.toExponential(2)}
-            </span>
+            {(params) => (
+              <span class="viz-toolbar__pin-info">
+                Pinned: rise={(params().tauRise * 1000).toFixed(1)}ms,
+                decay={(params().tauDecay * 1000).toFixed(1)}ms,
+                lambda={params().lambda.toExponential(2)}
+              </span>
+            )}
           </Show>
           <SubmitPanel />
         </div>

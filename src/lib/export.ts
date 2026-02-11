@@ -52,7 +52,7 @@ export function buildExportData(
 
   return {
     schema_version: '1.0.0',
-    catune_version: '0.0.1',
+    catune_version: import.meta.env.VITE_APP_VERSION || 'dev',
     export_date: new Date().toISOString(),
     parameters: {
       tau_rise_s: tauRise,
@@ -68,7 +68,7 @@ export function buildExportData(
       kernel:
         'h(t) = exp(-t/tau_decay) - exp(-t/tau_rise), normalized to unit peak',
       ar2_relation:
-        'c[t] = g1*c[t-1] + g2*c[t-2] + s[t], where g1 = d+r, g2 = -(d*r), d = exp(-dt/tau_decay), r = exp(-dt/tau_rise)',
+        'c[t] = g1*c[t-1] + g2*c[t-2] + s[t], where g1 = decayRoot+riseRoot, g2 = -(decayRoot*riseRoot), decayRoot = exp(-dt/tau_decay), riseRoot = exp(-dt/tau_rise)',
       lambda_definition:
         'L1 penalty weight on spike train s in the FISTA objective function',
       convergence:

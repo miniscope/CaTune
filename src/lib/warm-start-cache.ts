@@ -1,5 +1,11 @@
 import type { SolverParams, WarmStartStrategy } from './solver-types';
 
+/** Number of tau_decay time constants of padding on each side of the visible window. */
+const PADDING_TAU_MULTIPLIER = 5;
+
+/** Relative change threshold below which tau changes use warm-no-momentum. */
+const TAU_CHANGE_THRESHOLD = 0.2;
+
 /** Cached warm-start state from a previous solve, keyed by window and params. */
 export interface WarmStartEntry {
   state: Uint8Array;
@@ -25,7 +31,7 @@ export function computePaddedWindow(
   tauDecay: number,
   fs: number,
 ): { paddedStart: number; paddedEnd: number; resultOffset: number; resultLength: number } {
-  const paddingSamples = Math.ceil(5 * tauDecay * fs);
+  const paddingSamples = Math.ceil(PADDING_TAU_MULTIPLIER * tauDecay * fs);
   const paddedStart = Math.max(0, visibleStart - paddingSamples);
   const paddedEnd = Math.min(traceLength, visibleEnd + paddingSamples);
   const resultOffset = visibleStart - paddedStart;
@@ -80,7 +86,7 @@ export function shouldWarmStart(
     ? Math.abs(newParams.tauDecay - oldParams.tauDecay) / oldParams.tauDecay
     : (newParams.tauDecay === 0 ? 0 : 1);
 
-  if (tauRiseChange < 0.2 && tauDecayChange < 0.2) {
+  if (tauRiseChange < TAU_CHANGE_THRESHOLD && tauDecayChange < TAU_CHANGE_THRESHOLD) {
     return 'warm-no-momentum';
   }
 
