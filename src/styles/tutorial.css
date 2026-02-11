@@ -4,15 +4,15 @@
 .driver-popover {
   background: var(--bg-secondary);
   color: var(--text-primary);
-  border: 1px solid var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-elevated);
 }
 
 .driver-popover .driver-popover-title {
   color: var(--accent);
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .driver-popover .driver-popover-description {
@@ -23,6 +23,7 @@
 
 .driver-popover .driver-popover-progress-text {
   color: var(--text-secondary);
+  font-family: var(--font-mono);
 }
 
 /* Next and Done buttons: accent-colored */
@@ -32,7 +33,7 @@
   border: none;
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-md);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
 }
 
@@ -43,7 +44,7 @@
   border: 1px solid var(--text-secondary);
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-md);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
 }
 
@@ -61,7 +62,7 @@
 }
 
 /* ========================
-   Tutorial Panel
+   Tutorial Panel — elevated shadow, warm borders
    ======================== */
 .tutorial-panel {
   background: var(--bg-secondary);
@@ -70,19 +71,21 @@
   margin-bottom: var(--space-md);
   max-height: 400px;
   overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-elevated);
 }
 
 /* ========================
-   Tutorial Cards
+   Tutorial Cards — inset bg
    ======================== */
 .tutorial-card {
-  background: var(--bg-surface);
+  background: var(--bg-inset);
   border-radius: var(--radius-sm);
   padding: var(--space-md);
   margin-bottom: var(--space-sm);
   cursor: pointer;
-  border: 1px solid transparent;
-  transition: border-color 0.15s;
+  border: 1px solid var(--border-default);
+  transition: border-color var(--transition-fast);
 }
 
 .tutorial-card:hover {
@@ -95,7 +98,7 @@
 }
 
 .tutorial-card--locked:hover {
-  border-color: transparent;
+  border-color: var(--border-default);
 }
 
 .tutorial-card--completed {
@@ -103,7 +106,7 @@
 }
 
 .tutorial-card__title {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   margin-bottom: var(--space-xs);
 }
 
@@ -133,7 +136,8 @@
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-mono);
   text-transform: uppercase;
 }
 
@@ -153,10 +157,11 @@
 }
 
 /* ========================
-   First-Time Tutorial Banner
+   First-Time Tutorial Banner — warm accent
    ======================== */
 .tutorial-banner {
-  background: var(--bg-surface);
+  background: linear-gradient(90deg, var(--accent-warm-muted), transparent);
+  border-left: 3px solid var(--accent-warm);
   border-radius: var(--radius-md);
   padding: var(--space-md) var(--space-lg);
   margin-bottom: var(--space-md);

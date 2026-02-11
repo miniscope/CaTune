@@ -1,6 +1,4 @@
-/* Community feature styles - dark theme
-   Covers AuthGate, PrivacyNotice, SubmitPanel, SubmissionSummary,
-   and placeholder for CommunityBrowser (Plan 03). */
+/* Community feature styles - Scientific Instrument theme */
 
 /* ========================
    AuthGate
@@ -27,18 +25,20 @@
 }
 
 .auth-gate__input {
-  background: var(--bg-surface);
+  background: var(--bg-inset);
   color: var(--text-primary);
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
   font-size: 0.9rem;
+  font-family: var(--font-body);
   min-width: 200px;
 }
 
 .auth-gate__input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 .auth-gate__sent {
@@ -64,12 +64,13 @@
 .auth-gate__btn {
   background: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
   font-size: 0.9rem;
+  font-family: var(--font-body);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
 .auth-gate__btn:hover {
@@ -194,7 +195,7 @@
 .submit-panel__summary {
   font-size: 0.9rem;
   color: var(--text-secondary);
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   margin-bottom: var(--space-sm);
 }
 
@@ -209,6 +210,7 @@
   border-radius: var(--radius-md);
   padding: var(--space-lg);
   margin-top: var(--space-sm);
+  border: 1px solid var(--border-subtle);
 }
 
 .submit-panel__field {
@@ -217,37 +219,40 @@
 
 .submit-panel__field label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   margin-bottom: var(--space-xs);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .submit-panel__field input,
 .submit-panel__field select,
 .submit-panel__field textarea {
   width: 100%;
-  background: var(--bg-surface);
-  border: 1px solid var(--text-secondary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: var(--space-sm) var(--space-md);
   font-size: 0.9rem;
-  font-family: inherit;
+  font-family: var(--font-body);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .submit-panel__field input:focus,
 .submit-panel__field select:focus,
 .submit-panel__field textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 .submit-panel__field input::placeholder,
 .submit-panel__field textarea::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.6;
+  color: var(--text-tertiary);
+  opacity: 0.8;
 }
 
 .submit-panel__field textarea {
@@ -302,7 +307,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-md);
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   color: var(--text-primary);
   margin-bottom: var(--space-sm);
@@ -325,8 +330,9 @@
 
 .submission-summary__timestamp {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   margin: 0 0 var(--space-md);
+  font-family: var(--font-mono);
 }
 
 .submission-summary__actions {
@@ -335,13 +341,14 @@
 }
 
 /* ========================
-   CommunityBrowser (placeholder - Plan 03)
+   CommunityBrowser
    ======================== */
 
 .community-browser {
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   padding: var(--space-lg);
+  border: 1px solid var(--border-subtle);
 }
 
 .community-browser__header {
@@ -361,7 +368,7 @@
 .community-browser__chevron {
   color: var(--text-secondary);
   font-size: 0.8rem;
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-normal);
 }
 
 .community-browser__chevron--expanded {
@@ -387,14 +394,14 @@
 }
 
 .community-browser__compare-btn {
-  background: var(--bg-surface);
+  background: var(--bg-inset);
   color: var(--text-secondary);
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-md);
   font-size: 0.85rem;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .community-browser__compare-btn:hover {
@@ -405,7 +412,7 @@
 .community-browser__compare-btn--active {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(100, 180, 255, 0.08);
+  background: var(--accent-muted);
 }
 
 /* ========================
@@ -477,7 +484,7 @@
 }
 
 .scatter-plot__legend-label {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
 }
 
@@ -517,9 +524,9 @@
 }
 
 .filter-bar__select {
-  background: var(--bg-surface);
+  background: var(--bg-inset);
   color: var(--text-primary);
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.85rem;
@@ -528,12 +535,14 @@
 
 .filter-bar__select:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 .filter-bar__count {
   color: var(--text-secondary);
   font-size: 0.85rem;
+  font-family: var(--font-mono);
   margin-left: var(--space-xs);
 }
 
