@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 2 of 8 (WASM Solver)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-02-11 -- Completed 02-01 (Rust FISTA Solver Core)
+Last activity: 2026-02-11 -- Completed 02-02 (WASM Bridge and Worker API)
 
-Progress: [███░░░░░░░] 1/3 Phase 2
+Progress: [██████░░░░] 2/3 Phase 2
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 6 min
-- Total execution time: 21 min
+- Total execution time: 27 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-data-foundation | 3/3 | 8 min | 3 min |
-| 02-wasm-solver | 1/3 | 13 min | 13 min |
+| 02-wasm-solver | 2/3 | 19 min | 10 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (3 min), 01-02 (5 min), 01-03 (?), 02-01 (13 min)
-- Trend: Phase 2 solver work is heavier (Rust toolchain install, algorithm debugging)
+- Last 5 plans: 01-02 (5 min), 01-03 (?), 02-01 (13 min), 02-02 (6 min)
+- Trend: 02-02 faster than 02-01 (no algorithm debugging, mostly wiring)
 
 *Updated after each plan completion*
 
@@ -57,6 +57,9 @@ Recent decisions affecting current work:
 - [02-01]: FISTA with adaptive restart (O'Donoghue & Candes 2015) to prevent oscillation with non-negativity
 - [02-01]: Two-sequence FISTA formulation (x_k proximal, y_k extrapolated) for correct convergence
 - [02-01]: Homebrew gcc-15 as C linker for Rust native tests (WSL2 lacks build-essential)
+- [02-02]: Disabled wasm-opt (bundled version incompatible with Rust 1.93 bulk-memory ops)
+- [02-02]: LIBRARY_PATH env var for wasm-pack host-target build script compilation
+- [02-02]: Worker singleton pattern (create once, never terminate) for WASM instance reuse
 
 ### Pending Todos
 
@@ -69,5 +72,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 02-01-PLAN.md (Rust FISTA Solver Core)
-Resume file: .planning/phases/02-wasm-solver/02-01-SUMMARY.md
+Stopped at: Completed 02-02-PLAN.md (WASM Bridge and Worker API)
+Resume file: .planning/phases/02-wasm-solver/02-02-SUMMARY.md
