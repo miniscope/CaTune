@@ -1,10 +1,14 @@
 import type { Component } from 'solid-js';
+import { importStep } from './lib/data-store';
 
 const App: Component = () => {
   return (
-    <main>
+    <main class="import-container">
       <h1>CaTune</h1>
-      <p>Data import coming soon...</p>
+      <p class="text-secondary">
+        Calcium Deconvolution Parameter Tuning
+      </p>
+      <p>Current step: {importStep()}</p>
     </main>
   );
 };
