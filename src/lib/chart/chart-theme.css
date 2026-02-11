@@ -1,0 +1,51 @@
+/*
+ * CaTune dark theme overrides for uPlot.
+ * Import after uPlot.min.css to override default light theme.
+ * References CSS custom properties from src/styles/global.css.
+ */
+
+/* Chart wrapper background */
+.u-wrap {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+/* Plot area cursor */
+.u-over {
+  cursor: crosshair;
+}
+
+/* Axis tick labels */
+.u-axis .u-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* Axis tick marks */
+.u-axis .u-tick {
+  stroke: color-mix(in srgb, var(--text-secondary) 30%, transparent);
+}
+
+/* Grid lines at 15% opacity */
+.u-grid .u-stroke {
+  stroke: color-mix(in srgb, var(--text-secondary) 15%, transparent);
+}
+
+/* Cursor crosshair lines */
+.u-cursor-x,
+.u-cursor-y {
+  border-color: var(--accent) !important;
+}
+
+/* Legend text */
+.u-legend th,
+.u-legend td {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* Trace panel spacing and sizing */
+.trace-panel {
+  margin-bottom: var(--space-sm);
+  width: 100%;
+}
