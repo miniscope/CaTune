@@ -11,6 +11,8 @@ import { DataValidationReport } from './components/DataValidationReport.tsx';
 import { TracePreview } from './components/TracePreview.tsx';
 import { TracePanelStack } from './components/traces/TracePanelStack.tsx';
 import { KernelDisplay } from './components/traces/KernelDisplay.tsx';
+import { ParameterPanel } from './components/controls/ParameterPanel.tsx';
+import { startTuningLoop, commitToHistory } from './lib/tuning-orchestrator.ts';
 import {
   importStep,
   rawFile,
@@ -50,7 +52,7 @@ const App: Component = () => {
     return `${d.toFixed(1)}s`;
   });
 
-  // Load first cell's traces when import reaches 'ready'
+  // Load first cell's traces and start tuning loop when import reaches 'ready'
   createEffect(
     on(importStep, (currentStep) => {
       if (currentStep === 'ready') {
@@ -58,6 +60,7 @@ const App: Component = () => {
         const shape = effectiveShape();
         if (data && shape) {
           loadCellTraces(0, data, shape, swapped());
+          startTuningLoop();
         }
       }
     }),
@@ -189,6 +192,7 @@ const App: Component = () => {
           </Show>
         </div>
 
+        <ParameterPanel onCommit={commitToHistory} />
         <TracePanelStack />
         <KernelDisplay />
       </section>
