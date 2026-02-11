@@ -32,7 +32,7 @@ export function KernelDisplay() {
   ];
 
   return (
-    <div class="kernel-section">
+    <div class="kernel-section" data-tutorial="kernel-display">
       <div class="kernel-section__header">
         <h4 class="panel-label">Calcium Kernel</h4>
         <p class="kernel-section__params">

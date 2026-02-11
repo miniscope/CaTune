@@ -31,7 +31,7 @@ export function ExportPanel() {
   };
 
   return (
-    <div class="export-panel">
+    <div class="export-panel" data-tutorial="export-panel">
       <button class="btn-primary btn-small" onClick={handleExport}>
         Export Parameters
       </button>

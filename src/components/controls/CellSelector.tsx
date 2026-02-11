@@ -62,7 +62,7 @@ export function CellSelector(props: CellSelectorProps) {
   const maxCount = () => Math.min(20, numCells());
 
   return (
-    <div class="cell-selector">
+    <div class="cell-selector" data-tutorial="cell-selector">
       <div class="cell-selector__group">
         <label class="cell-selector__label">Selection Mode</label>
         <select

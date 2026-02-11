@@ -33,7 +33,7 @@ export function ConvergenceIndicator() {
   };
 
   return (
-    <div class={`convergence ${statusClass()}`}>
+    <div class={`convergence ${statusClass()}`} data-tutorial="convergence-indicator">
       <span class="convergence__dot" />
       <span class="convergence__text">{statusText()}</span>
     </div>

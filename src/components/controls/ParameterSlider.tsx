@@ -21,6 +21,8 @@ export interface ParameterSliderProps {
   format?: (value: number) => string;
   /** Unit label shown after the numeric input. */
   unit?: string;
+  /** Tutorial targeting attribute for driver.js tour steps. */
+  'data-tutorial'?: string;
 }
 
 export function ParameterSlider(props: ParameterSliderProps) {
@@ -65,7 +67,7 @@ export function ParameterSlider(props: ParameterSliderProps) {
   };
 
   return (
-    <div class="param-slider">
+    <div class="param-slider" data-tutorial={props['data-tutorial']}>
       <label class="param-slider__label">{props.label}</label>
       <div class="param-slider__controls">
         <input

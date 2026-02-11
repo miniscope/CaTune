@@ -29,7 +29,7 @@ export function MultiTraceView(props: MultiTraceViewProps) {
 
   return (
     <Show when={multiCellResults().size > 0}>
-      <section class="multi-trace-section">
+      <section class="multi-trace-section" data-tutorial="multi-trace-view">
         <div class="multi-trace-header">
           <h3 class="multi-trace-header__title">Multi-Cell Comparison</h3>
           <span class="multi-trace-header__count">

@@ -172,7 +172,7 @@ export function TracePanelStack() {
   return (
     <div class="trace-stack">
       {/* Panel 1: Raw + Reconvolution Fit */}
-      <div class="trace-stack__panel">
+      <div class="trace-stack__panel" data-tutorial="trace-raw-fit">
         <h4 class="panel-label">Raw + Fit</h4>
         <TracePanel
           data={() => rawFitData()}
@@ -184,7 +184,7 @@ export function TracePanelStack() {
       </div>
 
       {/* Panel 2: Deconvolved Activity */}
-      <div class="trace-stack__panel">
+      <div class="trace-stack__panel" data-tutorial="trace-deconvolved">
         <h4 class="panel-label">Deconvolved Activity</h4>
         <TracePanel
           data={() => deconvolvedData()}
@@ -196,7 +196,7 @@ export function TracePanelStack() {
       </div>
 
       {/* Panel 3: Residuals */}
-      <div class="trace-stack__panel">
+      <div class="trace-stack__panel" data-tutorial="trace-residuals">
         <h4 class="panel-label">Residuals</h4>
         <TracePanel
           data={() => residualData()}

@@ -37,7 +37,7 @@ export function ParameterPanel(props: ParameterPanelProps) {
   };
 
   return (
-    <div class="param-panel">
+    <div class="param-panel" data-tutorial="param-panel">
       <div class="param-panel__header">
         <ConvergenceIndicator />
       </div>
@@ -52,6 +52,7 @@ export function ParameterPanel(props: ParameterPanelProps) {
           format={(v) => (v * 1000).toFixed(1)}
           unit="ms"
           onCommit={handleCommit}
+          data-tutorial="slider-rise"
         />
         <ParameterSlider
           label="Decay Time"
@@ -63,6 +64,7 @@ export function ParameterPanel(props: ParameterPanelProps) {
           format={(v) => (v * 1000).toFixed(1)}
           unit="ms"
           onCommit={handleCommit}
+          data-tutorial="slider-decay"
         />
         <ParameterSlider
           label="Sparsity (lambda)"
@@ -75,6 +77,7 @@ export function ParameterPanel(props: ParameterPanelProps) {
           toSlider={lambdaToSlider}
           format={(v) => v.toExponential(2)}
           onCommit={handleCommit}
+          data-tutorial="slider-lambda"
         />
       </div>
     </div>

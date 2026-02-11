@@ -126,7 +126,7 @@ const App: Component = () => {
     <>
     <main class="import-container">
       {/* Header */}
-      <header class="app-header">
+      <header class="app-header" data-tutorial="app-header">
         <h1 class="app-header__title">CaTune</h1>
         <p class="app-header__subtitle">
           Calcium Deconvolution Parameter Tuning
@@ -247,7 +247,7 @@ const App: Component = () => {
 
     {/* Visualization section -- full width, outside import-container */}
     <Show when={step() === 'ready'}>
-      <section class="viz-container">
+      <section class="viz-container" data-tutorial="viz-container">
         <div class="viz-header">
           <h2 class="viz-header__title">Trace Visualization</h2>
           <Show when={effectiveShape()}>
@@ -263,6 +263,7 @@ const App: Component = () => {
           <button
             class={`btn-secondary btn-small ${pinnedParams() ? 'btn-active' : ''}`}
             onClick={() => pinnedParams() ? unpinSnapshot() : pinCurrentSnapshot()}
+            data-tutorial="pin-snapshot"
           >
             {pinnedParams() ? 'Unpin Snapshot' : 'Pin for Comparison'}
           </button>
