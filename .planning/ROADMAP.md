@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: WASM Solver** - Rust ISTA/FISTA solver compiled to WASM running in Web Workers
 - [x] **Phase 3: Visualization** - High-performance trace plotting with reconvolution overlay and residuals
 - [x] **Phase 4: Interactive Core Loop** - Parameter controls wired to solver and plots for live tuning
-- [ ] **Phase 5: Multi-Trace and Export** - Multi-cell validation and parameter export for downstream use
+- [x] **Phase 5: Multi-Trace and Export** - Multi-cell validation and parameter export for downstream use
 - [ ] **Phase 6: Tutorial System** - Progressive guided tutorials encoding the Aharoni Lab tuning workflow
 - [ ] **Phase 7: Community Database** - Opt-in parameter sharing and cross-lab distribution browsing
 - [ ] **Phase 8: Python Companion** - Minimal Python package for data conversion and offline deconvolution
@@ -100,9 +100,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Multi-cell data layer: cell activity ranking, reactive selection store, batch solver
-- [ ] 05-02-PLAN.md -- AR2 coefficient derivation, JSON export with Blob download, before/after pinned snapshot overlay
-- [ ] 05-03-PLAN.md -- UI components (MultiTraceView, CellSelector, ExportPanel) and App.tsx integration
+- [x] 05-01-PLAN.md -- Multi-cell data layer: cell activity ranking, reactive selection store, batch solver
+- [x] 05-02-PLAN.md -- AR2 coefficient derivation, JSON export with Blob download, before/after pinned snapshot overlay
+- [x] 05-03-PLAN.md -- UI components (MultiTraceView, CellSelector, ExportPanel) and App.tsx integration
 
 ### Phase 6: Tutorial System
 **Goal**: Users learn the tuning workflow through progressive, contextual guidance on their own data
@@ -112,11 +112,12 @@ Plans:
   1. User can follow a progressive tutorial from basic concepts (what each parameter does) through the complete guided tuning workflow to advanced techniques (residual analysis, parameter coupling)
   2. Tutorial steps reference and highlight actual UI elements, providing contextual guidance on the user's own data
   3. Tutorial content is data-driven (JSON/YAML definitions) so updates require no code changes
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md -- Tutorial engine core: driver.js install, type system, progress persistence, SolidJS store, engine, dark theme CSS
+- [ ] 06-02-PLAN.md -- data-tutorial attributes on existing components + three progressive tutorial content definitions (basics, workflow, advanced)
+- [ ] 06-03-PLAN.md -- Tutorial UI (TutorialPanel, TutorialLauncher), App.tsx integration, first-time banner, orchestrator wiring
 
 ### Phase 7: Community Database
 **Goal**: Users can share their tuned parameters and learn from other labs' parameter choices across experimental conditions
@@ -157,7 +158,7 @@ Note: Phases 2 and 3 can develop in parallel (they share no dependencies beyond 
 | 2. WASM Solver | 3/3 | ✓ Complete | 2026-02-10 |
 | 3. Visualization | 2/2 | ✓ Complete | 2026-02-10 |
 | 4. Interactive Core Loop | 3/3 | ✓ Complete | 2026-02-10 |
-| 5. Multi-Trace and Export | 0/3 | In Progress | - |
-| 6. Tutorial System | 0/TBD | Not started | - |
+| 5. Multi-Trace and Export | 3/3 | ✓ Complete | 2026-02-11 |
+| 6. Tutorial System | 0/3 | In Progress | - |
 | 7. Community Database | 0/TBD | Not started | - |
 | 8. Python Companion | 0/TBD | Not started | - |
