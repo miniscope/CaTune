@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 1 of 8 (Data Foundation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-02-11 -- Completed 01-01 (Project Scaffold)
+Last activity: 2026-02-11 -- Completed 01-02 (Data Parsing and Validation)
 
-Progress: [█░░░░░░░░░] 1/3 Phase 1
+Progress: [██████░░░░] 2/3 Phase 1
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 3 min
-- Total execution time: 3 min
+- Total plans completed: 2
+- Average duration: 4 min
+- Total execution time: 8 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-data-foundation | 1/3 | 3 min | 3 min |
+| 01-data-foundation | 2/3 | 8 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (3 min)
-- Trend: Starting
+- Last 5 plans: 01-01 (3 min), 01-02 (5 min)
+- Trend: Steady
 
 *Updated after each plan completion*
 
@@ -48,6 +48,10 @@ Recent decisions affecting current work:
 - [01-01]: Manual project scaffold instead of npm init solid for precise Vite 7 version control
 - [01-01]: Individual SolidJS signals (createSignal) instead of createStore for linear import flow
 - [01-01]: jsdom added as devDependency for Vitest DOM test environment
+- [01-02]: Zero-copy typed array view with copy fallback for unaligned offsets
+- [01-02]: Regex header parsing for .npy Python dict literals (no eval/Function)
+- [01-02]: Big-endian rejection with helpful message rather than byte-swapping
+- [01-02]: Negative values tracked in stats but no warning (deltaF/F can be negative)
 
 ### Pending Todos
 
@@ -60,5 +64,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 01-01-PLAN.md (Project Scaffold)
-Resume file: .planning/phases/01-data-foundation/01-01-SUMMARY.md
+Stopped at: Completed 01-02-PLAN.md (Data Parsing and Validation)
+Resume file: .planning/phases/01-data-foundation/01-02-SUMMARY.md
