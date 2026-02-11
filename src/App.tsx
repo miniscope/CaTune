@@ -19,6 +19,8 @@ import { SubmitPanel } from './components/community/SubmitPanel.tsx';
 import { CommunityBrowser } from './components/community/CommunityBrowser.tsx';
 import { TutorialLauncher } from './components/tutorial/TutorialLauncher.tsx';
 import { TutorialPanel } from './components/tutorial/TutorialPanel.tsx';
+import { DashboardPanel } from './components/layout/DashboardPanel.tsx';
+import { VizLayout } from './components/layout/VizLayout.tsx';
 
 import {
   importStep,
@@ -318,8 +320,8 @@ const App: Component = () => {
 
     {/* Visualization section -- full width, outside import-container */}
     <Show when={step() === 'ready'}>
-      <section class="viz-container" data-tutorial="viz-container">
-        <div class="viz-header">
+      <VizLayout>
+        <div class="viz-header" data-tutorial="viz-container">
           <h2 class="viz-header__title">Trace Visualization</h2>
           <Show when={effectiveShape()}>
             {(shape) => (
@@ -330,40 +332,54 @@ const App: Component = () => {
           </Show>
         </div>
 
-        <ParameterPanel onBatchSolve={triggerBatchSolve} />
+        <DashboardPanel id="parameters" variant="controls">
+          <ParameterPanel onBatchSolve={triggerBatchSolve} />
+        </DashboardPanel>
 
-        <div class="viz-toolbar">
-          <button
-            class={`btn-secondary btn-small ${pinnedParams() ? 'btn-active' : ''}`}
-            onClick={() => pinnedParams() ? unpinSnapshot() : pinCurrentSnapshot()}
-            data-tutorial="pin-snapshot"
-          >
-            {pinnedParams() ? 'Unpin Snapshot' : 'Pin for Comparison'}
-          </button>
-          <Show when={pinnedParams()}>
-            {(params) => (
-              <span class="viz-toolbar__pin-info">
-                Pinned: rise={(params().tauRise * 1000).toFixed(1)}ms,
-                decay={(params().tauDecay * 1000).toFixed(1)}ms,
-                lambda={params().lambda.toExponential(2)}
-              </span>
-            )}
-          </Show>
-          <SubmitPanel />
-        </div>
+        <DashboardPanel id="toolbar" variant="controls">
+          <div class="viz-toolbar">
+            <button
+              class={`btn-secondary btn-small ${pinnedParams() ? 'btn-active' : ''}`}
+              onClick={() => pinnedParams() ? unpinSnapshot() : pinCurrentSnapshot()}
+              data-tutorial="pin-snapshot"
+            >
+              {pinnedParams() ? 'Unpin Snapshot' : 'Pin for Comparison'}
+            </button>
+            <Show when={pinnedParams()}>
+              {(params) => (
+                <span class="viz-toolbar__pin-info">
+                  Pinned: rise={(params().tauRise * 1000).toFixed(1)}ms,
+                  decay={(params().tauDecay * 1000).toFixed(1)}ms,
+                  lambda={params().lambda.toExponential(2)}
+                </span>
+              )}
+            </Show>
+            <SubmitPanel />
+          </div>
+        </DashboardPanel>
 
-        <TracePanelStack />
+        <DashboardPanel id="traces" variant="data">
+          <TracePanelStack />
+        </DashboardPanel>
 
-        <CellSelector onSelectionChange={triggerBatchSolve} />
-        <MultiTraceView onCellClick={handleCellClick} />
-        <KernelDisplay />
-      </section>
+        <DashboardPanel id="selector" variant="controls">
+          <CellSelector onSelectionChange={triggerBatchSolve} />
+        </DashboardPanel>
 
-      <Show when={supabaseEnabled}>
-        <section class="community-container">
-          <CommunityBrowser />
-        </section>
-      </Show>
+        <DashboardPanel id="multi-trace" variant="interactive">
+          <MultiTraceView onCellClick={handleCellClick} />
+        </DashboardPanel>
+
+        <DashboardPanel id="kernel" variant="data">
+          <KernelDisplay />
+        </DashboardPanel>
+
+        <Show when={supabaseEnabled}>
+          <DashboardPanel id="community" variant="interactive">
+            <CommunityBrowser />
+          </DashboardPanel>
+        </Show>
+      </VizLayout>
     </Show>
     </>
   );

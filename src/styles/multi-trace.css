@@ -1,4 +1,4 @@
-/* Multi-trace view styles - dark theme for CaTune */
+/* Multi-trace view styles - Scientific Instrument theme */
 
 /* ========================
    Multi-Trace Section
@@ -24,6 +24,7 @@
 .multi-trace-header__count {
   font-size: 0.85rem;
   color: var(--text-secondary);
+  font-family: var(--font-mono);
 }
 
 /* ========================
@@ -36,14 +37,15 @@
 }
 
 /* ========================
-   Mini-Panel
+   Mini-Panel — inset bg, warm active state
    ======================== */
 .mini-panel {
-  border: 1px solid var(--bg-surface);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: var(--space-xs);
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .mini-panel:hover {
@@ -51,8 +53,8 @@
 }
 
 .mini-panel--active {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(83, 199, 240, 0.2);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 8px rgba(212, 165, 116, 0.2);
 }
 
 .mini-panel__label {
@@ -60,6 +62,7 @@
   color: var(--text-secondary);
   margin-bottom: 2px;
   padding-left: var(--space-xs);
+  font-family: var(--font-mono);
 }
 
 /* ========================
@@ -83,41 +86,46 @@
 }
 
 .cell-selector__label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .cell-selector__mode {
-  background: var(--bg-surface);
-  border: 1px solid var(--text-secondary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.85rem;
   outline: none;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast);
 }
 
 .cell-selector__mode:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 .cell-selector__count {
   width: 60px;
-  background: var(--bg-surface);
-  border: 1px solid var(--text-secondary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.85rem;
+  font-family: var(--font-mono);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast);
 }
 
 .cell-selector__count:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 /* Hide spin buttons for cleaner look */
@@ -133,19 +141,20 @@
 
 .cell-selector__manual {
   width: 180px;
-  background: var(--bg-surface);
-  border: 1px solid var(--text-secondary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.85rem;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast);
 }
 
 .cell-selector__manual:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 /* ========================
@@ -160,7 +169,7 @@
 .export-panel__summary {
   font-size: 0.8rem;
   color: var(--text-secondary);
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
 }
 
 /* ========================
@@ -175,7 +184,7 @@
 }
 
 /* ========================
-   Toolbar Row
+   Toolbar Row — border + warm active
    ======================== */
 .viz-toolbar {
   display: flex;
@@ -186,12 +195,13 @@
   padding: var(--space-sm) var(--space-md);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .viz-toolbar__pin-info {
   font-size: 0.8rem;
   color: var(--text-secondary);
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
 }
 
 /* ========================

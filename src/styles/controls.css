@@ -1,4 +1,4 @@
-/* Parameter control panel styles - dark theme for CaTune */
+/* Parameter control panel styles - Scientific Instrument theme */
 
 /* ========================
    Parameter Panel
@@ -31,10 +31,12 @@
 
 .param-slider__label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   margin-bottom: var(--space-xs);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .param-slider__controls {
@@ -67,7 +69,7 @@
   cursor: pointer;
   border: 2px solid var(--bg-primary);
   box-shadow: 0 0 4px rgba(83, 199, 240, 0.3);
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow var(--transition-fast);
 }
 
 .param-slider__range::-webkit-slider-thumb:hover {
@@ -83,7 +85,7 @@
   cursor: pointer;
   border: 2px solid var(--bg-primary);
   box-shadow: 0 0 4px rgba(83, 199, 240, 0.3);
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow var(--transition-fast);
 }
 
 .param-slider__range::-moz-range-thumb:hover {
@@ -97,33 +99,34 @@
   background: var(--bg-surface);
 }
 
-/* Focus ring for accessibility */
+/* Focus ring for accessibility — warm accent */
 .param-slider__range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px rgba(83, 199, 240, 0.4);
+  box-shadow: 0 0 0 3px var(--accent-warm-muted);
 }
 
 .param-slider__range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 3px rgba(83, 199, 240, 0.4);
+  box-shadow: 0 0 0 3px var(--accent-warm-muted);
 }
 
 /* --- Numeric input --- */
 
 .param-slider__number {
   width: 80px;
-  background: var(--bg-surface);
-  border: 1px solid var(--text-secondary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 4px 8px;
   font-size: 0.85rem;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   text-align: right;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .param-slider__number:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 2px var(--accent-warm-muted);
 }
 
 /* Hide spin buttons for cleaner look */
@@ -140,9 +143,10 @@
 /* --- Unit label --- */
 
 .param-slider__unit {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
   min-width: 24px;
+  font-family: var(--font-mono);
 }
 
 /* ========================
@@ -194,20 +198,6 @@
 
 .convergence--error .convergence__text {
   color: var(--error);
-}
-
-/* Idle: default (--text-secondary from base rule) */
-
-@keyframes convergence-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.3);
-  }
 }
 
 /* ========================

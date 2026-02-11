@@ -1,0 +1,131 @@
+/* CaTune Layout — Panel system and VizLayout modes */
+
+/* ========================
+   Dashboard Panel — wrapper with variant-based styling
+   ======================== */
+.dashboard-panel {
+  border-radius: var(--panel-radius);
+  padding: var(--panel-padding);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-panel);
+  animation: fade-in-up 0.4s ease both;
+}
+
+/* Staggered entrance for sequential panels */
+.dashboard-panel:nth-child(1) { animation-delay: 0s; }
+.dashboard-panel:nth-child(2) { animation-delay: 0.05s; }
+.dashboard-panel:nth-child(3) { animation-delay: 0.10s; }
+.dashboard-panel:nth-child(4) { animation-delay: 0.15s; }
+.dashboard-panel:nth-child(5) { animation-delay: 0.20s; }
+.dashboard-panel:nth-child(6) { animation-delay: 0.25s; }
+.dashboard-panel:nth-child(7) { animation-delay: 0.30s; }
+.dashboard-panel:nth-child(8) { animation-delay: 0.35s; }
+
+/* Variant: controls — secondary bg, raised */
+.dashboard-panel--controls {
+  background: var(--panel-bg-controls);
+}
+
+/* Variant: data — inset bg, recessed feel */
+.dashboard-panel--data {
+  background: var(--panel-bg-data);
+  box-shadow: var(--shadow-inset);
+}
+
+/* Variant: interactive — surface bg */
+.dashboard-panel--interactive {
+  background: var(--panel-bg-interactive);
+}
+
+/* Variant: default */
+.dashboard-panel--default {
+  background: var(--panel-bg);
+}
+
+/* Variant: flush — no padding/border, inner component handles styling */
+.dashboard-panel--flush {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* ========================
+   VizLayout — scroll mode (current), grid mode (future)
+   ======================== */
+.viz-layout {
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.viz-layout--scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+}
+
+/* ========================
+   Future dashboard grid mode (commented out)
+   Activate by switching class from viz-layout--scroll to viz-layout--grid
+   ======================== */
+
+/*
+.viz-layout--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto;
+  grid-template-areas:
+    "parameters  parameters"
+    "toolbar     toolbar"
+    "traces      traces"
+    "selector    selector"
+    "kernel      multi-trace"
+    "community   community";
+  gap: var(--panel-gap);
+}
+
+.viz-layout--grid [data-panel-id="parameters"]  { grid-area: parameters; }
+.viz-layout--grid [data-panel-id="toolbar"]      { grid-area: toolbar; }
+.viz-layout--grid [data-panel-id="traces"]       { grid-area: traces; }
+.viz-layout--grid [data-panel-id="selector"]     { grid-area: selector; }
+.viz-layout--grid [data-panel-id="kernel"]       { grid-area: kernel; }
+.viz-layout--grid [data-panel-id="multi-trace"]  { grid-area: multi-trace; }
+.viz-layout--grid [data-panel-id="community"]    { grid-area: community; }
+*/
+
+/* ========================
+   Section Divider
+   ======================== */
+.section-divider {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-default), transparent);
+  margin: var(--space-sm) 0;
+}
+
+/* ========================
+   Responsive
+   ======================== */
+@media (max-width: 600px) {
+  .viz-layout {
+    padding: var(--space-sm);
+  }
+
+  .dashboard-panel {
+    padding: var(--space-md);
+  }
+
+  /*
+  .viz-layout--grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "parameters"
+      "toolbar"
+      "traces"
+      "selector"
+      "kernel"
+      "multi-trace"
+      "community";
+  }
+  */
+}
