@@ -13,16 +13,19 @@ const TABLE = 'community_submissions';
 
 /**
  * Insert a new community submission and return the created row.
- * The user_id is set automatically by Supabase RLS.
+ * Adds user_id from the current auth session (required by RLS policy).
  */
 export async function submitParameters(
   payload: SubmissionPayload,
 ): Promise<CommunitySubmission> {
   if (!supabase) throw new Error('Community features not configured');
 
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
   const { data, error } = await supabase
     .from(TABLE)
-    .insert(payload)
+    .insert({ ...payload, user_id: user.id })
     .select()
     .single();
 

@@ -77,7 +77,7 @@ export function ScatterPlot(props: ScatterPlotProps) {
   function makeDrawPoints(colors: () => string[], userParams: () => ScatterPlotProps['userParams']) {
     return (u: uPlot, seriesIdx: number, _idx0: number, _idx1: number) => {
       const ctx = u.ctx;
-      const size = 6 * devicePixelRatio;
+      const size = 10 * devicePixelRatio;
 
       uPlot.orient(
         u,
@@ -126,7 +126,7 @@ export function ScatterPlot(props: ScatterPlotProps) {
             ) {
               const ucx = valToPosX(ux, scaleX, xDim, xOff);
               const ucy = valToPosY(uy, scaleY, yDim, yOff);
-              const uSize = 10 * devicePixelRatio;
+              const uSize = 14 * devicePixelRatio;
 
               ctx.fillStyle = lambdaToColor(
                 up.lambda,
@@ -161,13 +161,25 @@ export function ScatterPlot(props: ScatterPlotProps) {
 
     const drawFn = makeDrawPoints(lambdaColors, () => props.userParams);
 
+    // Compute padded ranges so points aren't on the edge
+    const xVals = subs.map((s) => s.tau_rise);
+    const yVals = subs.map((s) => s.tau_decay);
+    const up = props.userParams;
+    if (up) { xVals.push(up.tauRise); yVals.push(up.tauDecay); }
+    const xMin = Math.min(...xVals);
+    const xMax = Math.max(...xVals);
+    const yMin = Math.min(...yVals);
+    const yMax = Math.max(...yVals);
+    const xPad = (xMax - xMin) * 0.15 || xMin * 0.1;
+    const yPad = (yMax - yMin) * 0.15 || yMin * 0.1;
+
     const opts: uPlot.Options = {
       mode: 2,
       width: containerRef.clientWidth || 500,
       height: 340,
       scales: {
-        x: { time: false },
-        y: {},
+        x: { time: false, range: [xMin - xPad, xMax + xPad] },
+        y: { range: [yMin - yPad, yMax + yPad] },
       },
       series: [
         {},
@@ -184,12 +196,18 @@ export function ScatterPlot(props: ScatterPlotProps) {
           stroke: '#888',
           grid: { stroke: '#333' },
           ticks: { stroke: '#555' },
+          size: 40,
+          space: 80,
+          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(4)),
         },
         {
           label: 'tau_decay (s)',
           stroke: '#888',
           grid: { stroke: '#333' },
           ticks: { stroke: '#555' },
+          size: 60,
+          space: 50,
+          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(3)),
         },
       ],
       legend: { show: false },
@@ -263,7 +281,7 @@ function LambdaLegend(props: { min: number; max: number }) {
         class="scatter-plot__legend-bar"
       />
       <span class="scatter-plot__legend-label">{formatVal(props.max)}</span>
-      <span class="scatter-plot__legend-title">lambda</span>
+      <span class="scatter-plot__legend-title">&lambda;</span>
     </div>
   );
 }

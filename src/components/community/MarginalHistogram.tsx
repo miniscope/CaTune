@@ -14,6 +14,8 @@ export interface MarginalHistogramProps {
   orientation: 'horizontal' | 'vertical';
   label: string;
   bins?: number;
+  /** Optional range to align with parent scatter axis [min, max]. */
+  range?: [number, number];
 }
 
 /** Compute histogram bin counts from an array of values. */
@@ -60,7 +62,8 @@ export function MarginalHistogram(props: MarginalHistogramProps) {
   let containerRef: HTMLDivElement | undefined;
   let uplotInstance: uPlot | undefined;
 
-  const numBins = () => props.bins ?? 20;
+  // Auto-scale bins: fewer bins for sparse data, more for dense
+  const numBins = () => props.bins ?? Math.max(3, Math.min(20, Math.ceil(Math.sqrt(props.values.length))));
 
   const histogram = createMemo(() =>
     computeBins(props.values, numBins()),
@@ -84,11 +87,13 @@ export function MarginalHistogram(props: MarginalHistogramProps) {
     const chartWidth = isVertical ? 80 : (containerRef.clientWidth || 400);
     const chartHeight = isVertical ? 340 : 60;
 
+    const xRange = props.range ?? undefined;
+
     const opts: uPlot.Options = {
       width: chartWidth,
       height: chartHeight,
       scales: {
-        x: { time: false },
+        x: { time: false, range: xRange ? (_u: uPlot, _min: number, _max: number) => xRange : undefined },
         y: {},
       },
       series: [
@@ -103,17 +108,11 @@ export function MarginalHistogram(props: MarginalHistogramProps) {
       ],
       axes: [
         {
-          show: !isVertical,
-          stroke: '#888',
-          grid: { show: false },
-          ticks: { show: false },
-          size: isVertical ? 0 : 20,
+          show: false,
+          size: 0,
         },
         {
           show: false,
-          stroke: '#888',
-          grid: { show: false },
-          ticks: { show: false },
           size: 0,
         },
       ],

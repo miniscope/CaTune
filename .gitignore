@@ -4,3 +4,5 @@ dist/
 .vite/
 wasm/catune-solver/target/
 test/
+.env
+.env.local

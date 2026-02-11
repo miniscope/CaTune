@@ -19,7 +19,6 @@ import type {
 } from '../../lib/community/types';
 import { tauRise, tauDecay, lambda } from '../../lib/viz-store';
 import { ScatterPlot } from './ScatterPlot';
-import { MarginalHistogram } from './MarginalHistogram';
 import { FilterBar } from './FilterBar';
 import '../../styles/community.css';
 
@@ -64,6 +63,7 @@ export function CommunityBrowser() {
   const tauDecayValues = createMemo(() =>
     filteredSubmissions().map((s) => s.tau_decay),
   );
+
 
   /** User params for "Compare my params" overlay. */
   const userParams = createMemo(() =>
@@ -185,37 +185,10 @@ export function CommunityBrowser() {
                 </div>
               }
             >
-              {/* Visualization grid: histograms + scatter */}
-              <div class="community-browser__viz-grid">
-                {/* Top: tau_rise marginal histogram */}
-                <div class="community-browser__viz-grid__top-hist">
-                  <MarginalHistogram
-                    values={tauRiseValues()}
-                    orientation="horizontal"
-                    label="tau_rise distribution"
-                  />
-                </div>
-
-                {/* Top-right: empty corner */}
-                <div class="community-browser__viz-grid__corner" />
-
-                {/* Center: scatter plot */}
-                <div class="community-browser__viz-grid__scatter">
-                  <ScatterPlot
-                    submissions={filteredSubmissions()}
-                    userParams={userParams()}
-                  />
-                </div>
-
-                {/* Right: tau_decay marginal histogram */}
-                <div class="community-browser__viz-grid__right-hist">
-                  <MarginalHistogram
-                    values={tauDecayValues()}
-                    orientation="vertical"
-                    label="tau_decay distribution"
-                  />
-                </div>
-              </div>
+              <ScatterPlot
+                submissions={filteredSubmissions()}
+                userParams={userParams()}
+              />
             </Show>
           </Show>
         </div>

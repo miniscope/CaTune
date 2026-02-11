@@ -48,28 +48,20 @@ if (supabase) {
 
 // --- Auth actions ---
 
-/** Sign in with GitHub OAuth. Redirects to GitHub and back. */
-async function signInWithGitHub(): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'github',
+/** Sign in with email magic link. Sends a login link to the user's email. */
+async function signInWithEmail(email: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Community features not configured' };
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
     options: {
-      redirectTo: window.location.origin + (import.meta.env.BASE_URL || '/'),
+      emailRedirectTo: window.location.origin + (import.meta.env.BASE_URL || '/'),
     },
   });
-  if (error) console.error('GitHub sign-in error:', error.message);
-}
-
-/** Sign in with Google OAuth. Redirects to Google and back. */
-async function signInWithGoogle(): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: window.location.origin + (import.meta.env.BASE_URL || '/'),
-    },
-  });
-  if (error) console.error('Google sign-in error:', error.message);
+  if (error) {
+    console.error('Email sign-in error:', error.message);
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 /** Sign out of the current session (local scope only). */
@@ -96,7 +88,6 @@ export {
   setBrowsing,
   setLastFetched,
   // Auth actions
-  signInWithGitHub,
-  signInWithGoogle,
+  signInWithEmail,
   signOut,
 };

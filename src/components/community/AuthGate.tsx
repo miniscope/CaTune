@@ -1,20 +1,39 @@
 /**
  * Authentication gate for community features.
- * Shows GitHub/Google login buttons when unauthenticated,
+ * Shows email sign-in form when unauthenticated,
  * user info with sign-out when authenticated.
  * Reads from the global community-store -- no props needed.
  */
 
-import { Show } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import {
   user,
   authLoading,
-  signInWithGitHub,
-  signInWithGoogle,
+  signInWithEmail,
   signOut,
 } from '../../lib/community/community-store';
 
 export function AuthGate() {
+  const [email, setEmail] = createSignal('');
+  const [sending, setSending] = createSignal(false);
+  const [sent, setSent] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    const addr = email().trim();
+    if (!addr) return;
+    setSending(true);
+    setError(null);
+    const result = await signInWithEmail(addr);
+    setSending(false);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setSent(true);
+    }
+  }
+
   return (
     <div class="auth-gate">
       <Show when={!authLoading()} fallback={<span class="auth-gate__loading">Loading...</span>}>
@@ -22,23 +41,38 @@ export function AuthGate() {
           when={user()}
           fallback={
             <div class="auth-gate__login">
-              <div class="auth-gate__buttons">
-                <button
-                  class="auth-gate__btn auth-gate__btn--github"
-                  onClick={() => signInWithGitHub()}
-                >
-                  Sign in with GitHub
-                </button>
-                <button
-                  class="auth-gate__btn auth-gate__btn--google"
-                  onClick={() => signInWithGoogle()}
-                >
-                  Sign in with Google
-                </button>
-              </div>
-              <p class="auth-gate__prompt">
-                Sign in to share parameters with the community
-              </p>
+              <Show
+                when={!sent()}
+                fallback={
+                  <p class="auth-gate__sent">
+                    Check your email for a login link. Click it to sign in.
+                  </p>
+                }
+              >
+                <form class="auth-gate__form" onSubmit={handleSubmit}>
+                  <input
+                    class="auth-gate__input"
+                    type="email"
+                    placeholder="you@lab.edu"
+                    value={email()}
+                    onInput={(e) => setEmail(e.currentTarget.value)}
+                    required
+                  />
+                  <button
+                    class="auth-gate__btn"
+                    type="submit"
+                    disabled={sending()}
+                  >
+                    {sending() ? 'Sending...' : 'Sign in with Email'}
+                  </button>
+                </form>
+                <Show when={error()}>
+                  <p class="auth-gate__error">{error()}</p>
+                </Show>
+                <p class="auth-gate__prompt">
+                  Sign in to share parameters with the community
+                </p>
+              </Show>
             </div>
           }
         >
