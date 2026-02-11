@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** Neuroscientists can interactively tune deconvolution parameters on their own calcium imaging data, see immediate visual feedback of fit quality, and learn the tuning workflow through progressive guided tutorials -- all in the browser with zero setup.
-**Current focus:** Phase 3 - Visualization
+**Current focus:** Phase 4 - Interactive Core Loop
 
 ## Current Position
 
-Phase: 3 of 8 (Visualization)
-Plan: 1 of 2 in current phase
+Phase: 4 of 8 (Interactive Core Loop)
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-11 -- Completed 03-01 (Chart Infrastructure)
+Last activity: 2026-02-11 -- Completed 04-01 (Parameter Controls UI)
 
-Progress: [█████-----] 1/2 Phase 3
+Progress: [██████░░░░] 2/3 Phase 4
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 5 min
-- Total execution time: 33 min
+- Total plans completed: 10
+- Average duration: 4 min
+- Total execution time: 41 min
 
 **By Phase:**
 
@@ -29,11 +29,12 @@ Progress: [█████-----] 1/2 Phase 3
 |-------|-------|-------|----------|
 | 01-data-foundation | 3/3 | 8 min | 3 min |
 | 02-wasm-solver | 3/3 | 22 min | 7 min |
-| 03-visualization | 1/2 | 3 min | 3 min |
+| 03-visualization | 2/2 | 8 min | 4 min |
+| 04-interactive-core-loop | 2/3 | 3 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (13 min), 02-02 (6 min), 02-03 (3 min), 03-01 (3 min)
-- Trend: 03-01 fast (pure TypeScript utilities + component, no build toolchain issues)
+- Last 5 plans: 03-01 (3 min), 03-02 (5 min), 04-02 (1 min), 04-01 (2 min)
+- Trend: Parameter controls plan completed quickly - well-defined UI components with clear research patterns
 
 *Updated after each plan completion*
 
@@ -69,6 +70,15 @@ Recent decisions affecting current work:
 - [03-01]: X-axis only zoom with y auto-range (scientific trace viewing standard)
 - [03-01]: Disabled uPlot default box-select zoom in favor of drag-to-pan
 - [03-01]: autoResize enabled on SolidUplot for responsive width filling
+- [03-02]: Visualization store decoupled from solver for reactive data flow
+- [03-02]: Mock trace generator creates synthetic data for development (Phase 4 replaces with real solver output)
+- [03-02]: Raw + reconvolution fit combined in single panel as multi-series overlay
+- [03-02]: Residual trace derived as createMemo for automatic reactivity
+- [04-01]: Local lambda signal in ParameterPanel (not viz-store) to avoid modifying shared state before Plan 03 integration
+- [04-01]: Local solverStatus signal in ConvergenceIndicator -- Plan 03 will move both to viz-store
+- [04-01]: onInput for live solver feedback, onChange for undo history commits (one undo entry per drag gesture)
+- [04-02]: Conditional base path via GITHUB_ACTIONS env var (auto-set by runner, no manual config)
+- [04-02]: Artifact-based Pages deployment (upload-pages-artifact + deploy-pages) over gh-pages branch approach
 
 ### Pending Todos
 
@@ -81,5 +91,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 03-01-PLAN.md (Chart Infrastructure)
-Resume file: .planning/phases/03-visualization/03-01-SUMMARY.md
+Stopped at: Completed 04-01-PLAN.md (Parameter Controls UI)
+Resume file: .planning/phases/04-interactive-core-loop/04-01-SUMMARY.md

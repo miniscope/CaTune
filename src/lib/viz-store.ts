@@ -1,11 +1,9 @@
 // Reactive visualization store for trace display.
-// DECOUPLED from the solver -- accepts trace data as typed arrays.
-// Phase 4 will wire solver output to these signals.
+// Signals are wired to the solver via tuning-orchestrator.
+// Parameter changes trigger solver dispatch; results flow back here.
 
 import { createSignal, createMemo } from 'solid-js';
 import type { NpyResult } from './types';
-import { generateMockTraces } from './chart/mock-traces';
-import { samplingRate } from './data-store';
 
 // --- Cell selection ---
 
@@ -23,6 +21,15 @@ const [reconvolutionTrace, setReconvolutionTrace] =
 
 const [tauRise, setTauRise] = createSignal<number>(0.02); // 20ms default
 const [tauDecay, setTauDecay] = createSignal<number>(0.4); // 400ms default
+
+// --- Lambda (sparsity penalty) ---
+
+const [lambda, setLambda] = createSignal<number>(0.01); // default sparsity
+
+// --- Solver status ---
+
+export type SolverStatus = 'idle' | 'solving' | 'converged' | 'error';
+const [solverStatus, setSolverStatus] = createSignal<SolverStatus>('idle');
 
 // --- Derived: residual trace ---
 
@@ -42,8 +49,9 @@ const residualTrace = createMemo<Float64Array | null>(() => {
 
 /**
  * Extract the raw fluorescence trace for a given cell index from the flat
- * typed array, then generate mock deconvolved/reconvolution data for
- * development visualization. Phase 4 replaces mock data with real solver output.
+ * typed array. Deconvolved/reconvolution traces are set to null; the
+ * tuning orchestrator's reactive effect detects rawTrace changed and
+ * triggers a solver dispatch automatically.
  *
  * @param cellIndex - Which cell to extract (row index)
  * @param data - The parsed NpyResult with flat typed array
@@ -82,11 +90,9 @@ function loadCellTraces(
   setRawTrace(raw);
   setSelectedCell(cellIndex);
 
-  // Generate mock deconvolved + reconvolution for development display
-  const fs = samplingRate() ?? 30;
-  const mock = generateMockTraces(raw, tauRise(), tauDecay(), fs);
-  setDeconvolvedTrace(mock.deconvolved);
-  setReconvolutionTrace(mock.reconvolution);
+  // Clear derived traces -- tuning orchestrator will trigger solver dispatch
+  setDeconvolvedTrace(null);
+  setReconvolutionTrace(null);
 }
 
 // --- Exports ---
@@ -109,6 +115,12 @@ export {
   setTauRise,
   tauDecay,
   setTauDecay,
+  // Lambda (sparsity)
+  lambda,
+  setLambda,
+  // Solver status
+  solverStatus,
+  setSolverStatus,
   // Actions
   loadCellTraces,
 };

@@ -1,11 +1,11 @@
 // Parameter control panel grouping three sliders (tau_rise, tau_decay, lambda)
 // with a convergence indicator. Consumed by the App/tuning view.
-//
-// Note: lambda signal is local for now. Plan 03 will integrate it into
-// viz-store when wiring the full reactive loop.
+// Lambda and solver status signals live in viz-store (centralized).
 
-import { createSignal } from 'solid-js';
-import { tauRise, tauDecay, setTauRise, setTauDecay } from '../../lib/viz-store';
+import {
+  tauRise, tauDecay, setTauRise, setTauDecay,
+  lambda, setLambda,
+} from '../../lib/viz-store';
 import {
   PARAM_RANGES,
   sliderToLambda,
@@ -15,11 +15,6 @@ import type { ParamSnapshot } from '../../lib/param-history';
 import { ParameterSlider } from './ParameterSlider';
 import { ConvergenceIndicator } from './ConvergenceIndicator';
 import '../../styles/controls.css';
-
-// Local lambda signal (will be moved to viz-store in Plan 03)
-const [lambda, setLambda] = createSignal<number>(PARAM_RANGES.lambda.default);
-
-export { lambda, setLambda };
 
 export interface ParameterPanelProps {
   /** Called when any slider commits (onChange). Provides the full parameter

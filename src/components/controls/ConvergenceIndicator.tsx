@@ -1,17 +1,9 @@
 // Convergence indicator showing solver status as a colored dot + label.
 // Displays idle/solving/converged/error states with appropriate visuals.
-//
-// Note: solverStatus is defined locally for now. Plan 03 (tuning orchestrator)
-// will move these signals to viz-store when wiring the full reactive loop.
+// Solver status signal is centralized in viz-store.
 
-import { createSignal } from 'solid-js';
-
-export type SolverStatusType = 'idle' | 'solving' | 'converged' | 'error';
-
-const [solverStatus, setSolverStatus] =
-  createSignal<SolverStatusType>('idle');
-
-export { solverStatus, setSolverStatus };
+import { solverStatus } from '../../lib/viz-store';
+import type { SolverStatus } from '../../lib/viz-store';
 
 export function ConvergenceIndicator() {
   const statusClass = () => {
