@@ -133,7 +133,7 @@ export function ScatterPlot(props: ScatterPlotProps) {
                 lambdaRange().min || up.lambda,
                 lambdaRange().max || up.lambda,
               );
-              ctx.strokeStyle = '#fff';
+              ctx.strokeStyle = '#ffffff';
               ctx.lineWidth = 2 * devicePixelRatio;
               ctx.beginPath();
               ctx.arc(ucx, ucy, uSize / 2, 0, 2 * Math.PI);

@@ -7,7 +7,6 @@
   border-radius: var(--panel-radius);
   padding: var(--panel-padding);
   border: 1px solid var(--panel-border);
-  box-shadow: var(--shadow-panel);
   animation: fade-in-up 0.4s ease both;
 }
 
@@ -21,18 +20,17 @@
 .dashboard-panel:nth-child(7) { animation-delay: 0.30s; }
 .dashboard-panel:nth-child(8) { animation-delay: 0.35s; }
 
-/* Variant: controls — secondary bg, raised */
+/* Variant: controls — light grey bg */
 .dashboard-panel--controls {
   background: var(--panel-bg-controls);
 }
 
-/* Variant: data — inset bg, recessed feel */
+/* Variant: data — white bg */
 .dashboard-panel--data {
   background: var(--panel-bg-data);
-  box-shadow: var(--shadow-inset);
 }
 
-/* Variant: interactive — surface bg */
+/* Variant: interactive — white bg */
 .dashboard-panel--interactive {
   background: var(--panel-bg-interactive);
 }
@@ -252,7 +250,8 @@
 
 .metrics-panel__stat {
   flex: 1;
-  background: var(--bg-inset);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: var(--space-sm);
   text-align: center;
@@ -326,12 +325,12 @@
 }
 
 /* ========================
-   Section Divider
+   Section Divider — solid thin line
    ======================== */
 .section-divider {
   border: none;
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-default), transparent);
+  background: var(--border-subtle);
   margin: var(--space-sm) 0;
 }
 
@@ -346,18 +345,4 @@
   .dashboard-panel {
     padding: var(--space-md);
   }
-
-  /*
-  .viz-layout--grid {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "parameters"
-      "toolbar"
-      "traces"
-      "selector"
-      "kernel"
-      "multi-trace"
-      "community";
-  }
-  */
 }

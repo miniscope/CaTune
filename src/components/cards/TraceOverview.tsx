@@ -106,17 +106,17 @@ export function TraceOverview(props: TraceOverviewProps) {
       if (zoomEnd > rowStartTime && zoomStart < rowEndTime) {
         const hlStart = Math.max(0, (zoomStart - rowStartTime) / rowDuration) * width;
         const hlEnd = Math.min(1, (zoomEnd - rowStartTime) / rowDuration) * width;
-        ctx.fillStyle = 'rgba(83, 199, 240, 0.15)';
+        ctx.fillStyle = 'rgba(33, 113, 181, 0.1)';
         ctx.fillRect(hlStart, rowY, hlEnd - hlStart, ROW_HEIGHT);
 
         // Border lines for highlight
-        ctx.strokeStyle = 'rgba(83, 199, 240, 0.4)';
+        ctx.strokeStyle = 'rgba(33, 113, 181, 0.3)';
         ctx.lineWidth = 1;
         ctx.strokeRect(hlStart, rowY, hlEnd - hlStart, ROW_HEIGHT);
       }
 
       // Draw trace line
-      ctx.strokeStyle = 'hsl(200, 60%, 50%)';
+      ctx.strokeStyle = '#1f77b4';
       ctx.lineWidth = 1;
       ctx.beginPath();
 

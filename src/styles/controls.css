@@ -1,4 +1,4 @@
-/* Parameter control panel styles - Scientific Instrument theme */
+/* Parameter control panel styles - Scientific Instrument light theme */
 
 /* ========================
    Parameter Panel
@@ -50,17 +50,19 @@
   display: flex;
   align-items: baseline;
   gap: 2px;
+  min-width: 100px;
+  justify-content: flex-end;
 }
 
-/* --- Range input: cross-browser dark theme --- */
+/* --- Range input: cross-browser light theme --- */
 
 .param-slider__range {
   -webkit-appearance: none;
   appearance: none;
   flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-surface);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-default);
   outline: none;
   cursor: pointer;
 }
@@ -69,57 +71,57 @@
 .param-slider__range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
   border: 2px solid var(--bg-primary);
-  box-shadow: 0 0 4px rgba(83, 199, 240, 0.3);
+  box-shadow: 0 0 0 1px var(--border-default);
   transition: box-shadow var(--transition-fast);
 }
 
 .param-slider__range::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 8px rgba(83, 199, 240, 0.5);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 /* Thumb - Firefox */
 .param-slider__range::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
   border: 2px solid var(--bg-primary);
-  box-shadow: 0 0 4px rgba(83, 199, 240, 0.3);
+  box-shadow: 0 0 0 1px var(--border-default);
   transition: box-shadow var(--transition-fast);
 }
 
 .param-slider__range::-moz-range-thumb:hover {
-  box-shadow: 0 0 8px rgba(83, 199, 240, 0.5);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 /* Track - Firefox */
 .param-slider__range::-moz-range-track {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-surface);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-default);
 }
 
-/* Focus ring for accessibility — warm accent */
+/* Focus ring for accessibility */
 .param-slider__range:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px var(--accent-warm-muted);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 .param-slider__range:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 3px var(--accent-warm-muted);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 /* --- Numeric input --- */
 
 .param-slider__number {
   width: 72px;
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
@@ -132,8 +134,8 @@
 }
 
 .param-slider__number:focus {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 2px var(--accent-warm-muted);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 /* Hide spin buttons for cleaner look */

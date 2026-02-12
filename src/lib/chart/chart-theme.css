@@ -1,12 +1,12 @@
 /*
- * CaTune dark theme overrides for uPlot.
+ * CaTune light theme overrides for uPlot.
  * Import after uPlot.min.css to override default light theme.
  * References CSS custom properties from src/styles/global.css.
  */
 
-/* Chart wrapper — inset background */
+/* Chart wrapper — clean white with thin border */
 .u-wrap {
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
 }
@@ -18,25 +18,25 @@
 
 /* Axis tick labels — mono font */
 .u-axis .u-label {
-  color: #8b92a8;
+  color: #616161;
   font-size: 11px;
   font-family: var(--font-mono);
 }
 
 /* Axis tick marks */
 .u-axis .u-tick {
-  stroke: color-mix(in srgb, var(--text-secondary) 30%, transparent);
+  stroke: rgba(0, 0, 0, 0.15);
 }
 
-/* Grid lines at 15% opacity */
+/* Grid lines — subtle */
 .u-grid .u-stroke {
-  stroke: color-mix(in srgb, var(--text-secondary) 15%, transparent);
+  stroke: rgba(0, 0, 0, 0.06);
 }
 
 /* Cursor crosshair lines */
 .u-cursor-x,
 .u-cursor-y {
-  border-color: var(--accent) !important;
+  border-color: rgba(0, 0, 0, 0.3) !important;
 }
 
 /* Legend text — mono font */

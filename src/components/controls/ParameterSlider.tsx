@@ -84,7 +84,7 @@ export function ParameterSlider(props: ParameterSliderProps) {
             onInput={handleNumericInput}
             onChange={handleNumericChange}
           />
-          {props.unit && <span class="param-slider__unit">{props.unit}</span>}
+          <span class="param-slider__unit">{props.unit ?? ''}</span>
         </span>
       </div>
       <input

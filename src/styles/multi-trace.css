@@ -1,4 +1,4 @@
-/* Multi-trace view styles - Scientific Instrument theme */
+/* Multi-trace view styles - Scientific Instrument light theme */
 
 /* ========================
    Multi-Trace Section
@@ -37,15 +37,15 @@
 }
 
 /* ========================
-   Mini-Panel — inset bg, warm active state
+   Mini-Panel — flat, thin borders
    ======================== */
 .mini-panel {
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: var(--space-xs);
   cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
 }
 
 .mini-panel:hover {
@@ -53,8 +53,8 @@
 }
 
 .mini-panel--active {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 8px rgba(212, 165, 116, 0.2);
+  border-color: var(--accent);
+  border-width: 2px;
 }
 
 .mini-panel__label {
@@ -92,7 +92,7 @@
 }
 
 .cell-selector__mode {
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
@@ -104,13 +104,13 @@
 }
 
 .cell-selector__mode:focus {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 2px var(--accent-warm-muted);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 .cell-selector__count {
   width: 60px;
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
@@ -122,8 +122,8 @@
 }
 
 .cell-selector__count:focus {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 2px var(--accent-warm-muted);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 /* Hide spin buttons for cleaner look */
@@ -148,7 +148,7 @@
 }
 
 .cell-selector__step-btn {
-  background: var(--bg-inset);
+  background: var(--bg-secondary);
   border: none;
   color: var(--text-secondary);
   font-size: 0.85rem;
@@ -170,14 +170,14 @@
   padding: 2px 6px;
   min-width: 20px;
   text-align: center;
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border-left: 1px solid var(--border-default);
   border-right: 1px solid var(--border-default);
 }
 
 .cell-selector__manual {
   width: 180px;
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
@@ -189,8 +189,8 @@
 }
 
 .cell-selector__manual:focus {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 2px var(--accent-warm-muted);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 /* ========================
@@ -220,7 +220,7 @@
 }
 
 /* ========================
-   Toolbar Row — border + warm active
+   Toolbar Row
    ======================== */
 .viz-toolbar {
   display: flex;
