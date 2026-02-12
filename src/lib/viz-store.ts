@@ -4,6 +4,8 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import type { NpyResult } from './types';
+import type { SolverStatus } from './solver-types';
+export type { SolverStatus } from './solver-types';
 import { extractCellTrace } from './array-utils';
 import { pinMultiCellResults, unpinMultiCellResults } from './multi-cell-store';
 
@@ -30,7 +32,6 @@ const [lambda, setLambda] = createSignal<number>(0.01); // default sparsity
 
 // --- Solver status ---
 
-export type SolverStatus = 'idle' | 'solving' | 'converged' | 'error';
 const [solverStatus, setSolverStatus] = createSignal<SolverStatus>('idle');
 
 // --- Pinned snapshot for before/after comparison ---
