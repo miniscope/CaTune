@@ -53,6 +53,16 @@ function computeLambdaColors(submissions: CommunitySubmission[]): string[] {
   return lambdas.map((l) => lambdaToColor(l, minL, maxL));
 }
 
+/** Compute the median of a numeric array. Returns 0 for empty arrays. */
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 export function ScatterPlot(props: ScatterPlotProps) {
   let containerRef: HTMLDivElement | undefined;
   let uplotInstance: uPlot | undefined;
@@ -60,6 +70,15 @@ export function ScatterPlot(props: ScatterPlotProps) {
   const lambdaColors = createMemo(() =>
     computeLambdaColors(props.submissions),
   );
+
+  const medianPoint = createMemo(() => {
+    const subs = props.submissions;
+    if (subs.length === 0) return null;
+    return {
+      x: median(subs.map((s) => s.tau_rise)),
+      y: median(subs.map((s) => s.tau_decay)),
+    };
+  });
 
   const lambdaRange = createMemo(() => {
     if (props.submissions.length === 0) return { min: 0, max: 1 };
@@ -86,7 +105,13 @@ export function ScatterPlot(props: ScatterPlotProps) {
   });
 
   /** Create custom paths draw function for colored scatter points. */
-  function makeDrawPoints(colors: () => string[], userParams: () => ScatterPlotProps['userParams'], markerStroke: string) {
+  function makeDrawPoints(
+    colors: () => string[],
+    userParams: () => ScatterPlotProps['userParams'],
+    medianPt: () => { x: number; y: number } | null,
+    markerStroke: string,
+    medianColor: string,
+  ) {
     return (u: uPlot, seriesIdx: number, _idx0: number, _idx1: number) => {
       const ctx = u.ctx;
       const size = 10 * devicePixelRatio;
@@ -105,17 +130,43 @@ export function ScatterPlot(props: ScatterPlotProps) {
           const yVals = d[1];
           const cols = colors();
 
+          const scaleValid =
+            scaleX.min != null && scaleX.max != null &&
+            scaleY.min != null && scaleY.max != null;
+
+          // Draw median crosshair lines (behind points)
+          const mp = medianPt();
+          if (mp && scaleValid) {
+            const mcx = valToPosX(mp.x, scaleX, xDim, xOff);
+            const mcy = valToPosY(mp.y, scaleY, yDim, yOff);
+
+            ctx.save();
+            ctx.strokeStyle = medianColor;
+            ctx.lineWidth = 1 * devicePixelRatio;
+            ctx.globalAlpha = 0.5;
+
+            // Vertical line at median tau_rise
+            ctx.beginPath();
+            ctx.moveTo(mcx, yOff);
+            ctx.lineTo(mcx, yOff + yDim);
+            ctx.stroke();
+
+            // Horizontal line at median tau_decay
+            ctx.beginPath();
+            ctx.moveTo(xOff, mcy);
+            ctx.lineTo(xOff + xDim, mcy);
+            ctx.stroke();
+
+            ctx.restore();
+          }
+
           // Draw community points
           for (let i = 0; i < xVals.length; i++) {
             const xVal = xVals[i];
             const yVal = yVals[i];
-            if (
-              xVal == null || yVal == null ||
-              scaleX.min == null || scaleX.max == null ||
-              scaleY.min == null || scaleY.max == null
-            ) continue;
-            if (xVal < scaleX.min || xVal > scaleX.max) continue;
-            if (yVal < scaleY.min || yVal > scaleY.max) continue;
+            if (xVal == null || yVal == null || !scaleValid) continue;
+            if (xVal < scaleX.min! || xVal > scaleX.max!) continue;
+            if (yVal < scaleY.min! || yVal > scaleY.max!) continue;
 
             const cx = valToPosX(xVal, scaleX, xDim, xOff);
             const cy = valToPosY(yVal, scaleY, yDim, yOff);
@@ -125,16 +176,30 @@ export function ScatterPlot(props: ScatterPlotProps) {
             ctx.fill();
           }
 
+          // Draw median marker on top of community points
+          if (mp && scaleValid) {
+            const mcx = valToPosX(mp.x, scaleX, xDim, xOff);
+            const mcy = valToPosY(mp.y, scaleY, yDim, yOff);
+            const mSize = 8 * devicePixelRatio;
+
+            ctx.fillStyle = medianColor;
+            ctx.strokeStyle = markerStroke;
+            ctx.lineWidth = 1.5 * devicePixelRatio;
+            ctx.beginPath();
+            ctx.arc(mcx, mcy, mSize / 2, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+          }
+
           // Draw user parameter marker on top if provided
           const up = userParams();
           if (up) {
             const ux = up.tauRise;
             const uy = up.tauDecay;
             if (
-              scaleX.min != null && scaleX.max != null &&
-              scaleY.min != null && scaleY.max != null &&
-              ux >= scaleX.min && ux <= scaleX.max &&
-              uy >= scaleY.min && uy <= scaleY.max
+              scaleValid &&
+              ux >= scaleX.min! && ux <= scaleX.max! &&
+              uy >= scaleY.min! && uy <= scaleY.max!
             ) {
               const ucx = valToPosX(ux, scaleX, xDim, xOff);
               const ucy = valToPosY(uy, scaleY, yDim, yOff);
@@ -174,7 +239,7 @@ export function ScatterPlot(props: ScatterPlotProps) {
     // Read CSS custom properties for theme-aware colors
     const theme = getThemeColors();
 
-    const drawFn = makeDrawPoints(lambdaColors, () => props.userParams, theme.textPrimary);
+    const drawFn = makeDrawPoints(lambdaColors, () => props.userParams, medianPoint, theme.textPrimary, theme.textSecondary);
 
     // Compute padded ranges so points aren't on the edge
     const xVals = subs.map((s) => s.tau_rise);

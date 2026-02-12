@@ -21,7 +21,7 @@ export const PARAM_RANGES = {
   },
   lambda: {
     min: 0,        // No sparsity penalty
-    max: 4.0,      // High sparsity (only largest events)
+    max: 10,       // High sparsity (only largest events)
     default: 0.01, // Moderate sparsity
     logScale: false,
   },

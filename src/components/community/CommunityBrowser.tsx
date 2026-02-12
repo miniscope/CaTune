@@ -7,7 +7,7 @@
  * Built as a modular, self-contained component per locked decision.
  */
 
-import { createSignal, createEffect, createMemo, Show } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show, on } from 'solid-js';
 import { supabaseEnabled } from '../../lib/supabase';
 import { fetchSubmissions } from '../../lib/community/community-service';
 import {
@@ -16,9 +16,11 @@ import {
 } from '../../lib/community/community-store';
 import type {
   CommunitySubmission,
+  DataSource,
   FilterState,
 } from '../../lib/community/types';
 import { tauRise, tauDecay, lambda } from '../../lib/viz-store';
+import { isDemo } from '../../lib/data-store';
 import { ScatterPlot } from './ScatterPlot';
 import { FilterBar } from './FilterBar';
 import '../../styles/community.css';
@@ -34,17 +36,27 @@ export function CommunityBrowser() {
     species: null,
     brainRegion: null,
   });
+  const [dataSource, setDataSource] = createSignal<DataSource>(
+    isDemo() ? 'demo' : 'user',
+  );
   const [loading, setLoading] = createSignal(false);
   const [collapsed, setCollapsed] = createSignal(false);
   const [compareMyParams, setCompareMyParams] = createSignal(false);
   const [lastFetched, setLastFetched] = createSignal<number | null>(null);
   const [error, setError] = createSignal<string | null>(null);
 
+  // Auto-switch data source when demo mode changes
+  createEffect(on(isDemo, (demo) => {
+    setDataSource(demo ? 'demo' : 'user');
+  }));
+
   // --- Filtered data ---
   const filteredSubmissions = createMemo(() => {
     const subs = submissions();
     const f = filters();
+    const ds = dataSource();
     return subs.filter((s) => {
+      if (s.data_source !== ds) return false;
       if (f.indicator && s.indicator !== f.indicator) return false;
       if (f.species && s.species !== f.species) return false;
       if (f.brainRegion && s.brain_region !== f.brainRegion) return false;
@@ -148,6 +160,29 @@ export function CommunityBrowser() {
 
           {/* Content when loaded */}
           <Show when={!loading() && !error()}>
+            {/* Data source toggle */}
+            <div class="community-browser__source-row">
+              <div class="community-browser__source-toggle">
+                <button
+                  class={`community-browser__source-btn ${dataSource() === 'user' ? 'community-browser__source-btn--active' : ''}`}
+                  onClick={() => setDataSource('user')}
+                >
+                  User data
+                </button>
+                <button
+                  class={`community-browser__source-btn ${dataSource() === 'demo' ? 'community-browser__source-btn--active' : ''}`}
+                  onClick={() => setDataSource('demo')}
+                >
+                  Demo data
+                </button>
+              </div>
+              <Show when={isDemo() && dataSource() === 'demo'}>
+                <span class="community-browser__source-hint">
+                  Viewing demo parameters — submitting your demo results is encouraged!
+                </span>
+              </Show>
+            </div>
+
             {/* Filter bar */}
             <FilterBar
               filters={filters()}
