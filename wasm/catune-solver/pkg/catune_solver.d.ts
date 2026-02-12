@@ -24,11 +24,11 @@ export class Solver {
     /**
      * Returns a copy of the reconvolution (K * solution) for the active region.
      */
-    get_reconvolution(): Float64Array;
+    get_reconvolution(): Float32Array;
     /**
      * Returns a copy of the current solution (spike train) for the active region.
      */
-    get_solution(): Float64Array;
+    get_solution(): Float32Array;
     /**
      * Returns the current iteration count.
      */
@@ -54,7 +54,7 @@ export class Solver {
      * Load a trace for deconvolution. Grows buffers if needed (never shrinks).
      * Resets iteration state for a fresh solve.
      */
-    set_trace(trace: Float64Array): void;
+    set_trace(trace: Float32Array): void;
     /**
      * Run n_steps of FISTA iterations. Returns true if converged.
      *

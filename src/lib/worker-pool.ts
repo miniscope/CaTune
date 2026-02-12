@@ -10,8 +10,8 @@ export interface PoolJob {
   params: SolverParams;
   warmState: Uint8Array | null;
   warmStrategy: WarmStartStrategy;
-  onIntermediate(solution: Float64Array, reconvolution: Float64Array, iteration: number): void;
-  onComplete(solution: Float64Array, reconvolution: Float64Array, state: Uint8Array, iterations: number, converged: boolean): void;
+  onIntermediate(solution: Float32Array, reconvolution: Float32Array, iteration: number): void;
+  onComplete(solution: Float32Array, reconvolution: Float32Array, state: Uint8Array, iterations: number, converged: boolean): void;
   onCancelled(): void;
   onError(message: string): void;
 }

@@ -18,14 +18,14 @@ pub struct Solver {
     lambda: f64,
     fs: f64,
 
-    // Pre-allocated working buffers
-    pub(crate) trace: Vec<f64>,
-    pub(crate) solution: Vec<f64>,
-    pub(crate) solution_prev: Vec<f64>,
-    pub(crate) gradient: Vec<f64>,
-    pub(crate) reconvolution: Vec<f64>,
-    pub(crate) residual_buf: Vec<f64>,
-    pub(crate) kernel: Vec<f64>,
+    // Pre-allocated working buffers (f32 to halve memory per worker)
+    pub(crate) trace: Vec<f32>,
+    pub(crate) solution: Vec<f32>,
+    pub(crate) solution_prev: Vec<f32>,
+    pub(crate) gradient: Vec<f32>,
+    pub(crate) reconvolution: Vec<f32>,
+    pub(crate) residual_buf: Vec<f32>,
+    pub(crate) kernel: Vec<f32>,
 
     // FISTA state
     pub(crate) iteration: u32,
@@ -86,7 +86,7 @@ impl Solver {
 
     /// Load a trace for deconvolution. Grows buffers if needed (never shrinks).
     /// Resets iteration state for a fresh solve.
-    pub fn set_trace(&mut self, trace: &[f64]) {
+    pub fn set_trace(&mut self, trace: &[f32]) {
         self.active_len = trace.len();
 
         // Grow buffers if needed (never shrink to prevent WASM memory fragmentation)
@@ -118,12 +118,12 @@ impl Solver {
     }
 
     /// Returns a copy of the current solution (spike train) for the active region.
-    pub fn get_solution(&self) -> Vec<f64> {
+    pub fn get_solution(&self) -> Vec<f32> {
         self.solution[..self.active_len].to_vec()
     }
 
     /// Returns a copy of the reconvolution (K * solution) for the active region.
-    pub fn get_reconvolution(&self) -> Vec<f64> {
+    pub fn get_reconvolution(&self) -> Vec<f32> {
         self.reconvolution[..self.active_len].to_vec()
     }
 
@@ -146,11 +146,11 @@ impl Solver {
     }
 
     /// Serialize solver state for warm-start cache.
-    /// Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [solution...] [solution_prev...]
+    /// Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [solution f32...] [solution_prev f32...]
     pub fn export_state(&self) -> Vec<u8> {
         let n = self.active_len;
-        // 4 bytes active_len + 8 bytes t_fista + 4 bytes iteration + 2*n*8 bytes solutions
-        let mut buf = Vec::with_capacity(4 + 8 + 4 + 2 * n * 8);
+        // 4 bytes active_len + 8 bytes t_fista + 4 bytes iteration + 2*n*4 bytes solutions (f32)
+        let mut buf = Vec::with_capacity(4 + 8 + 4 + 2 * n * 4);
 
         buf.extend_from_slice(&(n as u32).to_le_bytes());
         buf.extend_from_slice(&self.t_fista.to_le_bytes());
@@ -178,7 +178,7 @@ impl Solver {
         }
 
         let saved_len = u32::from_le_bytes([state[0], state[1], state[2], state[3]]) as usize;
-        let expected_size = 4 + 8 + 4 + 2 * saved_len * 8;
+        let expected_size = 4 + 8 + 4 + 2 * saved_len * 4; // f32: 4 bytes per element
 
         if state.len() != expected_size || saved_len != self.active_len {
             return; // size mismatch, cold start
@@ -192,7 +192,7 @@ impl Solver {
         self.converged = false;
         self.prev_objective = f64::INFINITY;
 
-        // Read solution and solution_prev
+        // Read solution and solution_prev (f32: 4 bytes each)
         let mut offset = 16;
         for i in 0..saved_len {
             let bytes = [
@@ -200,13 +200,9 @@ impl Solver {
                 state[offset + 1],
                 state[offset + 2],
                 state[offset + 3],
-                state[offset + 4],
-                state[offset + 5],
-                state[offset + 6],
-                state[offset + 7],
             ];
-            self.solution[i] = f64::from_le_bytes(bytes);
-            offset += 8;
+            self.solution[i] = f32::from_le_bytes(bytes);
+            offset += 4;
         }
         for i in 0..saved_len {
             let bytes = [
@@ -214,13 +210,9 @@ impl Solver {
                 state[offset + 1],
                 state[offset + 2],
                 state[offset + 3],
-                state[offset + 4],
-                state[offset + 5],
-                state[offset + 6],
-                state[offset + 7],
             ];
-            self.solution_prev[i] = f64::from_le_bytes(bytes);
-            offset += 8;
+            self.solution_prev[i] = f32::from_le_bytes(bytes);
+            offset += 4;
         }
     }
 }

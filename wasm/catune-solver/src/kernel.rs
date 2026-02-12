@@ -2,7 +2,8 @@
 ///
 /// h(t) = exp(-t/tau_decay) - exp(-t/tau_rise), normalized so max(h) = 1.0.
 /// Kernel length extends until the decay envelope drops below 1e-6 of peak.
-pub fn build_kernel(tau_rise: f64, tau_decay: f64, fs: f64) -> Vec<f64> {
+/// Computed in f64 for precision, returned as Vec<f32>.
+pub fn build_kernel(tau_rise: f64, tau_decay: f64, fs: f64) -> Vec<f32> {
     let dt = 1.0 / fs;
 
     // Kernel length: until decay drops below 1e-6 of peak
@@ -10,13 +11,13 @@ pub fn build_kernel(tau_rise: f64, tau_decay: f64, fs: f64) -> Vec<f64> {
     let kernel_len = ((-1e-6_f64.ln()) * tau_decay / dt).ceil() as usize;
     let kernel_len = kernel_len.max(2); // at least 2 samples
 
-    let mut kernel = Vec::with_capacity(kernel_len);
+    let mut kernel_f64 = Vec::with_capacity(kernel_len);
     let mut peak = 0.0_f64;
 
     for i in 0..kernel_len {
         let t = (i as f64) * dt;
         let val = (-t / tau_decay).exp() - (-t / tau_rise).exp();
-        kernel.push(val);
+        kernel_f64.push(val);
         if val > peak {
             peak = val;
         }
@@ -24,12 +25,12 @@ pub fn build_kernel(tau_rise: f64, tau_decay: f64, fs: f64) -> Vec<f64> {
 
     // Normalize to peak = 1.0
     if peak > 0.0 {
-        for v in kernel.iter_mut() {
+        for v in kernel_f64.iter_mut() {
             *v /= peak;
         }
     }
 
-    kernel
+    kernel_f64.iter().map(|&v| v as f32).collect()
 }
 
 /// Derive AR(2) coefficients (g1, g2) from tau parameters.
@@ -55,7 +56,8 @@ pub fn tau_to_ar2(tau_rise: f64, tau_decay: f64, fs: f64) -> (f64, f64) {
 /// tight upper bound for the Toeplitz (causal) convolution matrix used in practice.
 ///
 /// Computed via direct DFT of the kernel (O(n^2) but kernel is short, ~100-200 samples).
-pub fn compute_lipschitz(kernel: &[f64]) -> f64 {
+/// Takes f32 kernel but uses f64 intermediates for DFT precision; returns f64.
+pub fn compute_lipschitz(kernel: &[f32]) -> f64 {
     let n = kernel.len();
     if n == 0 {
         return 1e-10;
@@ -71,9 +73,10 @@ pub fn compute_lipschitz(kernel: &[f64]) -> f64 {
         let mut re = 0.0_f64;
         let mut im = 0.0_f64;
         for (k, &hk) in kernel.iter().enumerate() {
+            let hk64 = hk as f64;
             let angle = freq * (k as f64);
-            re += hk * angle.cos();
-            im -= hk * angle.sin();
+            re += hk64 * angle.cos();
+            im -= hk64 * angle.sin();
         }
         let power = re * re + im * im;
         if power > max_power {
@@ -92,9 +95,9 @@ mod tests {
     #[test]
     fn kernel_peak_is_one_typical_params() {
         let kernel = build_kernel(0.02, 0.4, 30.0);
-        let peak = kernel.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let peak = kernel.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         assert!(
-            (peak - 1.0).abs() < 1e-10,
+            (peak - 1.0).abs() < 1e-6,
             "Peak should be 1.0, got {}",
             peak
         );
@@ -104,9 +107,9 @@ mod tests {
     #[test]
     fn kernel_peak_is_one_extreme_params() {
         let kernel = build_kernel(0.001, 2.0, 100.0);
-        let peak = kernel.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let peak = kernel.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         assert!(
-            (peak - 1.0).abs() < 1e-10,
+            (peak - 1.0).abs() < 1e-6,
             "Peak should be 1.0 for extreme params, got {}",
             peak
         );
@@ -117,7 +120,7 @@ mod tests {
     fn kernel_first_sample_is_zero() {
         let kernel = build_kernel(0.02, 0.4, 30.0);
         assert!(
-            kernel[0].abs() < 1e-15,
+            kernel[0].abs() < 1e-7,
             "First sample should be 0.0, got {}",
             kernel[0]
         );
@@ -129,7 +132,7 @@ mod tests {
         let kernel = build_kernel(0.02, 0.4, 30.0);
         for (i, &v) in kernel.iter().enumerate() {
             assert!(
-                v >= -1e-15,
+                v >= -1e-7,
                 "Kernel value at index {} is negative: {}",
                 i,
                 v
@@ -219,7 +222,7 @@ mod tests {
 
         // The Lipschitz constant (max power spectrum) should be >= sum of squares
         // (by Parseval's theorem, sum of squares = average power, max >= average)
-        let sum_squares: f64 = kernel.iter().map(|k| k * k).sum();
+        let sum_squares: f64 = kernel.iter().map(|&k| (k as f64) * (k as f64)).sum();
         assert!(
             lipschitz >= sum_squares * 0.99, // allow tiny numerical error
             "Lipschitz should be >= sum of squares: {} vs {}",
@@ -228,7 +231,7 @@ mod tests {
         );
 
         // And bounded above by (sum of kernel)^2 (L1 norm squared)
-        let l1_norm: f64 = kernel.iter().map(|k| k.abs()).sum();
+        let l1_norm: f64 = kernel.iter().map(|&k| (k as f64).abs()).sum();
         assert!(
             lipschitz <= l1_norm * l1_norm * 1.01, // allow tiny numerical error
             "Lipschitz should be <= L1 norm squared: {} vs {}",

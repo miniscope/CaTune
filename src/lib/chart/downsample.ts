@@ -14,8 +14,8 @@
  * @returns [xValues, yValues] suitable for uPlot
  */
 export function downsampleMinMax(
-  xData: Float64Array | number[],
-  yData: Float64Array | number[],
+  xData: Float64Array | Float32Array | number[],
+  yData: Float64Array | Float32Array | number[],
   targetBuckets: number,
 ): [number[], number[]] {
   const len = xData.length;

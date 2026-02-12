@@ -12,8 +12,8 @@ export type SelectionMode = 'top-active' | 'random' | 'manual';
 export interface CellTraces {
   cellIndex: number;
   raw: Float64Array;
-  deconvolved: Float64Array;
-  reconvolution: Float64Array;
+  deconvolved: Float32Array;
+  reconvolution: Float32Array;
   windowStartSample?: number;
 }
 
@@ -45,8 +45,8 @@ function updateOneCellStatus(cellIndex: number, status: CellSolverStatus): void 
 
 function updateOneCellTraces(
   cellIndex: number,
-  deconvolved: Float64Array,
-  reconvolution: Float64Array,
+  deconvolved: Float32Array,
+  reconvolution: Float32Array,
   windowStartSample?: number,
 ): void {
   setMultiCellResults(prev => {

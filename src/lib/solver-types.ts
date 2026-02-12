@@ -8,15 +8,15 @@ export interface SolverParams {
 
 /** Intermediate result emitted during solver iteration for live visualization. */
 export interface IntermediateResult {
-  solution: Float64Array;
-  reconvolution: Float64Array;
+  solution: Float32Array;
+  reconvolution: Float32Array;
   iteration: number;
 }
 
 /** Final result returned after solver convergence or termination. */
 export interface SolveResult {
-  solution: Float64Array;
-  reconvolution: Float64Array;
+  solution: Float32Array;
+  reconvolution: Float32Array;
   state: Uint8Array;          // serialized warm-start state
   iterations: number;
   converged: boolean;
@@ -54,15 +54,15 @@ export type PoolWorkerOutbound =
   | {
       type: 'intermediate';
       jobId: number;
-      solution: Float64Array;
-      reconvolution: Float64Array;
+      solution: Float32Array;
+      reconvolution: Float32Array;
       iteration: number;
     }
   | {
       type: 'complete';
       jobId: number;
-      solution: Float64Array;
-      reconvolution: Float64Array;
+      solution: Float32Array;
+      reconvolution: Float32Array;
       state: Uint8Array;
       iterations: number;
       converged: boolean;

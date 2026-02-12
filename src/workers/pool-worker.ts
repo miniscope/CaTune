@@ -32,7 +32,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
 
   // Configure solver
   solver.set_params(req.params.tauRise, req.params.tauDecay, req.params.lambda, req.params.fs);
-  solver.set_trace(req.trace);
+  solver.set_trace(new Float32Array(req.trace));
 
   // Warm-start handling
   if (req.warmStrategy === 'warm' && req.warmState) {
