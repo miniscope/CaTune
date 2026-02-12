@@ -8,7 +8,7 @@
  * Fraction of values that are effectively zero (below threshold).
  */
 export function computeSparsityRatio(
-  deconvolved: Float64Array,
+  deconvolved: Float64Array | Float32Array,
   threshold: number = 1e-6,
 ): number {
   if (deconvolved.length === 0) return 0;
@@ -25,7 +25,7 @@ export function computeSparsityRatio(
  */
 export function computeResidualRMS(
   raw: Float64Array,
-  reconvolution: Float64Array,
+  reconvolution: Float64Array | Float32Array,
 ): number {
   if (raw.length === 0 || raw.length !== reconvolution.length) return 0;
   let sumSq = 0;
@@ -42,7 +42,7 @@ export function computeResidualRMS(
  */
 export function computeRSquared(
   raw: Float64Array,
-  reconvolution: Float64Array,
+  reconvolution: Float64Array | Float32Array,
 ): number {
   if (raw.length === 0 || raw.length !== reconvolution.length) return 0;
 

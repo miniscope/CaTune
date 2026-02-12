@@ -14,9 +14,9 @@ const [selectedCell, setSelectedCell] = createSignal<number>(0);
 
 const [rawTrace, setRawTrace] = createSignal<Float64Array | null>(null);
 const [deconvolvedTrace, setDeconvolvedTrace] =
-  createSignal<Float64Array | null>(null);
+  createSignal<Float32Array | null>(null);
 const [reconvolutionTrace, setReconvolutionTrace] =
-  createSignal<Float64Array | null>(null);
+  createSignal<Float32Array | null>(null);
 
 // --- Tau parameters (kernel shape) ---
 
@@ -35,9 +35,9 @@ const [solverStatus, setSolverStatus] = createSignal<SolverStatus>('idle');
 // --- Pinned snapshot for before/after comparison ---
 
 const [pinnedDeconvolved, setPinnedDeconvolved] =
-  createSignal<Float64Array | null>(null);
+  createSignal<Float32Array | null>(null);
 const [pinnedReconvolution, setPinnedReconvolution] =
-  createSignal<Float64Array | null>(null);
+  createSignal<Float32Array | null>(null);
 const [pinnedParams, setPinnedParams] = createSignal<{
   tauRise: number;
   tauDecay: number;
@@ -50,8 +50,8 @@ function pinCurrentSnapshot(): void {
   const reconv = reconvolutionTrace();
 
   // Deep copy to avoid sharing ArrayBuffer references
-  setPinnedDeconvolved(deconv ? new Float64Array(deconv) : null);
-  setPinnedReconvolution(reconv ? new Float64Array(reconv) : null);
+  setPinnedDeconvolved(deconv ? new Float32Array(deconv) : null);
+  setPinnedReconvolution(reconv ? new Float32Array(reconv) : null);
   setPinnedParams({
     tauRise: tauRise(),
     tauDecay: tauDecay(),

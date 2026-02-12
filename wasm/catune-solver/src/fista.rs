@@ -53,9 +53,12 @@ impl Solver {
                 self.residual_buf[i] = self.solution[i]; // save x_k
             }
 
+            // f64 scalars applied to f32 arrays via cast
+            let step_f32 = step_size as f32;
+            let thresh_f32 = threshold as f32;
             for i in 0..n {
-                let z = self.solution_prev[i] - step_size * self.gradient[i];
-                self.solution[i] = (z - threshold).max(0.0); // x_{k+1}
+                let z = self.solution_prev[i] - step_f32 * self.gradient[i];
+                self.solution[i] = (z - thresh_f32).max(0.0); // x_{k+1}
             }
 
             // 5. Compute objective at x_{k+1} for convergence and restart checks
@@ -70,7 +73,7 @@ impl Solver {
 
             // 7. FISTA momentum extrapolation: y_{k+1} = x_{k+1} + momentum * (x_{k+1} - x_k)
             let t_new = (1.0 + (1.0 + 4.0 * self.t_fista * self.t_fista).sqrt()) / 2.0;
-            let momentum = (self.t_fista - 1.0) / t_new;
+            let momentum = ((self.t_fista - 1.0) / t_new) as f32;
 
             for i in 0..n {
                 let x_k = self.residual_buf[i]; // previous x_k
@@ -144,15 +147,16 @@ impl Solver {
     }
 
     /// Compute objective: (1/2)||reconvolution - trace||^2 + lambda * sum(solution)
+    /// Accumulates in f64 for convergence tracking precision.
     fn compute_objective(&self) -> f64 {
         let n = self.active_len;
-        let mut data_fidelity = 0.0;
-        let mut l1_penalty = 0.0;
+        let mut data_fidelity = 0.0_f64;
+        let mut l1_penalty = 0.0_f64;
 
         for i in 0..n {
-            let residual = self.reconvolution[i] - self.trace[i];
+            let residual = (self.reconvolution[i] - self.trace[i]) as f64;
             data_fidelity += residual * residual;
-            l1_penalty += self.solution[i]; // solution is non-negative, so ||s||_1 = sum(s)
+            l1_penalty += self.solution[i] as f64; // solution is non-negative, so ||s||_1 = sum(s)
         }
 
         0.5 * data_fidelity + self.lambda * l1_penalty
@@ -167,7 +171,7 @@ mod tests {
     /// Helper: create a solver with given params and run to convergence
     fn solve_to_convergence(
         solver: &mut Solver,
-        trace: &[f64],
+        trace: &[f32],
         max_batches: u32,
         batch_size: u32,
     ) -> u32 {
@@ -180,6 +184,19 @@ mod tests {
             }
         }
         total_batches
+    }
+
+    /// Helper: build an f32 trace from kernel convolved with spikes
+    fn build_trace(kernel: &[f32], n: usize, spikes: &[usize]) -> Vec<f32> {
+        let mut trace = vec![0.0_f32; n];
+        for &s in spikes {
+            for (k, &kv) in kernel.iter().enumerate() {
+                if s + k < n {
+                    trace[s + k] += kv;
+                }
+            }
+        }
+        trace
     }
 
     // Test 1: Delta impulse recovery
@@ -223,7 +240,7 @@ mod tests {
         );
 
         // Sum of all other values should be small relative to the spike
-        let sum_others: f64 = solution
+        let sum_others: f32 = solution
             .iter()
             .enumerate()
             .filter(|&(i, _)| i != max_idx)
@@ -243,13 +260,13 @@ mod tests {
         let mut solver = Solver::new();
         solver.set_params(0.02, 0.4, 0.01, 30.0);
 
-        let trace = vec![0.0; 100];
+        let trace = vec![0.0_f32; 100];
         solve_to_convergence(&mut solver, &trace, 100, 10);
 
         let solution = solver.get_solution();
-        let max_val = solution.iter().cloned().fold(0.0_f64, f64::max);
+        let max_val = solution.iter().cloned().fold(0.0_f32, f32::max);
         assert!(
-            max_val < 1e-10,
+            max_val < 1e-6,
             "Zero trace should produce zero solution, max = {}",
             max_val
         );
@@ -261,20 +278,8 @@ mod tests {
         let mut solver = Solver::new();
         solver.set_params(0.02, 0.4, 0.01, 30.0);
 
-        // Create a simple trace: kernel convolved with a spike train
         let kernel = build_kernel(0.02, 0.4, 30.0);
-        let n = 200;
-        let mut trace = vec![0.0; n];
-
-        // Place spikes at a few locations
-        let spikes = [10, 50, 100, 150];
-        for &s in &spikes {
-            for (k, &kv) in kernel.iter().enumerate() {
-                if s + k < n {
-                    trace[s + k] += kv;
-                }
-            }
-        }
+        let trace = build_trace(&kernel, 200, &[10, 50, 100, 150]);
 
         solve_to_convergence(&mut solver, &trace, 100, 10);
 
@@ -294,7 +299,7 @@ mod tests {
         // Create a noisy trace
         let kernel = build_kernel(0.02, 0.4, 30.0);
         let n = 200;
-        let mut trace = vec![0.0; n];
+        let mut trace = vec![0.0_f32; n];
         let spikes = [20, 60, 120];
         for &s in &spikes {
             for (k, &kv) in kernel.iter().enumerate() {
@@ -305,7 +310,7 @@ mod tests {
         }
         // Add some noise-like perturbation
         for i in 0..n {
-            trace[i] += 0.01 * ((i as f64 * 0.7).sin());
+            trace[i] += 0.01 * ((i as f32 * 0.7).sin());
         }
 
         solve_to_convergence(&mut solver, &trace, 200, 10);
@@ -325,16 +330,7 @@ mod tests {
     #[test]
     fn deterministic_output() {
         let kernel = build_kernel(0.02, 0.4, 30.0);
-        let n = 150;
-        let mut trace = vec![0.0; n];
-        let spikes = [10, 50, 100];
-        for &s in &spikes {
-            for (k, &kv) in kernel.iter().enumerate() {
-                if s + k < n {
-                    trace[s + k] += kv;
-                }
-            }
-        }
+        let trace = build_trace(&kernel, 150, &[10, 50, 100]);
 
         // Run 1
         let mut solver1 = Solver::new();
@@ -351,7 +347,7 @@ mod tests {
         assert_eq!(sol1.len(), sol2.len());
         for i in 0..sol1.len() {
             assert!(
-                (sol1[i] - sol2[i]).abs() < 1e-15,
+                (sol1[i] - sol2[i]).abs() < 1e-7,
                 "Solutions differ at index {}: {} vs {}",
                 i,
                 sol1[i],
@@ -368,27 +364,19 @@ mod tests {
 
         let kernel = build_kernel(0.02, 0.4, 30.0);
         let n = 200;
-        let mut trace = vec![0.0; n];
-        let spikes = [10, 50, 100, 150];
-        for &s in &spikes {
-            for (k, &kv) in kernel.iter().enumerate() {
-                if s + k < n {
-                    trace[s + k] += kv;
-                }
-            }
-        }
+        let trace = build_trace(&kernel, n, &[10, 50, 100, 150]);
 
         solve_to_convergence(&mut solver, &trace, 200, 10);
 
         let reconvolution = solver.get_reconvolution();
 
         // Compute relative error: ||trace - reconvolution|| / ||trace||
-        let mut err_sq = 0.0;
-        let mut trace_sq = 0.0;
+        let mut err_sq = 0.0_f64;
+        let mut trace_sq = 0.0_f64;
         for i in 0..n {
-            let diff = trace[i] - reconvolution[i];
+            let diff = (trace[i] - reconvolution[i]) as f64;
             err_sq += diff * diff;
-            trace_sq += trace[i] * trace[i];
+            trace_sq += (trace[i] as f64) * (trace[i] as f64);
         }
 
         let rel_error = (err_sq / trace_sq).sqrt();
@@ -403,16 +391,7 @@ mod tests {
     #[test]
     fn warm_start_faster_convergence() {
         let kernel = build_kernel(0.02, 0.4, 30.0);
-        let n = 200;
-        let mut trace = vec![0.0; n];
-        let spikes = [10, 50, 100, 150];
-        for &s in &spikes {
-            for (k, &kv) in kernel.iter().enumerate() {
-                if s + k < n {
-                    trace[s + k] += kv;
-                }
-            }
-        }
+        let trace = build_trace(&kernel, 200, &[10, 50, 100, 150]);
 
         // Cold start solve with original lambda
         let mut solver = Solver::new();
@@ -465,7 +444,7 @@ mod tests {
 
         let kernel = build_kernel(0.02, 0.4, 30.0);
         let n = 100;
-        let mut trace = vec![0.0; n];
+        let mut trace = vec![0.0_f32; n];
         for (k, &kv) in kernel.iter().enumerate() {
             if k < n {
                 trace[k] += kv;
@@ -489,7 +468,7 @@ mod tests {
         let sol = solver.get_solution();
         for i in 0..sol.len() {
             assert!(
-                (solver.solution[i] - solver.solution_prev[i]).abs() < 1e-15,
+                (solver.solution[i] - solver.solution_prev[i]).abs() < 1e-7,
                 "solution_prev should equal solution at index {}",
                 i
             );

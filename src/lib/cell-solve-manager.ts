@@ -90,16 +90,16 @@ function dispatchCellSolve(state: CellSolveState): void {
     onIntermediate(solution, reconvolution, _iteration) {
       if (state.activeJobId !== jobId) return; // stale
       // Extract visible region from padded result
-      const visSol = new Float64Array(solution.subarray(resultOffset, resultOffset + resultLength));
-      const visReconv = new Float64Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
+      const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
+      const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
       updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
     },
     onComplete(solution, reconvolution, solverState, _iterations, _converged) {
       if (state.activeJobId !== jobId) return; // stale
       state.activeJobId = null;
       // Extract visible region
-      const visSol = new Float64Array(solution.subarray(resultOffset, resultOffset + resultLength));
-      const visReconv = new Float64Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
+      const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
+      const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
       updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
       // Cache warm-start state
       state.warmStartCache.store(solverState, params, paddedStart, paddedEnd);
@@ -147,7 +147,7 @@ function ensureCellState(cellIndex: number, data: NpyResult, shape: [number, num
     // Ensure the cell has an entry in multiCellResults for immediate card rendering
     const results = multiCellResults();
     if (!results.has(cellIndex)) {
-      const zeros = new Float64Array(rawTrace.length);
+      const zeros = new Float32Array(rawTrace.length);
       const next = new Map(results);
       next.set(cellIndex, { cellIndex, raw: rawTrace, deconvolved: zeros, reconvolution: zeros });
       setMultiCellResults(next);

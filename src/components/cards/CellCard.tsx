@@ -13,8 +13,8 @@ import { computePeakSNR, snrToQuality } from '../../lib/metrics/snr';
 export interface CellCardProps {
   cellIndex: number;
   rawTrace: Float64Array;
-  deconvolvedTrace?: Float64Array;
-  reconvolutionTrace?: Float64Array;
+  deconvolvedTrace?: Float32Array;
+  reconvolutionTrace?: Float32Array;
   samplingRate: number;
   isActive?: boolean;
   solverStatus?: SolverStatus;

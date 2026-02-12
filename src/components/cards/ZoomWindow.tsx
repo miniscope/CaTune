@@ -11,8 +11,8 @@ import { createRawSeries, createFitSeries, createDeconvolvedSeries } from '../..
 
 export interface ZoomWindowProps {
   rawTrace: Float64Array;
-  deconvolvedTrace?: Float64Array;
-  reconvolutionTrace?: Float64Array;
+  deconvolvedTrace?: Float32Array;
+  reconvolutionTrace?: Float32Array;
   samplingRate: number;
   /** Zoom window start time (seconds) */
   startTime: number;
@@ -120,7 +120,7 @@ export function ZoomWindow(props: ZoomWindowProps) {
     const deconvStartInWindow = startSample - offset;
     const deconvEndInWindow = endSample - offset;
     // Helper to scale deconv values to z-score space below the raw trace
-    const scaleDeconv = (dsDeconvRaw: number[], deconvFull: Float64Array): number[] => {
+    const scaleDeconv = (dsDeconvRaw: number[], deconvFull: Float32Array): number[] => {
       let dMin = Infinity;
       let dMax = -Infinity;
       for (let i = 0; i < deconvFull.length; i++) {
