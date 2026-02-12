@@ -3,6 +3,8 @@
  * See supabase/migrations/ for the database schema.
  */
 
+export type DataSource = 'user' | 'demo' | 'training';
+
 /** Full community submission row as returned from the database. */
 export interface CommunitySubmission {
   id: string;
@@ -40,6 +42,9 @@ export interface CommunitySubmission {
   dataset_hash: string;
   quality_score?: number;
   catune_version: string;
+
+  // Data source
+  data_source: DataSource;
 
   // Extensible
   extra_metadata?: Record<string, unknown>;

@@ -158,6 +158,7 @@ export function SubmitPanel() {
         fps: fs,
         dataset_hash: datasetHash,
         quality_score: qualityScore,
+        data_source: rawFile() ? 'user' : 'demo',
         catune_version: import.meta.env.VITE_APP_VERSION || 'dev',
       };
 
