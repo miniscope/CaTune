@@ -52,7 +52,7 @@ export function ParameterPanel(props: ParameterPanelProps) {
           data-tutorial="slider-decay"
         />
         <ParameterSlider
-          label="Sparsity (lambda)"
+          label="Sparsity"
           value={lambda}
           setValue={setLambda}
           min={PARAM_RANGES.lambda.min}

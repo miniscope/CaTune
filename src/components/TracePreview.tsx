@@ -11,11 +11,11 @@ import type { NumericTypedArray } from '../lib/types.ts';
 
 const NUM_TRACES = 5;
 const TRACE_COLORS = [
-  'hsl(200, 80%, 60%)',
-  'hsl(140, 70%, 50%)',
-  'hsl(30, 90%, 55%)',
-  'hsl(280, 70%, 60%)',
-  'hsl(350, 80%, 55%)',
+  '#1f77b4',
+  '#ff7f0e',
+  '#2ca02c',
+  '#d62728',
+  '#9467bd',
 ];
 
 export function TracePreview() {

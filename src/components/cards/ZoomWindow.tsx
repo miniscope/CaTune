@@ -274,6 +274,7 @@ export function ZoomWindow(props: ZoomWindowProps) {
         disableWheelZoom={!!props.onZoomChange}
         yRange={globalYRange()}
         hideYValues
+        xLabel="Time (s)"
       />
       <Show when={showHint()}>
         <div class="zoom-hint">Hold Ctrl to zoom</div>

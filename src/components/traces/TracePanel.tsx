@@ -64,16 +64,16 @@ export function TracePanel(props: TracePanelProps) {
   // Use resolved hex colors (not CSS variables) — uPlot draws axis labels
   // on canvas via fillText, and CSS variable resolution can fail during
   // setData redraws, causing tick labels to vanish.
-  const AXIS_TEXT = '#8b92a8';
-  const AXIS_GRID = 'rgba(160, 160, 160, 0.15)';
-  const AXIS_TICK = 'rgba(160, 160, 160, 0.3)';
+  const AXIS_TEXT = '#616161';
+  const AXIS_GRID = 'rgba(0, 0, 0, 0.06)';
+  const AXIS_TICK = 'rgba(0, 0, 0, 0.15)';
 
   const xAxis: uPlot.Axis = {
     stroke: AXIS_TEXT,
     grid: { stroke: AXIS_GRID },
     ticks: { stroke: AXIS_TICK },
     values: formatTimeValues,
-    ...(props.xLabel ? { label: props.xLabel, labelSize: 14, labelGap: 2, labelFont: '11px sans-serif' } : {}),
+    ...(props.xLabel ? { label: props.xLabel, labelSize: 10, labelGap: 0, labelFont: '10px sans-serif', size: 30 } : {}),
   };
 
   const yAxisBase: uPlot.Axis = {

@@ -44,16 +44,15 @@
    Cell Card
    ======================== */
 .cell-card {
-  background: var(--panel-bg-data);
+  background: var(--bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--panel-radius);
-  box-shadow: var(--shadow-panel);
   padding: var(--space-sm);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
   cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
   min-height: 280px;
   min-width: 0;
   overflow: hidden;
@@ -64,8 +63,8 @@
 }
 
 .cell-card--active {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 12px rgba(212, 165, 116, 0.25);
+  border-color: var(--accent);
+  border-width: 2px;
 }
 
 .cell-card__header {
@@ -94,7 +93,7 @@
   cursor: crosshair;
   border-radius: var(--radius-sm);
   overflow: hidden;
-  background: var(--bg-inset);
+  background: var(--bg-primary);
 }
 
 .trace-overview__canvas {
@@ -123,11 +122,11 @@
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.75);
-  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 2px;
   pointer-events: none;
   animation: zoom-hint-fade 1.5s ease-out forwards;
 }

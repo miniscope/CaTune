@@ -20,7 +20,7 @@
 .compact-header__title {
   font-size: 1.1rem;
   font-weight: var(--font-weight-semibold);
-  color: var(--accent);
+  color: var(--text-primary);
   letter-spacing: -0.02em;
 }
 

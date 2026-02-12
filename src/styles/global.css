@@ -1,59 +1,59 @@
-/* CaTune Global Styles - Scientific Instrument dark theme */
+/* CaTune Global Styles - Scientific Instrument light theme */
 
 :root {
-  /* Typography */
-  --font-body: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Typography — system fonts for scientific tool feel */
+  --font-body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* Background layers — warmed blue-slate */
-  --bg-primary: #191a2c;
-  --bg-secondary: #1c2240;
-  --bg-surface: #1a3058;
-  --bg-elevated: #243a5e;
-  --bg-inset: #141726;
+  /* Background layers — white content, grey chrome */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f0f0f0;
+  --bg-surface: #e4e4e4;
+  --bg-elevated: #ffffff;
+  --bg-inset: #fafafa;
 
   /* Text hierarchy */
-  --text-primary: #e8e8e8;
-  --text-secondary: #8b92a8;
-  --text-tertiary: #5c6380;
+  --text-primary: #1a1a1a;
+  --text-secondary: #616161;
+  --text-tertiary: #9e9e9e;
 
-  /* Dual-temperature accents */
-  --accent: #53c7f0;
-  --accent-hover: #3db8e0;
-  --accent-muted: rgba(83, 199, 240, 0.12);
-  --accent-warm: #d4a574;
-  --accent-warm-hover: #c4955a;
-  --accent-warm-muted: rgba(212, 165, 116, 0.12);
+  /* Accent — muted blue, used sparingly */
+  --accent: #2171b5;
+  --accent-hover: #185a92;
+  --accent-muted: rgba(33, 113, 181, 0.08);
+  --accent-warm: #1a1a1a;
+  --accent-warm-hover: #333333;
+  --accent-warm-muted: rgba(0, 0, 0, 0.04);
 
   /* Status */
-  --warning: #f0a500;
-  --warning-bg: rgba(240, 165, 0, 0.1);
-  --error: #e74c3c;
-  --error-bg: rgba(231, 76, 60, 0.1);
-  --success: #2ecc71;
+  --warning: #e09800;
+  --warning-bg: rgba(224, 152, 0, 0.08);
+  --error: #d32f2f;
+  --error-bg: rgba(211, 47, 47, 0.06);
+  --success: #2e7d32;
 
-  /* Semantic borders */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-emphasis: rgba(255, 255, 255, 0.18);
+  /* Semantic borders — thin, neutral */
+  --border-subtle: #e8e8e8;
+  --border-default: #d4d4d4;
+  --border-emphasis: #bdbdbd;
 
-  /* Panel tokens (dashboard prep) */
-  --panel-bg: var(--bg-secondary);
+  /* Panel tokens */
+  --panel-bg: var(--bg-primary);
   --panel-bg-controls: var(--bg-secondary);
-  --panel-bg-data: var(--bg-inset);
-  --panel-bg-interactive: var(--bg-surface);
+  --panel-bg-data: var(--bg-primary);
+  --panel-bg-interactive: var(--bg-primary);
   --panel-border: var(--border-subtle);
   --panel-radius: var(--radius-md);
   --panel-padding: var(--space-lg);
   --panel-gap: var(--space-md);
 
-  /* Shadows */
-  --shadow-panel: 0 2px 8px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
-  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-inset: inset 0 1px 4px rgba(0, 0, 0, 0.3);
+  /* Shadows — flat UI, minimal */
+  --shadow-panel: none;
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-inset: none;
 
   /* Transitions */
   --transition-fast: 0.1s ease;
@@ -67,10 +67,10 @@
   --space-lg: 24px;
   --space-xl: 32px;
 
-  /* Border radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Border radius — tight for scientific feel */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
 }
 
 /* Box-sizing reset */
@@ -80,27 +80,16 @@
   box-sizing: border-box;
 }
 
-/* Body — subtle diagonal gradient + noise texture */
+/* Body — clean white, no gradients or texture */
 body {
   margin: 0;
   font-family: var(--font-body);
   font-weight: var(--font-weight-normal);
-  background: linear-gradient(135deg, var(--bg-primary) 0%, #1b1e34 50%, var(--bg-primary) 100%);
+  background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* Barely-perceptible noise overlay */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.025;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Root container */
@@ -149,7 +138,7 @@ a:hover {
 }
 
 /* ========================
-   App Header — left-aligned, instrument aesthetic
+   App Header
    ======================== */
 .app-header {
   text-align: left;
@@ -160,7 +149,7 @@ a:hover {
 
 .app-header__title {
   font-size: 1.75rem;
-  color: var(--accent);
+  color: var(--text-primary);
   margin-bottom: var(--space-xs);
   letter-spacing: -0.03em;
   font-weight: var(--font-weight-semibold);
@@ -184,7 +173,7 @@ a:hover {
 }
 
 /* ========================
-   Step Indicator — left-aligned, rounded-rect dots
+   Step Indicator
    ======================== */
 .step-indicator {
   text-align: left;
@@ -201,7 +190,7 @@ a:hover {
 .step-dot {
   width: 32px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -215,16 +204,15 @@ a:hover {
 }
 
 .step-dot--active {
-  background: var(--bg-surface);
+  background: var(--bg-primary);
   color: var(--accent);
   border-color: var(--accent);
 }
 
 .step-dot--current {
   background: var(--accent);
-  color: var(--bg-primary);
+  color: #ffffff;
   border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(83, 199, 240, 0.3);
 }
 
 .step-indicator__label {
@@ -236,15 +224,14 @@ a:hover {
 }
 
 /* ========================
-   Cards — depth hierarchy
+   Cards — flat, thin borders
    ======================== */
 .card {
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border-radius: var(--radius-md);
   padding: var(--space-lg);
   margin-bottom: var(--space-md);
   border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-panel);
   animation: fade-in 0.3s ease both;
 }
 
@@ -260,15 +247,14 @@ a:hover {
   padding: var(--space-lg);
   margin-bottom: var(--space-md);
   border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-inset);
 }
 
 /* ========================
-   Buttons — dual-temperature
+   Buttons — flat, no gradients
    ======================== */
 .btn-primary {
-  background: linear-gradient(180deg, var(--accent-warm) 0%, var(--accent-warm-hover) 100%);
-  color: var(--bg-primary);
+  background: var(--accent-warm);
+  color: #ffffff;
   border: none;
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-lg);
@@ -276,18 +262,15 @@ a:hover {
   font-weight: var(--font-weight-semibold);
   font-family: var(--font-body);
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), var(--shadow-panel);
+  transition: background var(--transition-fast);
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 12px rgba(212, 165, 116, 0.3);
+  background: var(--accent-warm-hover);
 }
 
 .btn-primary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  background: #000000;
 }
 
 .btn-primary:disabled {
@@ -298,7 +281,7 @@ a:hover {
 .btn-secondary {
   background: transparent;
   color: var(--text-primary);
-  border: 1px solid var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-lg);
   font-size: 0.95rem;
@@ -319,7 +302,7 @@ a:hover {
 }
 
 .btn-preset {
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -327,7 +310,7 @@ a:hover {
   font-size: 0.85rem;
   font-family: var(--font-mono);
   cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
 }
 
 .btn-preset:hover {
@@ -338,25 +321,24 @@ a:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-muted);
-  box-shadow: var(--shadow-inset);
 }
 
 .btn-active {
-  border-color: var(--accent-warm) !important;
-  color: var(--accent-warm) !important;
-  background: var(--accent-warm-muted) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  background: var(--accent-muted) !important;
 }
 
 /* ========================
-   Drop Zone — inset background, warm drag accent
+   Drop Zone
    ======================== */
 .drop-zone-wrapper {
   margin-bottom: var(--space-md);
 }
 
 .drop-zone {
-  border: 2px dashed var(--text-tertiary);
-  border-radius: var(--radius-lg);
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-md);
   padding: var(--space-xl) var(--space-lg);
   text-align: center;
   cursor: pointer;
@@ -370,10 +352,9 @@ a:hover {
 }
 
 .drop-zone--active {
-  border-color: var(--accent-warm);
-  background: var(--accent-warm-muted);
+  border-color: var(--accent);
+  background: var(--accent-muted);
   border-style: solid;
-  box-shadow: 0 0 20px rgba(212, 165, 116, 0.15);
 }
 
 .drop-zone__icon {
@@ -382,7 +363,7 @@ a:hover {
 }
 
 .drop-zone--active .drop-zone__icon {
-  color: var(--accent-warm);
+  color: var(--accent);
 }
 
 .drop-zone__text {
@@ -432,7 +413,7 @@ a:hover {
   height: 20px;
   border-radius: 50%;
   background: var(--warning);
-  color: var(--bg-primary);
+  color: #ffffff;
   font-size: 0.75rem;
   font-weight: 700;
   flex-shrink: 0;
@@ -466,7 +447,7 @@ a:hover {
 }
 
 /* ========================
-   Dimension Confirmation — monospace data values
+   Dimension Confirmation
    ======================== */
 .dimension-display {
   margin-bottom: var(--space-lg);
@@ -496,7 +477,7 @@ a:hover {
   display: block;
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text-primary);
   font-family: var(--font-mono);
 }
 
@@ -535,7 +516,7 @@ a:hover {
 }
 
 .custom-rate-input__field {
-  background: var(--bg-inset);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
@@ -548,12 +529,12 @@ a:hover {
 }
 
 .custom-rate-input__field:focus {
-  border-color: var(--accent-warm);
-  box-shadow: 0 0 0 2px var(--accent-warm-muted);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-muted);
 }
 
 .duration-display {
-  background: var(--bg-surface);
+  background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   padding: var(--space-md);
   margin-bottom: var(--space-md);
@@ -577,7 +558,7 @@ a:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--bg-surface);
+  background: var(--bg-primary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: var(--space-md);
@@ -603,7 +584,7 @@ a:hover {
 }
 
 /* ========================
-   Stats Grid — monospace values
+   Stats Grid
    ======================== */
 .stats-grid {
   display: grid;
@@ -613,10 +594,11 @@ a:hover {
 }
 
 .stat-item {
-  background: var(--bg-surface);
+  background: var(--bg-secondary);
   border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-md);
   text-align: center;
+  border: 1px solid var(--border-subtle);
 }
 
 .stat-item__label {
@@ -653,7 +635,7 @@ a:hover {
 }
 
 /* ========================
-   Info Summary Bar — monospace values
+   Info Summary Bar
    ======================== */
 .info-summary {
   display: flex;
@@ -727,9 +709,9 @@ a:hover {
 .demo-data-row__field input {
   width: 80px;
   padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-0);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.85rem;
@@ -782,8 +764,7 @@ a:hover {
 .viz-header {
   margin-bottom: var(--space-md);
   padding-bottom: var(--space-sm);
-  border-bottom: 2px solid transparent;
-  border-image: linear-gradient(90deg, var(--accent-warm), transparent) 1;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .viz-header__title {
@@ -859,7 +840,6 @@ a:hover {
   }
 }
 
-/* Convergence animation (kept as-is) */
 @keyframes convergence-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.3); }
