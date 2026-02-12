@@ -38,6 +38,9 @@ CREATE TABLE community_submissions (
   quality_score DOUBLE PRECISION,
   catune_version TEXT NOT NULL,
 
+  -- Data source tracking
+  data_source TEXT NOT NULL DEFAULT 'user',
+
   -- Extensible metadata
   extra_metadata JSONB DEFAULT '{}'::jsonb,
 
@@ -45,7 +48,8 @@ CREATE TABLE community_submissions (
   CONSTRAINT valid_tau_rise CHECK (tau_rise > 0 AND tau_rise < 1),
   CONSTRAINT valid_tau_decay CHECK (tau_decay > 0 AND tau_decay < 10),
   CONSTRAINT valid_lambda CHECK (lambda > 0 AND lambda < 1),
-  CONSTRAINT valid_sampling_rate CHECK (sampling_rate > 0 AND sampling_rate <= 1000)
+  CONSTRAINT valid_sampling_rate CHECK (sampling_rate > 0 AND sampling_rate <= 1000),
+  CONSTRAINT valid_data_source CHECK (data_source IN ('user', 'demo', 'training'))
 );
 
 -- Enable RLS

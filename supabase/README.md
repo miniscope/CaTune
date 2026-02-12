@@ -9,9 +9,9 @@ Supabase Dashboard SQL Editor.
 1. Open your Supabase project dashboard.
 2. Navigate to **SQL Editor**.
 3. Run each file in `supabase/migrations/` in numeric order:
-   - `001_community_submissions.sql` — submissions table + RLS policies
+   - `001_community_submissions.sql` — submissions table, RLS policies, and indexes
    - `002_field_options.sql` — canonical field options lookup table
-4. Run `supabase/seed/field_options_seed.sql` to populate the lookup values.
+4. Run `supabase/seed/field_options_seed.sql` to populate the indicator, species, and brain region lookup values.
 
 ## Seed data
 
