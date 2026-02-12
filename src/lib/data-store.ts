@@ -45,6 +45,9 @@ const durationSeconds = createMemo<number | null>(() => {
   return rate && tp ? tp / rate : null;
 });
 
+/** True when loaded data is demo-generated (parsedData present but no rawFile). */
+const isDemo = createMemo(() => parsedData() !== null && rawFile() === null);
+
 const importStep = createMemo<ImportStep>(() => {
   if (!parsedData()) return 'drop';
   if (!dimensionsConfirmed()) return 'confirm-dims';
@@ -125,6 +128,7 @@ export {
   numTimepoints,
   durationSeconds,
   importStep,
+  isDemo,
   // Actions
   resetImport,
   loadDemoData,

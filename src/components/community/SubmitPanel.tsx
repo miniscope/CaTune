@@ -20,6 +20,7 @@ import {
   rawFile,
   parsedData,
   durationSeconds,
+  isDemo,
 } from '../../lib/data-store';
 import { computeAR2 } from '../../lib/ar2';
 import { buildExportData, downloadExport } from '../../lib/export';
@@ -71,9 +72,10 @@ export function SubmitPanel() {
 
   // --- Derived ---
   const requiredFieldsFilled = () =>
-    indicator().trim() !== '' &&
+    isDemo() ||
+    (indicator().trim() !== '' &&
     species().trim() !== '' &&
-    brainRegion().trim() !== '';
+    brainRegion().trim() !== '');
 
   // --- Handlers ---
 
@@ -146,19 +148,19 @@ export function SubmitPanel() {
         sampling_rate: fs,
         ar2_g1: ar2.g1,
         ar2_g2: ar2.g2,
-        indicator: indicator().trim(),
-        species: species().trim(),
-        brain_region: brainRegion().trim(),
+        indicator: isDemo() ? 'simulated' : indicator().trim(),
+        species: isDemo() ? 'simulated' : species().trim(),
+        brain_region: isDemo() ? 'simulated' : brainRegion().trim(),
         lab_name: labName().trim() || undefined,
         orcid: orcid().trim() || undefined,
-        virus_construct: virusConstruct().trim() || undefined,
-        time_since_injection_days: timeSinceInjection()
-          ? parseInt(timeSinceInjection(), 10)
-          : undefined,
+        virus_construct: isDemo() ? undefined : virusConstruct().trim() || undefined,
+        time_since_injection_days: isDemo() ? undefined
+          : timeSinceInjection() ? parseInt(timeSinceInjection(), 10) : undefined,
         notes: notes().trim() || undefined,
-        microscope_type: microscopeType().trim() || undefined,
-        imaging_depth_um: imagingDepth() ? parseFloat(imagingDepth()) : undefined,
-        cell_type: cellType().trim() || undefined,
+        microscope_type: isDemo() ? undefined : microscopeType().trim() || undefined,
+        imaging_depth_um: isDemo() ? undefined
+          : imagingDepth() ? parseFloat(imagingDepth()) : undefined,
+        cell_type: isDemo() ? undefined : cellType().trim() || undefined,
         num_cells: shape?.[0],
         recording_length_s: durationSeconds() ?? undefined,
         fps: fs,
@@ -253,93 +255,126 @@ export function SubmitPanel() {
           >
             <div class="submit-modal__content">
               <h3 class="submit-modal__title">Submit to Community</h3>
+
+              <Show when={isDemo()}>
+                <div class="submit-panel__demo-notice">
+                  You're tuning on simulated demo data — submitting is encouraged!
+                  This helps the community see what parameters work well for the demo dataset.
+                </div>
+              </Show>
+
               <AuthGate />
 
               <Show when={user()}>
-                {/* Required fields */}
-                <div class="submit-panel__field">
-                  <label>
-                    Calcium Indicator <span class="submit-panel__required-marker">*</span>
-                  </label>
-                  <SearchableSelect
-                    options={fieldOptions().indicators}
-                    value={indicator()}
-                    onChange={setIndicator}
-                    placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. GCaMP6f (AAV)'}
-                  />
-                  <div class="submit-panel__request-link">
-                    Don't see yours? <a href={buildFieldOptionRequestUrl('indicator')} target="_blank" rel="noopener noreferrer">Request it</a>
+                {/* Experiment metadata fields — hidden for demo data */}
+                <Show when={!isDemo()}>
+                  {/* Required fields */}
+                  <div class="submit-panel__field">
+                    <label>
+                      Calcium Indicator <span class="submit-panel__required-marker">*</span>
+                    </label>
+                    <SearchableSelect
+                      options={fieldOptions().indicators}
+                      value={indicator()}
+                      onChange={setIndicator}
+                      placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. GCaMP6f (AAV)'}
+                    />
+                    <div class="submit-panel__request-link">
+                      Don't see yours? <a href={buildFieldOptionRequestUrl('indicator')} target="_blank" rel="noopener noreferrer">Request it</a>
+                    </div>
                   </div>
-                </div>
 
-                <div class="submit-panel__field">
-                  <label>
-                    Species <span class="submit-panel__required-marker">*</span>
-                  </label>
-                  <SearchableSelect
-                    options={fieldOptions().species}
-                    value={species()}
-                    onChange={setSpecies}
-                    placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. mouse'}
-                  />
-                  <div class="submit-panel__request-link">
-                    Don't see yours? <a href={buildFieldOptionRequestUrl('species')} target="_blank" rel="noopener noreferrer">Request it</a>
+                  <div class="submit-panel__field">
+                    <label>
+                      Species <span class="submit-panel__required-marker">*</span>
+                    </label>
+                    <SearchableSelect
+                      options={fieldOptions().species}
+                      value={species()}
+                      onChange={setSpecies}
+                      placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. mouse'}
+                    />
+                    <div class="submit-panel__request-link">
+                      Don't see yours? <a href={buildFieldOptionRequestUrl('species')} target="_blank" rel="noopener noreferrer">Request it</a>
+                    </div>
                   </div>
-                </div>
 
-                <div class="submit-panel__field">
-                  <label>
-                    Brain Region <span class="submit-panel__required-marker">*</span>
-                  </label>
-                  <SearchableSelect
-                    options={fieldOptions().brainRegions}
-                    value={brainRegion()}
-                    onChange={setBrainRegion}
-                    placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. cortex'}
-                  />
-                  <div class="submit-panel__request-link">
-                    Don't see yours? <a href={buildFieldOptionRequestUrl('brain_region')} target="_blank" rel="noopener noreferrer">Request it</a>
+                  <div class="submit-panel__field">
+                    <label>
+                      Brain Region <span class="submit-panel__required-marker">*</span>
+                    </label>
+                    <SearchableSelect
+                      options={fieldOptions().brainRegions}
+                      value={brainRegion()}
+                      onChange={setBrainRegion}
+                      placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. cortex'}
+                    />
+                    <div class="submit-panel__request-link">
+                      Don't see yours? <a href={buildFieldOptionRequestUrl('brain_region')} target="_blank" rel="noopener noreferrer">Request it</a>
+                    </div>
                   </div>
-                </div>
 
-                {/* Optional fields */}
-                <div class="submit-panel__field">
-                  <label>Microscope Type</label>
-                  <SearchableSelect
-                    options={fieldOptions().microscopeTypes}
-                    value={microscopeType()}
-                    onChange={setMicroscopeType}
-                    placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. 2-photon'}
-                  />
-                  <div class="submit-panel__request-link">
-                    Don't see yours? <a href={buildFieldOptionRequestUrl('microscope_type')} target="_blank" rel="noopener noreferrer">Request it</a>
+                  {/* Optional experiment fields */}
+                  <div class="submit-panel__field">
+                    <label>Microscope Type</label>
+                    <SearchableSelect
+                      options={fieldOptions().microscopeTypes}
+                      value={microscopeType()}
+                      onChange={setMicroscopeType}
+                      placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. 2-photon'}
+                    />
+                    <div class="submit-panel__request-link">
+                      Don't see yours? <a href={buildFieldOptionRequestUrl('microscope_type')} target="_blank" rel="noopener noreferrer">Request it</a>
+                    </div>
                   </div>
-                </div>
 
-                <div class="submit-panel__field">
-                  <label>Cell Type</label>
-                  <SearchableSelect
-                    options={fieldOptions().cellTypes}
-                    value={cellType()}
-                    onChange={setCellType}
-                    placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. pyramidal cell'}
-                  />
-                  <div class="submit-panel__request-link">
-                    Don't see yours? <a href={buildFieldOptionRequestUrl('cell_type')} target="_blank" rel="noopener noreferrer">Request it</a>
+                  <div class="submit-panel__field">
+                    <label>Cell Type</label>
+                    <SearchableSelect
+                      options={fieldOptions().cellTypes}
+                      value={cellType()}
+                      onChange={setCellType}
+                      placeholder={fieldOptionsLoading() ? 'Loading...' : 'e.g. pyramidal cell'}
+                    />
+                    <div class="submit-panel__request-link">
+                      Don't see yours? <a href={buildFieldOptionRequestUrl('cell_type')} target="_blank" rel="noopener noreferrer">Request it</a>
+                    </div>
                   </div>
-                </div>
 
-                <div class="submit-panel__field">
-                  <label>Imaging Depth (um)</label>
-                  <input
-                    type="number"
-                    value={imagingDepth()}
-                    onInput={(e) => setImagingDepth(e.currentTarget.value)}
-                    placeholder="Optional"
-                    min="0"
-                  />
-                </div>
+                  <div class="submit-panel__field">
+                    <label>Imaging Depth (um)</label>
+                    <input
+                      type="number"
+                      value={imagingDepth()}
+                      onInput={(e) => setImagingDepth(e.currentTarget.value)}
+                      placeholder="Optional"
+                      min="0"
+                    />
+                  </div>
 
+                  <div class="submit-panel__field">
+                    <label>Virus / Construct</label>
+                    <input
+                      type="text"
+                      value={virusConstruct()}
+                      onInput={(e) => setVirusConstruct(e.currentTarget.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  <div class="submit-panel__field">
+                    <label>Time Since Injection (days)</label>
+                    <input
+                      type="number"
+                      value={timeSinceInjection()}
+                      onInput={(e) => setTimeSinceInjection(e.currentTarget.value)}
+                      placeholder="Optional"
+                      min="0"
+                    />
+                  </div>
+                </Show>
+
+                {/* General optional fields — always visible */}
                 <div class="submit-panel__field">
                   <label>Lab Name</label>
                   <input
@@ -357,27 +392,6 @@ export function SubmitPanel() {
                     value={orcid()}
                     onInput={(e) => setOrcid(e.currentTarget.value)}
                     placeholder="0000-0000-0000-0000"
-                  />
-                </div>
-
-                <div class="submit-panel__field">
-                  <label>Virus / Construct</label>
-                  <input
-                    type="text"
-                    value={virusConstruct()}
-                    onInput={(e) => setVirusConstruct(e.currentTarget.value)}
-                    placeholder="Optional"
-                  />
-                </div>
-
-                <div class="submit-panel__field">
-                  <label>Time Since Injection (days)</label>
-                  <input
-                    type="number"
-                    value={timeSinceInjection()}
-                    onInput={(e) => setTimeSinceInjection(e.currentTarget.value)}
-                    placeholder="Optional"
-                    min="0"
                   />
                 </div>
 

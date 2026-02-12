@@ -8,7 +8,7 @@ import type { QualityCheckResult } from './types.ts';
 const HARD_LIMITS = {
   tauRise: { min: 0.001, max: 0.5, label: 'tau_rise' },
   tauDecay: { min: 0.01, max: 10, label: 'tau_decay' },
-  lambda: { min: 1e-6, max: 1.0, label: 'lambda' },
+  lambda: { min: 1e-6, max: 10, label: 'lambda' },
   samplingRate: { min: 1, max: 1000, label: 'sampling_rate' },
 } as const;
 
