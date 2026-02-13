@@ -9,7 +9,28 @@ description = "CaTune companion: calcium imaging deconvolution and data preparat
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Daniel Aharoni" }]
+keywords = ["calcium-imaging", "deconvolution", "neuroscience", "FISTA", "spike-inference"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Typing :: Typed",
+]
 dependencies = ["numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/miniscope/CaTune"
+Repository = "https://github.com/miniscope/CaTune"
+Issues = "https://github.com/miniscope/CaTune/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
