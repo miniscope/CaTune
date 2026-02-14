@@ -10,30 +10,31 @@ import type { SolverParams } from '../lib/solver-types';
 // ---------- computePaddedWindow ----------
 
 describe('computePaddedWindow', () => {
-  it('computes standard padding (5 * tauDecay * fs)', () => {
-    // paddingSamples = ceil(5 * 0.4 * 30) = ceil(60) = 60
+  it('uses adaptive padding: max(visibleSamples, tauPadding)', () => {
+    // visibleSamples = 1000, tauPadding = ceil(5*0.4*30) = 60
+    // padding = min(max(1000, 60), 9000) = 1000
     const result = computePaddedWindow(1000, 2000, 10000, 0.4, 30);
-    expect(result.paddedStart).toBe(940);
-    expect(result.paddedEnd).toBe(2060);
-    expect(result.resultOffset).toBe(60);
+    expect(result.paddedStart).toBe(0);   // max(0, 1000-1000)
+    expect(result.paddedEnd).toBe(3000);  // min(10000, 2000+1000)
+    expect(result.resultOffset).toBe(1000);
     expect(result.resultLength).toBe(1000);
   });
 
   it('clamps paddedStart to 0 when near trace start', () => {
-    // paddingSamples = 60, visibleStart=20 -> paddedStart = max(0, 20-60) = 0
+    // visibleSamples = 480, tauPadding = 60, padding = max(480, 60) = 480
     const result = computePaddedWindow(20, 500, 10000, 0.4, 30);
-    expect(result.paddedStart).toBe(0);
-    expect(result.paddedEnd).toBe(560);
+    expect(result.paddedStart).toBe(0);   // max(0, 20-480)
+    expect(result.paddedEnd).toBe(980);   // min(10000, 500+480)
     expect(result.resultOffset).toBe(20); // visibleStart - paddedStart = 20 - 0
     expect(result.resultLength).toBe(480);
   });
 
   it('clamps paddedEnd to traceLength when near trace end', () => {
-    // paddingSamples = 60, visibleEnd=10000 -> paddedEnd = min(10000, 10060) = 10000
+    // visibleSamples = 200, tauPadding = 60, padding = max(200, 60) = 200
     const result = computePaddedWindow(9800, 10000, 10000, 0.4, 30);
-    expect(result.paddedEnd).toBe(10000);
-    expect(result.paddedStart).toBe(9740);
-    expect(result.resultOffset).toBe(60);
+    expect(result.paddedEnd).toBe(10000); // min(10000, 10200)
+    expect(result.paddedStart).toBe(9600); // max(0, 9800-200)
+    expect(result.resultOffset).toBe(200);
     expect(result.resultLength).toBe(200);
   });
 

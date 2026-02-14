@@ -3,6 +3,9 @@ import type { SolverParams, WarmStartStrategy } from './solver-types';
 /** Number of tau_decay time constants of padding on each side of the visible window. */
 const PADDING_TAU_MULTIPLIER = 5;
 
+/** Maximum padding cap: 5 minutes of samples per side. */
+const MAX_PADDING_SECONDS = 5 * 60;
+
 /** Relative change threshold below which tau changes use warm-no-momentum. */
 const TAU_CHANGE_THRESHOLD = 0.2;
 
@@ -31,13 +34,21 @@ export function computePaddedWindow(
   tauDecay: number,
   fs: number,
 ): { paddedStart: number; paddedEnd: number; resultOffset: number; resultLength: number } {
-  const paddingSamples = Math.ceil(PADDING_TAU_MULTIPLIER * tauDecay * fs);
+  const visibleSamples = visibleEnd - visibleStart;
+  const tauPadding = Math.ceil(PADDING_TAU_MULTIPLIER * tauDecay * fs);
+  const maxPadding = Math.ceil(MAX_PADDING_SECONDS * fs);
+  const paddingSamples = Math.min(Math.max(visibleSamples, tauPadding), maxPadding);
   const paddedStart = Math.max(0, visibleStart - paddingSamples);
   const paddedEnd = Math.min(traceLength, visibleEnd + paddingSamples);
   const resultOffset = visibleStart - paddedStart;
   const resultLength = visibleEnd - visibleStart;
 
   return { paddedStart, paddedEnd, resultOffset, resultLength };
+}
+
+/** Compute the artifact-safe margin in samples (region that may have edge artifacts). */
+export function computeSafeMargin(tauDecay: number, fs: number): number {
+  return Math.ceil(PADDING_TAU_MULTIPLIER * tauDecay * fs);
 }
 
 /**

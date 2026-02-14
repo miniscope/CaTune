@@ -3,22 +3,27 @@
 // Replaces multi-cell-solver.ts, tuning-orchestrator.ts, and job-scheduler.ts.
 
 import { createEffect, on, onCleanup } from 'solid-js';
-import { tauRise, tauDecay, lambda } from './viz-store';
+import { tauRise, tauDecay, lambda, selectedCell } from './viz-store';
 import { parsedData, effectiveShape, swapped, samplingRate } from './data-store';
 import {
   selectedCells,
   multiCellResults,
   setMultiCellResults,
   updateOneCellStatus,
+  updateOneCellIteration,
   updateOneCellTraces,
+  visibleCellIndices,
+  hoveredCell,
 } from './multi-cell-store';
 import { extractCellTrace } from './array-utils';
-import { computePaddedWindow, WarmStartCache } from './warm-start-cache';
+import { computePaddedWindow, computeSafeMargin, WarmStartCache } from './warm-start-cache';
 import { createWorkerPool, type WorkerPool } from './worker-pool';
 import type { SolverParams } from './solver-types';
 import type { NpyResult } from './types';
 
 const DEBOUNCE_MS = 30;
+const QUANTUM_ITERATIONS = 15;
+const DEFAULT_ZOOM_WINDOW_S = 20;
 
 interface CellSolveState {
   cellIndex: number;
@@ -28,6 +33,14 @@ interface CellSolveState {
   warmStartCache: WarmStartCache;
   activeJobId: number | null;
   debounceTimer: ReturnType<typeof setTimeout> | null;
+  converged: boolean;
+  deferredRequeue: boolean;
+  dispatchedParams: SolverParams | null;
+  // Cached padded result for zoom-without-re-solve
+  paddedResultStart: number;
+  paddedResultEnd: number;
+  fullPaddedSolution: Float32Array | null;
+  fullPaddedReconvolution: Float32Array | null;
 }
 
 let pool: WorkerPool | null = null;
@@ -47,6 +60,43 @@ function getCurrentParams(): SolverParams {
   };
 }
 
+function getCellPriority(cellIndex: number): number {
+  if (cellIndex === selectedCell()) return 0;        // active (last-clicked)
+  if (cellIndex === hoveredCell()) return 0;         // hovered
+  if (visibleCellIndices().has(cellIndex)) return 1; // visible
+  return 2;                                          // off-screen
+}
+
+function cancelActiveJob(state: CellSolveState): void {
+  if (state.activeJobId !== null && pool) {
+    pool.cancel(state.activeJobId);
+    state.activeJobId = null;
+  }
+}
+
+/** Cache the full padded result and update the visible slice for a cell. */
+function cachePaddedAndUpdateTraces(
+  state: CellSolveState,
+  solution: Float32Array,
+  reconvolution: Float32Array,
+  paddedStart: number,
+  paddedEnd: number,
+  resultOffset: number,
+  resultLength: number,
+  visibleStart: number,
+  iteration: number,
+): void {
+  state.fullPaddedSolution = new Float32Array(solution);
+  state.fullPaddedReconvolution = new Float32Array(reconvolution);
+  state.paddedResultStart = paddedStart;
+  state.paddedResultEnd = paddedEnd;
+
+  const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
+  const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
+  updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
+  updateOneCellIteration(state.cellIndex, iteration);
+}
+
 function dispatchCellSolve(state: CellSolveState): void {
   if (!pool) return;
 
@@ -54,30 +104,25 @@ function dispatchCellSolve(state: CellSolveState): void {
   const fs = params.fs;
   const traceLen = state.rawTrace.length;
 
-  // Convert zoom seconds → sample indices
+  // Convert zoom seconds to sample indices
   const visibleStart = Math.max(0, Math.floor(state.zoomStart * fs));
   const visibleEnd = Math.min(traceLen, Math.ceil(state.zoomEnd * fs));
   if (visibleStart >= visibleEnd) return;
 
-  // Compute padded window
   const { paddedStart, paddedEnd, resultOffset, resultLength } =
     computePaddedWindow(visibleStart, visibleEnd, traceLen, params.tauDecay, fs);
 
-  // Extract padded trace subarray (copy for transfer)
   const paddedTrace = new Float64Array(state.rawTrace.subarray(paddedStart, paddedEnd));
-
-  // Get warm-start strategy
   const { strategy, state: warmState } =
     state.warmStartCache.getStrategy(params, paddedStart, paddedEnd);
 
-  // Cancel any in-flight job for this cell
-  if (state.activeJobId !== null) {
-    pool.cancel(state.activeJobId);
-    state.activeJobId = null;
-  }
+  cancelActiveJob(state);
 
   const jobId = nextJobId();
   state.activeJobId = jobId;
+  state.converged = false;
+  state.deferredRequeue = false;
+  state.dispatchedParams = { ...params };
 
   updateOneCellStatus(state.cellIndex, 'solving');
 
@@ -87,34 +132,84 @@ function dispatchCellSolve(state: CellSolveState): void {
     params,
     warmState,
     warmStrategy: strategy,
-    onIntermediate(solution, reconvolution, _iteration) {
-      if (state.activeJobId !== jobId) return; // stale
-      // Extract visible region from padded result
-      const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
-      const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
-      updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
+    getPriority: () => getCellPriority(state.cellIndex),
+    maxIterations: QUANTUM_ITERATIONS,
+    onIntermediate(solution, reconvolution, iteration) {
+      if (state.activeJobId !== jobId) return;
+      cachePaddedAndUpdateTraces(
+        state, solution, reconvolution,
+        paddedStart, paddedEnd, resultOffset, resultLength,
+        visibleStart, iteration,
+      );
     },
-    onComplete(solution, reconvolution, solverState, _iterations, _converged) {
-      if (state.activeJobId !== jobId) return; // stale
+    onComplete(solution, reconvolution, solverState, iterations, converged) {
+      if (state.activeJobId !== jobId) return;
       state.activeJobId = null;
-      // Extract visible region
-      const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
-      const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
-      updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
-      // Cache warm-start state
+      state.converged = converged;
+      cachePaddedAndUpdateTraces(
+        state, solution, reconvolution,
+        paddedStart, paddedEnd, resultOffset, resultLength,
+        visibleStart, iterations,
+      );
       state.warmStartCache.store(solverState, params, paddedStart, paddedEnd);
-      updateOneCellStatus(state.cellIndex, 'fresh');
+
+      if (converged) {
+        updateOneCellStatus(state.cellIndex, 'fresh');
+        drainDeferredCells();
+      } else {
+        reEnqueueCell(state);
+      }
     },
     onCancelled() {
       if (state.activeJobId === jobId) state.activeJobId = null;
     },
     onError(message) {
-      if (state.activeJobId !== jobId) return; // stale
+      if (state.activeJobId !== jobId) return;
       state.activeJobId = null;
       console.error(`Solver error for cell ${state.cellIndex}:`, message);
       updateOneCellStatus(state.cellIndex, 'error');
     },
   });
+}
+
+function hasUnconvergedVisibleCells(): boolean {
+  const visible = visibleCellIndices();
+  const active = selectedCell();
+  for (const s of cellStates.values()) {
+    if (s.converged) continue;
+    if (s.cellIndex === active || visible.has(s.cellIndex)) return true;
+  }
+  return false;
+}
+
+function drainDeferredCells(): void {
+  for (const s of cellStates.values()) {
+    if (s.deferredRequeue) {
+      s.deferredRequeue = false;
+      dispatchCellSolve(s);
+    }
+  }
+}
+
+function paramsMatch(a: SolverParams, b: SolverParams): boolean {
+  return a.tauRise === b.tauRise && a.tauDecay === b.tauDecay
+    && a.lambda === b.lambda && a.fs === b.fs;
+}
+
+function reEnqueueCell(state: CellSolveState): void {
+  if (!pool) return;
+  // Don't re-enqueue if params changed (Effect 2 handles it)
+  if (state.dispatchedParams && !paramsMatch(state.dispatchedParams, getCurrentParams())) return;
+  // Don't re-enqueue if cell was deselected
+  if (!cellStates.has(state.cellIndex)) return;
+
+  // Defer off-screen cells while visible/active cells are still solving
+  if (getCellPriority(state.cellIndex) > 1 && hasUnconvergedVisibleCells()) {
+    state.deferredRequeue = true;
+    return;
+  }
+
+  dispatchCellSolve(state);
 }
 
 function debouncedDispatch(state: CellSolveState): void {
@@ -137,10 +232,17 @@ function ensureCellState(cellIndex: number, data: NpyResult, shape: [number, num
       cellIndex,
       rawTrace,
       zoomStart: 0,
-      zoomEnd: duration,
+      zoomEnd: Math.min(DEFAULT_ZOOM_WINDOW_S, duration),
       warmStartCache: new WarmStartCache(),
       activeJobId: null,
       debounceTimer: null,
+      converged: false,
+      deferredRequeue: false,
+      dispatchedParams: null,
+      paddedResultStart: 0,
+      paddedResultEnd: 0,
+      fullPaddedSolution: null,
+      fullPaddedReconvolution: null,
     };
     cellStates.set(cellIndex, state);
 
@@ -165,18 +267,48 @@ function removeCellState(cellIndex: number): void {
   }
 }
 
+/** Check whether a zoom window fits within the artifact-safe region of the cached padded result. */
+function tryExtractFromCache(state: CellSolveState, newVisStart: number, newVisEnd: number): boolean {
+  if (!state.fullPaddedSolution || !state.fullPaddedReconvolution) return false;
+
+  const params = getCurrentParams();
+  const safeMargin = computeSafeMargin(params.tauDecay, params.fs);
+  const safeStart = state.paddedResultStart + safeMargin;
+  const safeEnd = state.paddedResultEnd - safeMargin;
+
+  if (newVisStart < safeStart || newVisEnd > safeEnd || newVisStart >= newVisEnd) return false;
+
+  // Cancel in-flight solver whose callbacks have stale window offsets
+  cancelActiveJob(state);
+
+  const offsetInPadded = newVisStart - state.paddedResultStart;
+  const length = newVisEnd - newVisStart;
+  const visSol = new Float32Array(state.fullPaddedSolution.subarray(offsetInPadded, offsetInPadded + length));
+  const visReconv = new Float32Array(state.fullPaddedReconvolution.subarray(offsetInPadded, offsetInPadded + length));
+  updateOneCellTraces(state.cellIndex, visSol, visReconv, newVisStart);
+  return true;
+}
+
 export function reportCellZoom(cellIndex: number, startS: number, endS: number): void {
   const state = cellStates.get(cellIndex);
   if (!state) return;
   state.zoomStart = startS;
   state.zoomEnd = endS;
 
-  // Cancel in-flight, debounce, re-dispatch just this cell
-  if (state.activeJobId !== null && pool) {
-    pool.cancel(state.activeJobId);
-    state.activeJobId = null;
+  const params = getCurrentParams();
+  const fs = params.fs;
+  const newVisStart = Math.max(0, Math.floor(startS * fs));
+  const newVisEnd = Math.min(state.rawTrace.length, Math.ceil(endS * fs));
+
+  if (tryExtractFromCache(state, newVisStart, newVisEnd)) {
+    // Cache hit — re-enqueue only if still converging
+    if (!state.converged) debouncedDispatch(state);
+    return;
   }
-  updateOneCellStatus(cellIndex, 'stale');
+
+  // Cache miss — cancel in-flight, debounce, re-dispatch
+  cancelActiveJob(state);
+  if (state.converged) updateOneCellStatus(cellIndex, 'stale');
   debouncedDispatch(state);
 }
 
@@ -220,9 +352,16 @@ export function initCellSolveManager(): void {
       // Cancel everything
       if (pool) pool.cancelAll();
 
-      // Mark all stale and re-dispatch with debounce
+      // Mark all stale, clear cached padded results, and re-dispatch.
+      // Priority ordering is handled by the worker pool's priority queue
+      // via each job's getPriority callback, so dispatch order doesn't matter.
       for (const state of cellStates.values()) {
         state.activeJobId = null;
+        state.converged = false;
+        state.deferredRequeue = false;
+        state.dispatchedParams = null;
+        state.fullPaddedSolution = null;
+        state.fullPaddedReconvolution = null;
         updateOneCellStatus(state.cellIndex, 'stale');
         debouncedDispatch(state);
       }

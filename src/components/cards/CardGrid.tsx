@@ -8,14 +8,16 @@
  * keeping CellCard instances alive and preserving their zoom state.
  */
 
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, onMount, onCleanup } from 'solid-js';
 import { CellCard } from './CellCard';
 import {
   selectedCells,
   multiCellResults,
   cellSolverStatuses,
+  cellIterationCounts,
   gridColumns,
   pinnedMultiCellResults,
+  setVisibleCellIndices,
 } from '../../lib/multi-cell-store';
 import { reportCellZoom } from '../../lib/cell-solve-manager';
 import { samplingRate, isDemo, groundTruthVisible, getGroundTruthForCell } from '../../lib/data-store';
@@ -28,6 +30,40 @@ export interface CardGridProps {
 
 export function CardGrid(props: CardGridProps) {
   const cells = createMemo(() => selectedCells());
+
+  // Track which cards are visible in the viewport via IntersectionObserver
+  const visibleSet = new Set<number>();
+  const cardRefs = new Map<number, HTMLElement>();
+  let observer: IntersectionObserver | undefined;
+
+  onMount(() => {
+    observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const idx = Number((entry.target as HTMLElement).dataset.cellIndex);
+          if (isNaN(idx)) continue;
+          if (entry.isIntersecting) {
+            visibleSet.add(idx);
+          } else {
+            visibleSet.delete(idx);
+          }
+        }
+        setVisibleCellIndices(new Set(visibleSet));
+      },
+      { threshold: 0.1 },
+    );
+    // Observe any already-registered cards
+    for (const el of cardRefs.values()) observer.observe(el);
+  });
+
+  onCleanup(() => {
+    observer?.disconnect();
+  });
+
+  function registerCard(cellIndex: number, el: HTMLElement): void {
+    cardRefs.set(cellIndex, el);
+    observer?.observe(el);
+  }
 
   return (
     <div class="card-grid-container">
@@ -59,6 +95,8 @@ export function CardGrid(props: CardGridProps) {
                       samplingRate={samplingRate() ?? 30}
                       isActive={selectedCell() === cellIndex}
                       solverStatus={cellSolverStatuses().get(cellIndex) ?? 'stale'}
+                      iterationCount={cellIterationCounts().get(cellIndex) ?? 0}
+                      cardRef={(el) => registerCard(cellIndex, el)}
                       onClick={() => props.onCellClick(cellIndex)}
                       onZoomChange={reportCellZoom}
                       windowStartSample={t().windowStartSample}

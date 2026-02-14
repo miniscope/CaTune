@@ -1,9 +1,9 @@
 /**
  * Per-card quality indicator badge.
- * Small colored dot reflecting solver state:
- *   - fresh: SNR-based color (green/yellow/red)
- *   - solving: yellow pulse (actively running)
- *   - stale: red (queued, results outdated)
+ * SNR-colored dot + solver status text:
+ *   - fresh: SNR dot + "SNR X.X" or "Done (N)"
+ *   - solving: SNR dot + "Iter N" with pulse
+ *   - stale: SNR dot + "Stale"
  */
 
 import type { QualityTier } from '../../lib/metrics/snr';
@@ -13,6 +13,7 @@ export interface QualityBadgeProps {
   quality: QualityTier;
   snr?: number;
   solverStatus?: CellSolverStatus;
+  iterationCount?: number;
 }
 
 const COLORS: Record<QualityTier, string> = {
@@ -23,28 +24,42 @@ const COLORS: Record<QualityTier, string> = {
 
 export function QualityBadge(props: QualityBadgeProps) {
   const status = () => props.solverStatus ?? 'fresh';
+  const iter = () => props.iterationCount ?? 0;
 
-  const color = () => {
+  const dotColor = () => COLORS[props.quality];
+
+  const label = () => {
     switch (status()) {
-      case 'solving': return 'var(--warning)';
-      case 'stale': return 'var(--error)';
-      default: return COLORS[props.quality];
+      case 'stale':
+        return 'Stale';
+      case 'solving':
+        return `Iter ${iter()}`;
+      case 'fresh':
+        if (props.snr != null) return `SNR ${props.snr.toFixed(1)}`;
+        return iter() > 0 ? `Done (${iter()})` : '';
+      default:
+        return '';
     }
   };
 
   const title = () => {
     switch (status()) {
-      case 'solving': return 'Solving...';
-      case 'stale': return 'Stale — awaiting solver';
-      default: return props.snr != null ? `SNR: ${props.snr.toFixed(1)}` : undefined;
+      case 'solving':
+        return `Solving — iteration ${iter()}`;
+      case 'stale':
+        return 'Stale — awaiting solver';
+      default:
+        return props.snr != null ? `Peak SNR: ${props.snr.toFixed(1)} dB` : undefined;
     }
   };
 
   return (
     <span
-      class={`quality-badge${status() === 'solving' ? ' quality-badge--solving' : ''}`}
+      class={`quality-badge quality-badge--${status()}`}
       title={title()}
-      style={{ background: color() }}
-    />
+    >
+      <span class="quality-badge__dot" style={{ background: dotColor() }} />
+      <span class="quality-badge__label">{label()}</span>
+    </span>
   );
 }
