@@ -209,6 +209,12 @@ export function reportCellZoom(cellIndex: number, startS: number, endS: number):
     const safeEnd = state.paddedResultEnd - safeMargin;
 
     if (newVisStart >= safeStart && newVisEnd <= safeEnd && newVisStart < newVisEnd) {
+      // Cancel any in-flight solver — its callbacks have stale window offsets
+      // that would overwrite the correctly-aligned slice we're about to set
+      if (state.activeJobId !== null && pool) {
+        pool.cancel(state.activeJobId);
+        state.activeJobId = null;
+      }
       // Extract from cached result — no re-solve needed
       const offsetInPadded = newVisStart - state.paddedResultStart;
       const length = newVisEnd - newVisStart;
