@@ -94,29 +94,25 @@ export function CardGrid(props: CardGridProps) {
               return (
                 <Show when={traces()}>
                   {(t) => (
-                    <div
-                      data-cell-index={cellIndex}
-                      ref={(el: HTMLElement) => registerCard(cellIndex, el)}
-                    >
-                      <CellCard
-                        cellIndex={cellIndex}
-                        rawTrace={t().raw}
-                        deconvolvedTrace={t().deconvolved}
-                        reconvolutionTrace={t().reconvolution}
-                        samplingRate={samplingRate() ?? 30}
-                        isActive={selectedCell() === cellIndex}
-                        solverStatus={cellSolverStatuses().get(cellIndex) ?? 'stale'}
+                    <CellCard
+                      cellIndex={cellIndex}
+                      rawTrace={t().raw}
+                      deconvolvedTrace={t().deconvolved}
+                      reconvolutionTrace={t().reconvolution}
+                      samplingRate={samplingRate() ?? 30}
+                      isActive={selectedCell() === cellIndex}
+                      solverStatus={cellSolverStatuses().get(cellIndex) ?? 'stale'}
                       iterationCount={cellIterationCounts().get(cellIndex) ?? 0}
-                        onClick={() => props.onCellClick(cellIndex)}
-                        onZoomChange={reportCellZoom}
-                        windowStartSample={t().windowStartSample}
-                        pinnedDeconvolved={pinnedTraces()?.deconvolved}
-                        pinnedReconvolution={pinnedTraces()?.reconvolution}
-                        pinnedWindowStartSample={pinnedTraces()?.windowStartSample}
-                        groundTruthSpikes={gt()?.spikes}
-                        groundTruthCalcium={gt()?.calcium}
-                      />
-                    </div>
+                      cardRef={(el) => registerCard(cellIndex, el)}
+                      onClick={() => props.onCellClick(cellIndex)}
+                      onZoomChange={reportCellZoom}
+                      windowStartSample={t().windowStartSample}
+                      pinnedDeconvolved={pinnedTraces()?.deconvolved}
+                      pinnedReconvolution={pinnedTraces()?.reconvolution}
+                      pinnedWindowStartSample={pinnedTraces()?.windowStartSample}
+                      groundTruthSpikes={gt()?.spikes}
+                      groundTruthCalcium={gt()?.calcium}
+                    />
                   )}
                 </Show>
               );

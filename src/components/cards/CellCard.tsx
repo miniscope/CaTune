@@ -19,6 +19,7 @@ export interface CellCardProps {
   isActive?: boolean;
   solverStatus?: CellSolverStatus;
   iterationCount?: number;
+  cardRef?: (el: HTMLElement) => void;
   onClick?: () => void;
   onZoomChange?: (cellIndex: number, startS: number, endS: number) => void;
   windowStartSample?: number;
@@ -66,7 +67,9 @@ export function CellCard(props: CellCardProps) {
   return (
     <div
       class={`cell-card ${statusClass()}`}
+      data-cell-index={props.cellIndex}
       data-tutorial={props.isActive ? 'cell-card-active' : undefined}
+      ref={props.cardRef}
       onClick={() => props.onClick?.()}
     >
       <div class="cell-card__header">
