@@ -18,6 +18,7 @@ export interface CellCardProps {
   samplingRate: number;
   isActive?: boolean;
   solverStatus?: CellSolverStatus;
+  iterationCount?: number;
   onClick?: () => void;
   onZoomChange?: (cellIndex: number, startS: number, endS: number) => void;
   windowStartSample?: number;
@@ -56,15 +57,26 @@ export function CellCard(props: CellCardProps) {
     props.onZoomChange?.(props.cellIndex, start, end);
   };
 
+  const statusClass = () => {
+    if (props.isActive) return 'cell-card--active';
+    const s = props.solverStatus ?? 'stale';
+    return `cell-card--${s}`;
+  };
+
   return (
     <div
-      class={`cell-card${props.isActive ? ' cell-card--active' : ''}`}
+      class={`cell-card ${statusClass()}`}
       data-tutorial={props.isActive ? 'cell-card-active' : undefined}
       onClick={() => props.onClick?.()}
     >
       <div class="cell-card__header">
         <span class="cell-card__title">
-          <QualityBadge quality={quality()} snr={snr()} solverStatus={props.solverStatus} />
+          <QualityBadge
+            quality={quality()}
+            snr={snr()}
+            solverStatus={props.solverStatus}
+            iterationCount={props.iterationCount}
+          />
           {' '}Cell {props.cellIndex + 1}
         </span>
       </div>

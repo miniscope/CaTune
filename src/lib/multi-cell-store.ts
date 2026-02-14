@@ -32,6 +32,10 @@ const [activelySolvingCell, setActivelySolvingCell] = createSignal<number | null
 const [activityRanking, setActivityRanking] = createSignal<number[] | null>(null);
 const [gridColumns, setGridColumns] = createSignal<number>(2);
 const [cellSolverStatuses, setCellSolverStatuses] = createSignal<Map<number, CellSolverStatus>>(new Map());
+const [cellIterationCounts, setCellIterationCounts] = createSignal<Map<number, number>>(new Map());
+
+// --- Viewport visibility tracking ---
+const [visibleCellIndices, setVisibleCellIndices] = createSignal<ReadonlySet<number>>(new Set());
 
 // --- Pinned multi-cell results for before/after comparison ---
 const [pinnedMultiCellResults, setPinnedMultiCellResults] = createSignal<Map<number, CellTraces>>(new Map());
@@ -42,6 +46,21 @@ function updateOneCellStatus(cellIndex: number, status: CellSolverStatus): void 
   setCellSolverStatuses(prev => {
     const next = new Map(prev);
     next.set(cellIndex, status);
+    return next;
+  });
+  if (status === 'stale') {
+    setCellIterationCounts(prev => {
+      const next = new Map(prev);
+      next.set(cellIndex, 0);
+      return next;
+    });
+  }
+}
+
+function updateOneCellIteration(cellIndex: number, iteration: number): void {
+  setCellIterationCounts(prev => {
+    const next = new Map(prev);
+    next.set(cellIndex, iteration);
     return next;
   });
 }
@@ -157,7 +176,9 @@ export {
   activityRanking,
   gridColumns,
   cellSolverStatuses,
+  cellIterationCounts,
   pinnedMultiCellResults,
+  visibleCellIndices,
   // Setters
   setSelectionMode,
   setSelectedCells,
@@ -170,8 +191,10 @@ export {
   setActivityRanking,
   setGridColumns,
   setCellSolverStatuses,
+  setVisibleCellIndices,
   // Per-cell helpers
   updateOneCellStatus,
+  updateOneCellIteration,
   updateOneCellTraces,
   // Actions
   computeAndCacheRanking,

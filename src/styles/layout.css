@@ -307,6 +307,14 @@
 
 /* Quality Badge */
 .quality-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.quality-badge__dot {
   display: inline-block;
   width: 8px;
   height: 8px;
@@ -315,8 +323,27 @@
   transition: background 0.3s ease;
 }
 
-.quality-badge--solving {
+.quality-badge__label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.quality-badge--solving .quality-badge__dot {
   animation: badge-pulse 1.2s ease-in-out infinite;
+}
+
+.quality-badge--solving .quality-badge__label {
+  color: var(--warning);
+}
+
+.quality-badge--stale .quality-badge__label {
+  color: var(--error);
+}
+
+.quality-badge--fresh .quality-badge__label {
+  color: var(--text-secondary);
 }
 
 @keyframes badge-pulse {

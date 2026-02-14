@@ -10,10 +10,12 @@ import {
   multiCellResults,
   setMultiCellResults,
   updateOneCellStatus,
+  updateOneCellIteration,
   updateOneCellTraces,
+  visibleCellIndices,
 } from './multi-cell-store';
 import { extractCellTrace } from './array-utils';
-import { computePaddedWindow, WarmStartCache } from './warm-start-cache';
+import { computePaddedWindow, computeSafeMargin, WarmStartCache } from './warm-start-cache';
 import { createWorkerPool, type WorkerPool } from './worker-pool';
 import type { SolverParams } from './solver-types';
 import type { NpyResult } from './types';
@@ -28,6 +30,11 @@ interface CellSolveState {
   warmStartCache: WarmStartCache;
   activeJobId: number | null;
   debounceTimer: ReturnType<typeof setTimeout> | null;
+  // Cached padded result for zoom-without-re-solve
+  paddedResultStart: number;
+  paddedResultEnd: number;
+  fullPaddedSolution: Float32Array | null;
+  fullPaddedReconvolution: Float32Array | null;
 }
 
 let pool: WorkerPool | null = null;
@@ -81,26 +88,41 @@ function dispatchCellSolve(state: CellSolveState): void {
 
   updateOneCellStatus(state.cellIndex, 'solving');
 
+  const isVisible = visibleCellIndices().has(state.cellIndex);
+
   pool.dispatch({
     jobId,
     trace: paddedTrace,
     params,
     warmState,
     warmStrategy: strategy,
-    onIntermediate(solution, reconvolution, _iteration) {
+    priority: isVisible ? 0 : 1,
+    onIntermediate(solution, reconvolution, iteration) {
       if (state.activeJobId !== jobId) return; // stale
+      // Store full padded result for zoom-without-re-solve
+      state.fullPaddedSolution = new Float32Array(solution);
+      state.fullPaddedReconvolution = new Float32Array(reconvolution);
+      state.paddedResultStart = paddedStart;
+      state.paddedResultEnd = paddedEnd;
       // Extract visible region from padded result
       const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
       const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
       updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
+      updateOneCellIteration(state.cellIndex, iteration);
     },
-    onComplete(solution, reconvolution, solverState, _iterations, _converged) {
+    onComplete(solution, reconvolution, solverState, iterations, _converged) {
       if (state.activeJobId !== jobId) return; // stale
       state.activeJobId = null;
+      // Store full padded result for zoom-without-re-solve
+      state.fullPaddedSolution = new Float32Array(solution);
+      state.fullPaddedReconvolution = new Float32Array(reconvolution);
+      state.paddedResultStart = paddedStart;
+      state.paddedResultEnd = paddedEnd;
       // Extract visible region
       const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
       const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
       updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
+      updateOneCellIteration(state.cellIndex, iterations);
       // Cache warm-start state
       state.warmStartCache.store(solverState, params, paddedStart, paddedEnd);
       updateOneCellStatus(state.cellIndex, 'fresh');
@@ -141,6 +163,10 @@ function ensureCellState(cellIndex: number, data: NpyResult, shape: [number, num
       warmStartCache: new WarmStartCache(),
       activeJobId: null,
       debounceTimer: null,
+      paddedResultStart: 0,
+      paddedResultEnd: 0,
+      fullPaddedSolution: null,
+      fullPaddedReconvolution: null,
     };
     cellStates.set(cellIndex, state);
 
@@ -171,7 +197,29 @@ export function reportCellZoom(cellIndex: number, startS: number, endS: number):
   state.zoomStart = startS;
   state.zoomEnd = endS;
 
-  // Cancel in-flight, debounce, re-dispatch just this cell
+  // Check if new zoom fits within the cached padded result (skip re-solve)
+  if (state.fullPaddedSolution && state.fullPaddedReconvolution) {
+    const params = getCurrentParams();
+    const fs = params.fs;
+    const traceLen = state.rawTrace.length;
+    const newVisStart = Math.max(0, Math.floor(startS * fs));
+    const newVisEnd = Math.min(traceLen, Math.ceil(endS * fs));
+    const safeMargin = computeSafeMargin(params.tauDecay, fs);
+    const safeStart = state.paddedResultStart + safeMargin;
+    const safeEnd = state.paddedResultEnd - safeMargin;
+
+    if (newVisStart >= safeStart && newVisEnd <= safeEnd && newVisStart < newVisEnd) {
+      // Extract from cached result — no re-solve needed
+      const offsetInPadded = newVisStart - state.paddedResultStart;
+      const length = newVisEnd - newVisStart;
+      const visSol = new Float32Array(state.fullPaddedSolution.subarray(offsetInPadded, offsetInPadded + length));
+      const visReconv = new Float32Array(state.fullPaddedReconvolution.subarray(offsetInPadded, offsetInPadded + length));
+      updateOneCellTraces(cellIndex, visSol, visReconv, newVisStart);
+      return;
+    }
+  }
+
+  // Outside cached bounds — cancel in-flight, debounce, re-dispatch
   if (state.activeJobId !== null && pool) {
     pool.cancel(state.activeJobId);
     state.activeJobId = null;
@@ -220,12 +268,27 @@ export function initCellSolveManager(): void {
       // Cancel everything
       if (pool) pool.cancelAll();
 
-      // Mark all stale and re-dispatch with debounce
+      // Mark all stale and clear cached padded results
       for (const state of cellStates.values()) {
         state.activeJobId = null;
+        state.fullPaddedSolution = null;
+        state.fullPaddedReconvolution = null;
         updateOneCellStatus(state.cellIndex, 'stale');
-        debouncedDispatch(state);
       }
+
+      // Re-dispatch with debounce — visible cells first for priority ordering
+      const visible = visibleCellIndices();
+      const visibleStates: CellSolveState[] = [];
+      const offScreenStates: CellSolveState[] = [];
+      for (const state of cellStates.values()) {
+        if (visible.has(state.cellIndex)) {
+          visibleStates.push(state);
+        } else {
+          offScreenStates.push(state);
+        }
+      }
+      for (const state of visibleStates) debouncedDispatch(state);
+      for (const state of offScreenStates) debouncedDispatch(state);
     }),
   );
 

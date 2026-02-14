@@ -10,6 +10,8 @@ export interface PoolJob {
   params: SolverParams;
   warmState: Uint8Array | null;
   warmStrategy: WarmStartStrategy;
+  /** Lower number = higher priority. 0 = viewport-visible, 1 = off-screen. */
+  priority?: number;
   onIntermediate(solution: Float32Array, reconvolution: Float32Array, iteration: number): void;
   onComplete(solution: Float32Array, reconvolution: Float32Array, state: Uint8Array, iterations: number, converged: boolean): void;
   onCancelled(): void;
@@ -145,6 +147,9 @@ export function createWorkerPool(poolSize?: number): WorkerPool {
   }
 
   function drainQueue(): void {
+    if (queue.length > 1) {
+      queue.sort((a, b) => (a.priority ?? 1) - (b.priority ?? 1));
+    }
     while (queue.length > 0) {
       const idle = findIdleWorker();
       if (!idle) break;
