@@ -22,7 +22,7 @@ impl Solver {
         }
 
         let step_size = 1.0 / self.lipschitz_constant;
-        let threshold = step_size * self.lambda;
+        let threshold = step_size * self.effective_lambda();
 
         for _ in 0..n_steps {
             if self.converged {
@@ -37,9 +37,19 @@ impl Solver {
             //    temporarily, or just convolve using solution_prev directly.
             self.convolve_forward_from_prev();
 
-            // 2. Compute residual = K * y_k - trace
+            // 1b. Compute baseline: b = mean(trace - K*y_k)
+            {
+                let mut sum = 0.0_f64;
+                for i in 0..n {
+                    sum += (self.trace[i] - self.reconvolution[i]) as f64;
+                }
+                self.baseline = sum / n as f64;
+            }
+
+            // 2. Compute residual = K * y_k + b - trace
+            let baseline_f32 = self.baseline as f32;
             for i in 0..n {
-                self.residual_buf[i] = self.reconvolution[i] - self.trace[i];
+                self.residual_buf[i] = self.reconvolution[i] + baseline_f32 - self.trace[i];
             }
 
             // 3. Adjoint convolution: gradient = K^T * residual
@@ -63,6 +73,16 @@ impl Solver {
 
             // 5. Compute objective at x_{k+1} for convergence and restart checks
             self.convolve_forward(); // reconvolution = K * x_{k+1}
+
+            // 5b. Recompute baseline at x_{k+1}
+            {
+                let mut sum = 0.0_f64;
+                for i in 0..n {
+                    sum += (self.trace[i] - self.reconvolution[i]) as f64;
+                }
+                self.baseline = sum / n as f64;
+            }
+
             let objective = self.compute_objective();
             self.iteration += 1;
 
@@ -146,7 +166,7 @@ impl Solver {
         }
     }
 
-    /// Compute objective: (1/2)||reconvolution - trace||^2 + lambda * sum(solution)
+    /// Compute objective: (1/2)||K*s + b - trace||^2 + lambda*G_dc * sum(solution)
     /// Accumulates in f64 for convergence tracking precision.
     fn compute_objective(&self) -> f64 {
         let n = self.active_len;
@@ -154,12 +174,12 @@ impl Solver {
         let mut l1_penalty = 0.0_f64;
 
         for i in 0..n {
-            let residual = (self.reconvolution[i] - self.trace[i]) as f64;
+            let residual = (self.reconvolution[i] as f64) + self.baseline - (self.trace[i] as f64);
             data_fidelity += residual * residual;
             l1_penalty += self.solution[i] as f64; // solution is non-negative, so ||s||_1 = sum(s)
         }
 
-        0.5 * data_fidelity + self.lambda * l1_penalty
+        0.5 * data_fidelity + self.effective_lambda() * l1_penalty
     }
 }
 
@@ -473,5 +493,77 @@ mod tests {
                 i
             );
         }
+    }
+
+    // Test 9: Baseline recovery with DC offset
+    // trace = K*spikes + DC, verify get_baseline() recovers the DC value
+    #[test]
+    fn baseline_recovery_with_dc_offset() {
+        let mut solver = Solver::new();
+        solver.set_params(0.02, 0.4, 0.001, 30.0); // low lambda for clean recovery
+
+        let kernel = build_kernel(0.02, 0.4, 30.0);
+        let n = 200;
+        let dc_offset = 5.0_f32;
+        let mut trace = build_trace(&kernel, n, &[10, 50, 100, 150]);
+        for i in 0..n {
+            trace[i] += dc_offset;
+        }
+
+        solve_to_convergence(&mut solver, &trace, 200, 10);
+
+        // Baseline should be close to the DC offset
+        let baseline = solver.get_baseline();
+        assert!(
+            (baseline - dc_offset as f64).abs() < 1.0,
+            "Baseline should be close to DC offset {}, got {}",
+            dc_offset,
+            baseline
+        );
+
+        // Reconvolution with baseline should approximate the original trace
+        let reconv = solver.get_reconvolution_with_baseline();
+        let mut err_sq = 0.0_f64;
+        let mut trace_sq = 0.0_f64;
+        for i in 0..n {
+            let diff = (trace[i] - reconv[i]) as f64;
+            err_sq += diff * diff;
+            trace_sq += (trace[i] as f64) * (trace[i] as f64);
+        }
+        let rel_error = (err_sq / trace_sq).sqrt();
+        assert!(
+            rel_error < 0.1,
+            "Relative reconvolution+baseline error should be < 0.1, got {}",
+            rel_error
+        );
+    }
+
+    // Test 10: Higher lambda produces fewer nonzero spikes
+    #[test]
+    fn lambda_scaling_affects_sparsity() {
+        let kernel = build_kernel(0.02, 0.4, 30.0);
+        let n = 200;
+        let trace = build_trace(&kernel, n, &[10, 50, 100, 150]);
+
+        // Solve with low lambda
+        let mut solver_low = Solver::new();
+        solver_low.set_params(0.02, 0.4, 0.01, 30.0);
+        solve_to_convergence(&mut solver_low, &trace, 200, 10);
+        let sol_low = solver_low.get_solution();
+        let nnz_low = sol_low.iter().filter(|&&v| v > 1e-6).count();
+
+        // Solve with high lambda
+        let mut solver_high = Solver::new();
+        solver_high.set_params(0.02, 0.4, 1.0, 30.0);
+        solve_to_convergence(&mut solver_high, &trace, 200, 10);
+        let sol_high = solver_high.get_solution();
+        let nnz_high = sol_high.iter().filter(|&&v| v > 1e-6).count();
+
+        assert!(
+            nnz_high < nnz_low,
+            "Higher lambda should produce fewer nonzero spikes: nnz_high={} vs nnz_low={}",
+            nnz_high,
+            nnz_low
+        );
     }
 }

@@ -4,8 +4,10 @@
 /**
  * FISTA solver for calcium deconvolution.
  *
- * Minimizes (1/2)||y - K*s||^2 + lambda*||s||_1 subject to s >= 0,
- * where K is the convolution matrix derived from a double-exponential kernel.
+ * Minimizes (1/2)||y - K*s - b||^2 + lambda*G_dc*||s||_1 subject to s >= 0,
+ * where K is the convolution matrix derived from a double-exponential kernel,
+ * b is a scalar baseline estimated jointly, and G_dc = sum(K) scales lambda
+ * so the sparsity slider is effective across all kernel configurations.
  *
  * Pre-allocated buffers grow but never shrink to prevent WASM memory fragmentation.
  */
@@ -22,10 +24,14 @@ export class Solver {
     converged(): boolean;
     /**
      * Serialize solver state for warm-start cache.
-     * Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [solution f32...] [solution_prev f32...]
+     * Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [baseline (f64)] [solution f32...] [solution_prev f32...]
      */
     export_state(): Uint8Array;
     filter_enabled(): boolean;
+    /**
+     * Returns the estimated scalar baseline.
+     */
+    get_baseline(): number;
     /**
      * Get filter cutoff frequencies as [f_hp, f_lp].
      */
@@ -38,6 +44,10 @@ export class Solver {
      * Returns a copy of the reconvolution (K * solution) for the active region.
      */
     get_reconvolution(): Float32Array;
+    /**
+     * Returns reconvolution with baseline added: K*s + b for the active region.
+     */
+    get_reconvolution_with_baseline(): Float32Array;
     /**
      * Returns a copy of the current solution (spike train) for the active region.
      */
@@ -103,9 +113,11 @@ export interface InitOutput {
     readonly solver_converged: (a: number) => number;
     readonly solver_export_state: (a: number, b: number) => void;
     readonly solver_filter_enabled: (a: number) => number;
+    readonly solver_get_baseline: (a: number) => number;
     readonly solver_get_filter_cutoffs: (a: number, b: number) => void;
     readonly solver_get_power_spectrum: (a: number, b: number) => void;
     readonly solver_get_reconvolution: (a: number, b: number) => void;
+    readonly solver_get_reconvolution_with_baseline: (a: number, b: number) => void;
     readonly solver_get_solution: (a: number, b: number) => void;
     readonly solver_get_spectrum_frequencies: (a: number, b: number) => void;
     readonly solver_get_trace: (a: number, b: number) => void;
