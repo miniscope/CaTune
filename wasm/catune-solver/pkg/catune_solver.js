@@ -3,8 +3,10 @@
 /**
  * FISTA solver for calcium deconvolution.
  *
- * Minimizes (1/2)||y - K*s||^2 + lambda*||s||_1 subject to s >= 0,
- * where K is the convolution matrix derived from a double-exponential kernel.
+ * Minimizes (1/2)||y - K*s - b||^2 + lambda*G_dc*||s||_1 subject to s >= 0,
+ * where K is the convolution matrix derived from a double-exponential kernel,
+ * b is a scalar baseline estimated jointly, and G_dc = sum(K) scales lambda
+ * so the sparsity slider is effective across all kernel configurations.
  *
  * Pre-allocated buffers grow but never shrink to prevent WASM memory fragmentation.
  */
@@ -37,7 +39,7 @@ export class Solver {
     }
     /**
      * Serialize solver state for warm-start cache.
-     * Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [solution f32...] [solution_prev f32...]
+     * Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [baseline (f64)] [solution f32...] [solution_prev f32...]
      * @returns {Uint8Array}
      */
     export_state() {
@@ -59,6 +61,14 @@ export class Solver {
     filter_enabled() {
         const ret = wasm.solver_filter_enabled(this.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * Returns the estimated scalar baseline.
+     * @returns {number}
+     */
+    get_baseline() {
+        const ret = wasm.solver_get_baseline(this.__wbg_ptr);
+        return ret;
     }
     /**
      * Get filter cutoff frequencies as [f_hp, f_lp].
@@ -102,6 +112,23 @@ export class Solver {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             wasm.solver_get_reconvolution(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayF32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Returns reconvolution with baseline added: K*s + b for the active region.
+     * @returns {Float32Array}
+     */
+    get_reconvolution_with_baseline() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.solver_get_reconvolution_with_baseline(retptr, this.__wbg_ptr);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var v1 = getArrayF32FromWasm0(r0, r1).slice();

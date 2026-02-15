@@ -60,7 +60,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
       const now = performance.now();
       if (now - lastIntermediateTime >= INTERMEDIATE_INTERVAL_MS) {
         const sol = solver.get_solution();
-        const reconv = solver.get_reconvolution();
+        const reconv = solver.get_reconvolution_with_baseline();
         const transfer: Transferable[] = [sol.buffer, reconv.buffer];
         post(
           {
@@ -86,7 +86,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
 
     // Final result
     const solution = solver.get_solution();
-    const reconvolution = solver.get_reconvolution();
+    const reconvolution = solver.get_reconvolution_with_baseline();
     const state = solver.export_state();
 
     const ftCopy = filteredTrace ? new Float32Array(filteredTrace) : undefined;

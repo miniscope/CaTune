@@ -8,8 +8,10 @@ use wasm_bindgen::prelude::*;
 
 /// FISTA solver for calcium deconvolution.
 ///
-/// Minimizes (1/2)||y - K*s||^2 + lambda*||s||_1 subject to s >= 0,
-/// where K is the convolution matrix derived from a double-exponential kernel.
+/// Minimizes (1/2)||y - K*s - b||^2 + lambda*G_dc*||s||_1 subject to s >= 0,
+/// where K is the convolution matrix derived from a double-exponential kernel,
+/// b is a scalar baseline estimated jointly, and G_dc = sum(K) scales lambda
+/// so the sparsity slider is effective across all kernel configurations.
 ///
 /// Pre-allocated buffers grow but never shrink to prevent WASM memory fragmentation.
 #[wasm_bindgen]
@@ -39,6 +41,10 @@ pub struct Solver {
     pub(crate) prev_objective: f64,
     pub(crate) tolerance: f64,
     pub(crate) lipschitz_constant: f64,
+
+    // Baseline and kernel scaling
+    pub(crate) baseline: f64,
+    kernel_dc_gain: f64,
 
     // Bandpass filter
     bandpass: BandpassFilter,
@@ -70,12 +76,15 @@ impl Solver {
             prev_objective: f64::INFINITY,
             tolerance: 1e-6,
             lipschitz_constant: 1.0,
+            baseline: 0.0,
+            kernel_dc_gain: 1.0,
             bandpass: BandpassFilter::new(),
         };
 
         // Build kernel with default params
         solver.kernel = build_kernel(solver.tau_rise, solver.tau_decay, solver.fs);
         solver.lipschitz_constant = compute_lipschitz(&solver.kernel);
+        solver.kernel_dc_gain = solver.kernel.iter().map(|&k| k as f64).sum();
 
         solver
     }
@@ -88,6 +97,7 @@ impl Solver {
         self.fs = fs;
         self.kernel = build_kernel(tau_rise, tau_decay, fs);
         self.lipschitz_constant = compute_lipschitz(&self.kernel);
+        self.kernel_dc_gain = self.kernel.iter().map(|&k| k as f64).sum();
         self.bandpass.update_cutoffs(tau_rise, tau_decay, fs);
     }
 
@@ -122,6 +132,7 @@ impl Solver {
         self.t_fista = 1.0;
         self.converged = false;
         self.prev_objective = f64::INFINITY;
+        self.baseline = 0.0;
     }
 
     /// Returns a copy of the current solution (spike train) for the active region.
@@ -132,6 +143,17 @@ impl Solver {
     /// Returns a copy of the reconvolution (K * solution) for the active region.
     pub fn get_reconvolution(&self) -> Vec<f32> {
         self.reconvolution[..self.active_len].to_vec()
+    }
+
+    /// Returns reconvolution with baseline added: K*s + b for the active region.
+    pub fn get_reconvolution_with_baseline(&self) -> Vec<f32> {
+        let b = self.baseline as f32;
+        self.reconvolution[..self.active_len].iter().map(|&v| v + b).collect()
+    }
+
+    /// Returns the estimated scalar baseline.
+    pub fn get_baseline(&self) -> f64 {
+        self.baseline
     }
 
     /// Returns a copy of the current trace for the active region.
@@ -158,16 +180,22 @@ impl Solver {
         self.solution_prev[..n].copy_from_slice(&self.solution[..n]);
     }
 
+    /// Effective lambda scaled by kernel DC gain: lambda * G_dc.
+    pub(crate) fn effective_lambda(&self) -> f64 {
+        self.lambda * self.kernel_dc_gain
+    }
+
     /// Serialize solver state for warm-start cache.
-    /// Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [solution f32...] [solution_prev f32...]
+    /// Format: [active_len (u32)] [t_fista (f64)] [iteration (u32)] [baseline (f64)] [solution f32...] [solution_prev f32...]
     pub fn export_state(&self) -> Vec<u8> {
         let n = self.active_len;
-        // 4 bytes active_len + 8 bytes t_fista + 4 bytes iteration + 2*n*4 bytes solutions (f32)
-        let mut buf = Vec::with_capacity(4 + 8 + 4 + 2 * n * 4);
+        // 4 bytes active_len + 8 bytes t_fista + 4 bytes iteration + 8 bytes baseline + 2*n*4 bytes solutions (f32)
+        let mut buf = Vec::with_capacity(4 + 8 + 4 + 8 + 2 * n * 4);
 
         buf.extend_from_slice(&(n as u32).to_le_bytes());
         buf.extend_from_slice(&self.t_fista.to_le_bytes());
         buf.extend_from_slice(&self.iteration.to_le_bytes());
+        buf.extend_from_slice(&self.baseline.to_le_bytes());
 
         for i in 0..n {
             buf.extend_from_slice(&self.solution[i].to_le_bytes());
@@ -228,28 +256,31 @@ impl Solver {
             return; // cold start -- solution already zeroed by set_trace
         }
 
-        // Read header: active_len (u32)
-        if state.len() < 16 {
+        // Read header: active_len (u32) + t_fista (f64) + iteration (u32) + baseline (f64) = 24 bytes
+        if state.len() < 24 {
             return; // too small, cold start
         }
 
         let saved_len = u32::from_le_bytes([state[0], state[1], state[2], state[3]]) as usize;
-        let expected_size = 4 + 8 + 4 + 2 * saved_len * 4; // f32: 4 bytes per element
+        let expected_size = 4 + 8 + 4 + 8 + 2 * saved_len * 4; // f32: 4 bytes per element
 
         if state.len() != expected_size || saved_len != self.active_len {
             return; // size mismatch, cold start
         }
 
-        // Read t_fista and iteration
+        // Read t_fista, iteration, and baseline
         self.t_fista = f64::from_le_bytes([
             state[4], state[5], state[6], state[7], state[8], state[9], state[10], state[11],
         ]);
         self.iteration = u32::from_le_bytes([state[12], state[13], state[14], state[15]]);
+        self.baseline = f64::from_le_bytes([
+            state[16], state[17], state[18], state[19], state[20], state[21], state[22], state[23],
+        ]);
         self.converged = false;
         self.prev_objective = f64::INFINITY;
 
         // Read solution and solution_prev (f32: 4 bytes each)
-        let mut offset = 16;
+        let mut offset = 24;
         for i in 0..saved_len {
             let bytes = [
                 state[offset],

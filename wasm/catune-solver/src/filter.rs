@@ -209,25 +209,6 @@ impl BandpassFilter {
             trace[i] = self.fft_input[i] * scale;
         }
 
-        // Baseline correction: shift so 2nd percentile = 0.
-        // The high-pass removes DC, leaving calcium transients centered
-        // around zero with ~half the values negative.  Subtracting the
-        // 2nd percentile (a robust baseline estimate) restores a non-
-        // negative baseline suitable for the non-negativity constraint
-        // in FISTA deconvolution.  Using p2 instead of p8 minimizes
-        // the upward shift in quiet trace regions while still clipping
-        // the deepest noise excursions.
-        let p8_idx = ((n as f64 * 0.02).round() as usize).min(n.saturating_sub(1));
-        // Reuse fft_input as scratch for partial sort (O(n) average)
-        self.fft_input[..n].copy_from_slice(trace);
-        self.fft_input[..n].select_nth_unstable_by(p8_idx, |a, b| {
-            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let baseline = self.fft_input[p8_idx];
-        for i in 0..n {
-            trace[i] -= baseline;
-        }
-
         true
     }
 
@@ -412,43 +393,6 @@ mod tests {
         assert!(!f.valid);
         let mut trace = vec![1.0; 64];
         assert!(!f.apply(&mut trace));
-    }
-
-    #[test]
-    fn test_baseline_correction() {
-        let mut f = make_filter(0.02, 0.4, 100.0);
-        let n = 1024;
-        let fs = 100.0_f32;
-
-        // Simulate a calcium-like trace: positive baseline + transients
-        let mut trace: Vec<f32> = (0..n)
-            .map(|i| {
-                let t = i as f32 / fs;
-                let baseline = 100.0; // large DC offset (fluorescence)
-                let transient = if (t * 0.5).fract() < 0.05 { 20.0 } else { 0.0 };
-                baseline + transient + 0.5 * (2.0 * PI * 1.0 * t).sin()
-            })
-            .collect();
-
-        assert!(f.apply(&mut trace));
-
-        // After filtering + baseline correction, the 2nd percentile should be ~0
-        let mut sorted = trace.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let p8 = sorted[(n as f64 * 0.02).round() as usize];
-        assert!(
-            p8.abs() < 0.5,
-            "8th percentile should be near 0, got: {}",
-            p8
-        );
-
-        // Most values should be non-negative (baseline at 0, transients positive)
-        let negative_frac = trace.iter().filter(|&&x| x < 0.0).count() as f64 / n as f64;
-        assert!(
-            negative_frac < 0.10,
-            "too many negative values after correction: {:.1}%",
-            negative_frac * 100.0
-        );
     }
 
     #[test]
