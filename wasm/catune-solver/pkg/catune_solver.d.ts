@@ -47,6 +47,11 @@ export class Solver {
      */
     get_spectrum_frequencies(): Float32Array;
     /**
+     * Returns a copy of the current trace for the active region.
+     * After apply_filter(), this contains the filtered trace.
+     */
+    get_trace(): Float32Array;
+    /**
      * Returns the current iteration count.
      */
     iteration_count(): number;
@@ -103,6 +108,7 @@ export interface InitOutput {
     readonly solver_get_reconvolution: (a: number, b: number) => void;
     readonly solver_get_solution: (a: number, b: number) => void;
     readonly solver_get_spectrum_frequencies: (a: number, b: number) => void;
+    readonly solver_get_trace: (a: number, b: number) => void;
     readonly solver_iteration_count: (a: number) => number;
     readonly solver_load_state: (a: number, b: number, c: number) => void;
     readonly solver_new: () => number;

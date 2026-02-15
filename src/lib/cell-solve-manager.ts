@@ -41,6 +41,7 @@ interface CellSolveState {
   paddedResultEnd: number;
   fullPaddedSolution: Float32Array | null;
   fullPaddedReconvolution: Float32Array | null;
+  fullPaddedFilteredTrace: Float32Array | null;
 }
 
 let pool: WorkerPool | null = null;
@@ -86,15 +87,20 @@ function cachePaddedAndUpdateTraces(
   resultLength: number,
   visibleStart: number,
   iteration: number,
+  filteredTrace?: Float32Array,
 ): void {
   state.fullPaddedSolution = new Float32Array(solution);
   state.fullPaddedReconvolution = new Float32Array(reconvolution);
+  state.fullPaddedFilteredTrace = filteredTrace ? new Float32Array(filteredTrace) : null;
   state.paddedResultStart = paddedStart;
   state.paddedResultEnd = paddedEnd;
 
   const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
   const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
-  updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
+  const visFiltered = filteredTrace
+    ? new Float32Array(filteredTrace.subarray(resultOffset, resultOffset + resultLength))
+    : undefined;
+  updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart, visFiltered);
   updateOneCellIteration(state.cellIndex, iteration);
 }
 
@@ -135,22 +141,22 @@ function dispatchCellSolve(state: CellSolveState): void {
     warmStrategy: strategy,
     getPriority: () => getCellPriority(state.cellIndex),
     maxIterations: QUANTUM_ITERATIONS,
-    onIntermediate(solution, reconvolution, iteration) {
+    onIntermediate(solution, reconvolution, iteration, filteredTrace) {
       if (state.activeJobId !== jobId) return;
       cachePaddedAndUpdateTraces(
         state, solution, reconvolution,
         paddedStart, paddedEnd, resultOffset, resultLength,
-        visibleStart, iteration,
+        visibleStart, iteration, filteredTrace,
       );
     },
-    onComplete(solution, reconvolution, solverState, iterations, converged) {
+    onComplete(solution, reconvolution, solverState, iterations, converged, filteredTrace) {
       if (state.activeJobId !== jobId) return;
       state.activeJobId = null;
       state.converged = converged;
       cachePaddedAndUpdateTraces(
         state, solution, reconvolution,
         paddedStart, paddedEnd, resultOffset, resultLength,
-        visibleStart, iterations,
+        visibleStart, iterations, filteredTrace,
       );
       state.warmStartCache.store(solverState, params, paddedStart, paddedEnd);
 
@@ -245,6 +251,7 @@ function ensureCellState(cellIndex: number, data: NpyResult, shape: [number, num
       paddedResultEnd: 0,
       fullPaddedSolution: null,
       fullPaddedReconvolution: null,
+      fullPaddedFilteredTrace: null,
     };
     cellStates.set(cellIndex, state);
 
@@ -287,7 +294,10 @@ function tryExtractFromCache(state: CellSolveState, newVisStart: number, newVisE
   const length = newVisEnd - newVisStart;
   const visSol = new Float32Array(state.fullPaddedSolution.subarray(offsetInPadded, offsetInPadded + length));
   const visReconv = new Float32Array(state.fullPaddedReconvolution.subarray(offsetInPadded, offsetInPadded + length));
-  updateOneCellTraces(state.cellIndex, visSol, visReconv, newVisStart);
+  const visFiltered = state.fullPaddedFilteredTrace
+    ? new Float32Array(state.fullPaddedFilteredTrace.subarray(offsetInPadded, offsetInPadded + length))
+    : undefined;
+  updateOneCellTraces(state.cellIndex, visSol, visReconv, newVisStart, visFiltered);
   return true;
 }
 
@@ -364,6 +374,7 @@ export function initCellSolveManager(): void {
         state.dispatchedParams = null;
         state.fullPaddedSolution = null;
         state.fullPaddedReconvolution = null;
+        state.fullPaddedFilteredTrace = null;
         updateOneCellStatus(state.cellIndex, 'stale');
         debouncedDispatch(state);
       }

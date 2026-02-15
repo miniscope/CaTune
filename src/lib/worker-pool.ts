@@ -14,8 +14,8 @@ export interface PoolJob {
    *  Lower number = higher priority. 0 = active cell, 1 = visible, 2 = off-screen. */
   getPriority?: () => number;
   maxIterations?: number;
-  onIntermediate(solution: Float32Array, reconvolution: Float32Array, iteration: number): void;
-  onComplete(solution: Float32Array, reconvolution: Float32Array, state: Uint8Array, iterations: number, converged: boolean): void;
+  onIntermediate(solution: Float32Array, reconvolution: Float32Array, iteration: number, filteredTrace?: Float32Array): void;
+  onComplete(solution: Float32Array, reconvolution: Float32Array, state: Uint8Array, iterations: number, converged: boolean, filteredTrace?: Float32Array): void;
   onCancelled(): void;
   onError(message: string): void;
 }
@@ -68,7 +68,7 @@ export function createWorkerPool(poolSize?: number): WorkerPool {
     if (msg.type === 'intermediate') {
       const job = inFlightJobs.get(msg.jobId);
       if (job) {
-        job.onIntermediate(msg.solution, msg.reconvolution, msg.iteration);
+        job.onIntermediate(msg.solution, msg.reconvolution, msg.iteration, msg.filteredTrace);
       }
       return;
     }
@@ -78,7 +78,7 @@ export function createWorkerPool(poolSize?: number): WorkerPool {
       inFlightJobs.delete(msg.jobId);
       entry.state = { status: 'idle' };
       if (job) {
-        job.onComplete(msg.solution, msg.reconvolution, msg.state, msg.iterations, msg.converged);
+        job.onComplete(msg.solution, msg.reconvolution, msg.state, msg.iterations, msg.converged, msg.filteredTrace);
       }
       drainQueue();
       return;

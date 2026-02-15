@@ -134,6 +134,12 @@ impl Solver {
         self.reconvolution[..self.active_len].to_vec()
     }
 
+    /// Returns a copy of the current trace for the active region.
+    /// After apply_filter(), this contains the filtered trace.
+    pub fn get_trace(&self) -> Vec<f32> {
+        self.trace[..self.active_len].to_vec()
+    }
+
     /// Returns whether the solver has converged.
     pub fn converged(&self) -> bool {
         self.converged

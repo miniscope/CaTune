@@ -92,6 +92,7 @@ export function CardGrid(props: CardGridProps) {
                       rawTrace={t().raw}
                       deconvolvedTrace={t().deconvolved}
                       reconvolutionTrace={t().reconvolution}
+                      filteredTrace={t().filteredTrace}
                       samplingRate={samplingRate() ?? 30}
                       isActive={selectedCell() === cellIndex}
                       solverStatus={cellSolverStatuses().get(cellIndex) ?? 'stale'}

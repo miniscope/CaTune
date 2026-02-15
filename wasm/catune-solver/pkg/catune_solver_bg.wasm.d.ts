@@ -11,6 +11,7 @@ export const solver_get_power_spectrum: (a: number, b: number) => void;
 export const solver_get_reconvolution: (a: number, b: number) => void;
 export const solver_get_solution: (a: number, b: number) => void;
 export const solver_get_spectrum_frequencies: (a: number, b: number) => void;
+export const solver_get_trace: (a: number, b: number) => void;
 export const solver_iteration_count: (a: number) => number;
 export const solver_load_state: (a: number, b: number, c: number) => void;
 export const solver_new: () => number;

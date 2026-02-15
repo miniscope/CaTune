@@ -146,6 +146,24 @@ export class Solver {
         }
     }
     /**
+     * Returns a copy of the current trace for the active region.
+     * After apply_filter(), this contains the filtered trace.
+     * @returns {Float32Array}
+     */
+    get_trace() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.solver_get_trace(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayF32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Returns the current iteration count.
      * @returns {number}
      */

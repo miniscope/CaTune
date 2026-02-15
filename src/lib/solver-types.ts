@@ -83,6 +83,7 @@ export type PoolWorkerOutbound =
       solution: Float32Array;
       reconvolution: Float32Array;
       iteration: number;
+      filteredTrace?: Float32Array;
     }
   | {
       type: 'complete';
@@ -92,6 +93,7 @@ export type PoolWorkerOutbound =
       state: Uint8Array;
       iterations: number;
       converged: boolean;
+      filteredTrace?: Float32Array;
       spectrum?: {
         frequencies: Float32Array;
         power: Float32Array;

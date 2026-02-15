@@ -37,8 +37,10 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
     solver.set_filter_enabled(req.params.filterEnabled);
 
     // Apply bandpass filter before warm-start (filter modifies the trace itself)
+    let filteredTrace: Float32Array | undefined;
     if (req.params.filterEnabled) {
       solver.apply_filter();
+      filteredTrace = solver.get_trace();
     }
 
     // Warm-start handling
@@ -62,6 +64,9 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
       if (now - lastIntermediateTime >= INTERMEDIATE_INTERVAL_MS) {
         const sol = solver.get_solution();
         const reconv = solver.get_reconvolution();
+        const ftCopy = filteredTrace ? new Float32Array(filteredTrace) : undefined;
+        const transfer: Transferable[] = [sol.buffer, reconv.buffer];
+        if (ftCopy) transfer.push(ftCopy.buffer);
         post(
           {
             type: 'intermediate',
@@ -69,8 +74,9 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
             solution: sol,
             reconvolution: reconv,
             iteration: solver.iteration_count(),
+            filteredTrace: ftCopy,
           },
-          [sol.buffer, reconv.buffer],
+          transfer,
         );
         lastIntermediateTime = now;
       }
@@ -97,10 +103,12 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
       ? { frequencies, power, cutoffs: [cutoffsArr[0], cutoffsArr[1]] as [number, number] }
       : undefined;
 
+    const ftCopy = filteredTrace ? new Float32Array(filteredTrace) : undefined;
     const transfer: Transferable[] = [solution.buffer, reconvolution.buffer, state.buffer];
     if (spectrum) {
       transfer.push(spectrum.power.buffer, spectrum.frequencies.buffer);
     }
+    if (ftCopy) transfer.push(ftCopy.buffer);
 
     post(
       {
@@ -111,6 +119,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
         state,
         iterations: solver.iteration_count(),
         converged: solver.converged(),
+        filteredTrace: ftCopy,
         spectrum,
       },
       transfer,

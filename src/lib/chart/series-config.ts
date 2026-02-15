@@ -32,6 +32,10 @@ export function createRawSeries(): uPlot.Series {
   return { label: 'Raw', stroke: '#1f77b4', width: 1 };
 }
 
+export function createFilteredSeries(): uPlot.Series {
+  return { label: 'Filtered', stroke: '#17becf', width: 1.5 };
+}
+
 export function createFitSeries(): uPlot.Series {
   return { label: 'Fit', stroke: '#ff7f0e', width: 1.5 };
 }

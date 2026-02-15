@@ -16,6 +16,7 @@ export interface CellTraces {
   raw: Float64Array;
   deconvolved: Float32Array;
   reconvolution: Float32Array;
+  filteredTrace?: Float32Array;
   windowStartSample?: number;
 }
 
@@ -73,6 +74,7 @@ function updateOneCellTraces(
   deconvolved: Float32Array,
   reconvolution: Float32Array,
   windowStartSample?: number,
+  filteredTrace?: Float32Array,
 ): void {
   setMultiCellResults(prev => {
     const existing = prev.get(cellIndex);
@@ -82,6 +84,7 @@ function updateOneCellTraces(
       ...existing,
       deconvolved,
       reconvolution,
+      filteredTrace,
       windowStartSample,
     });
     return next;
