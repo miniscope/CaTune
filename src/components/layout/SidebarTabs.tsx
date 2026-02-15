@@ -1,43 +1,52 @@
 /**
- * Sidebar tab switcher: Community | Metrics
- * Preserves component state by rendering both, hiding the inactive one.
+ * Sidebar tab switcher: Community | Spectrum | Metrics
+ * Preserves component state by rendering all tabs, hiding inactive ones via display:none.
  */
 
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 
-export type SidebarTab = 'community' | 'metrics';
+export type SidebarTab = 'community' | 'spectrum' | 'metrics';
 
 export interface SidebarTabsProps {
-  communityContent: JSX.Element;
+  communityContent?: JSX.Element;
   metricsContent: JSX.Element;
+  spectrumContent?: JSX.Element;
 }
 
 export function SidebarTabs(props: SidebarTabsProps) {
-  const [activeTab, setActiveTab] = createSignal<SidebarTab>('community');
+  const tabs = (): { id: SidebarTab; label: string; content: JSX.Element }[] => {
+    const list: { id: SidebarTab; label: string; content: JSX.Element }[] = [];
+    if (props.communityContent) list.push({ id: 'community', label: 'Community', content: props.communityContent });
+    if (props.spectrumContent) list.push({ id: 'spectrum', label: 'Spectrum', content: props.spectrumContent });
+    list.push({ id: 'metrics', label: 'Metrics', content: props.metricsContent });
+    return list;
+  };
+
+  const defaultTab: SidebarTab = props.communityContent ? 'community' : props.spectrumContent ? 'spectrum' : 'metrics';
+  const [activeTab, setActiveTab] = createSignal<SidebarTab>(defaultTab);
 
   return (
     <div class="sidebar-tabs">
       <div class="sidebar-tabs__bar">
-        <button
-          class={`sidebar-tabs__tab${activeTab() === 'community' ? ' sidebar-tabs__tab--active' : ''}`}
-          onClick={() => setActiveTab('community')}
-        >
-          Community
-        </button>
-        <button
-          class={`sidebar-tabs__tab${activeTab() === 'metrics' ? ' sidebar-tabs__tab--active' : ''}`}
-          onClick={() => setActiveTab('metrics')}
-        >
-          Metrics
-        </button>
+        <For each={tabs()}>
+          {(tab) => (
+            <button
+              class={`sidebar-tabs__tab${activeTab() === tab.id ? ' sidebar-tabs__tab--active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          )}
+        </For>
       </div>
       <div class="sidebar-tabs__content">
-        <div style={{ display: activeTab() === 'community' ? 'block' : 'none' }}>
-          {props.communityContent}
-        </div>
-        <div style={{ display: activeTab() === 'metrics' ? 'block' : 'none' }}>
-          {props.metricsContent}
-        </div>
+        <For each={tabs()}>
+          {(tab) => (
+            <div style={{ display: activeTab() === tab.id ? 'block' : 'none' }}>
+              {tab.content}
+            </div>
+          )}
+        </For>
       </div>
     </div>
   );

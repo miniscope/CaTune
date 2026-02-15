@@ -34,15 +34,20 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
     // Configure solver
     solver.set_params(req.params.tauRise, req.params.tauDecay, req.params.lambda, req.params.fs);
     solver.set_trace(new Float32Array(req.trace));
+    solver.set_filter_enabled(req.params.filterEnabled);
 
-    // Warm-start handling
-    if (req.warmStrategy === 'warm' && req.warmState) {
-      solver.load_state(req.warmState);
-    } else if (req.warmStrategy === 'warm-no-momentum' && req.warmState) {
-      solver.load_state(req.warmState);
-      solver.reset_momentum();
+    // Apply bandpass filter before warm-start (filter modifies the trace itself)
+    let filteredTrace: Float32Array | undefined;
+    if (req.params.filterEnabled) {
+      solver.apply_filter();
+      filteredTrace = solver.get_trace();
     }
-    // 'cold': set_trace already zeroed the solution
+
+    // Warm-start: load cached state; reset momentum if kernel changed
+    if (req.warmState && req.warmStrategy !== 'cold') {
+      solver.load_state(req.warmState);
+      if (req.warmStrategy === 'warm-no-momentum') solver.reset_momentum();
+    }
 
     let lastIntermediateTime = performance.now();
     const startIter = solver.iteration_count();
@@ -56,6 +61,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
       if (now - lastIntermediateTime >= INTERMEDIATE_INTERVAL_MS) {
         const sol = solver.get_solution();
         const reconv = solver.get_reconvolution();
+        const transfer: Transferable[] = [sol.buffer, reconv.buffer];
         post(
           {
             type: 'intermediate',
@@ -64,7 +70,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
             reconvolution: reconv,
             iteration: solver.iteration_count(),
           },
-          [sol.buffer, reconv.buffer],
+          transfer,
         );
         lastIntermediateTime = now;
       }
@@ -83,6 +89,10 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
     const reconvolution = solver.get_reconvolution();
     const state = solver.export_state();
 
+    const ftCopy = filteredTrace ? new Float32Array(filteredTrace) : undefined;
+    const transfer: Transferable[] = [solution.buffer, reconvolution.buffer, state.buffer];
+    if (ftCopy) transfer.push(ftCopy.buffer);
+
     post(
       {
         type: 'complete',
@@ -92,8 +102,9 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
         state,
         iterations: solver.iteration_count(),
         converged: solver.converged(),
+        filteredTrace: ftCopy,
       },
-      [solution.buffer, reconvolution.buffer, state.buffer],
+      transfer,
     );
   } catch (err) {
     post({ type: 'error', jobId: req.jobId, message: String(err) });

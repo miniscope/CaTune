@@ -15,7 +15,7 @@ export interface PoolJob {
   getPriority?: () => number;
   maxIterations?: number;
   onIntermediate(solution: Float32Array, reconvolution: Float32Array, iteration: number): void;
-  onComplete(solution: Float32Array, reconvolution: Float32Array, state: Uint8Array, iterations: number, converged: boolean): void;
+  onComplete(solution: Float32Array, reconvolution: Float32Array, state: Uint8Array, iterations: number, converged: boolean, filteredTrace?: Float32Array): void;
   onCancelled(): void;
   onError(message: string): void;
 }
@@ -78,7 +78,7 @@ export function createWorkerPool(poolSize?: number): WorkerPool {
       inFlightJobs.delete(msg.jobId);
       entry.state = { status: 'idle' };
       if (job) {
-        job.onComplete(msg.solution, msg.reconvolution, msg.state, msg.iterations, msg.converged);
+        job.onComplete(msg.solution, msg.reconvolution, msg.state, msg.iterations, msg.converged, msg.filteredTrace);
       }
       drainQueue();
       return;

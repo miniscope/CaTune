@@ -7,12 +7,13 @@ import { createMemo, createSignal, Show } from 'solid-js';
 import type uPlot from 'uplot';
 import { TracePanel } from '../traces/TracePanel';
 import { downsampleMinMax } from '../../lib/chart/downsample';
-import { createRawSeries, createFitSeries, createDeconvolvedSeries, createResidualSeries, createPinnedOverlaySeries, createGroundTruthSpikesSeries, createGroundTruthCalciumSeries } from '../../lib/chart/series-config';
+import { createRawSeries, createFilteredSeries, createFitSeries, createDeconvolvedSeries, createResidualSeries, createPinnedOverlaySeries, createGroundTruthSpikesSeries, createGroundTruthCalciumSeries } from '../../lib/chart/series-config';
 
 export interface ZoomWindowProps {
   rawTrace: Float64Array;
   deconvolvedTrace?: Float32Array;
   reconvolutionTrace?: Float32Array;
+  filteredTrace?: Float32Array;
   samplingRate: number;
   /** Zoom window start time (seconds) */
   startTime: number;
@@ -41,6 +42,11 @@ const DECONV_GAP = -2; // z-score offset: negative = deconv peaks overlap raw ra
 const DECONV_SCALE = 0.35; // scale deconvolved to this fraction of raw z-range
 const RESID_GAP = 0.5; // gap between deconv band bottom and residual band top
 const RESID_SCALE = 0.25; // scale residuals to this fraction of raw z-range
+
+// Series count: x + raw + filtered + deconv + fit + resid + pinnedDeconv + pinnedFit + gtCalcium + gtSpikes
+const SERIES_COUNT = 10;
+const emptySeriesData = (): [number[], ...number[][]] =>
+  Array.from({ length: SERIES_COUNT }, () => []) as unknown as [number[], ...number[][]];
 
 export function ZoomWindow(props: ZoomWindowProps) {
   const height = () => props.height ?? 150;
@@ -198,11 +204,11 @@ export function ZoomWindow(props: ZoomWindowProps) {
   const zoomData = createMemo<[number[], ...number[][]]>(() => {
     const raw = props.rawTrace;
     const fs = props.samplingRate;
-    if (!raw || raw.length === 0) return [[], [], [], [], [], [], []];
+    if (!raw || raw.length === 0) return emptySeriesData();
 
     const startSample = Math.max(0, Math.floor(props.startTime * fs));
     const endSample = Math.min(raw.length, Math.ceil(props.endTime * fs));
-    if (startSample >= endSample) return [[], [], [], [], [], [], []];
+    if (startSample >= endSample) return emptySeriesData();
 
     const len = endSample - startSample;
     const { mean, std, zMin, zMax } = rawStats();
@@ -224,6 +230,12 @@ export function ZoomWindow(props: ZoomWindowProps) {
 
     // z-score transform for traces in raw-space (reconv, pinned reconv)
     const toZScore = (values: number[]) => values.map(v => (v - mean) / std);
+
+    // Filtered trace — same z-score space as raw (only present when filter is active)
+    const dsFiltered = sliceAndDownsample(
+      props.filteredTrace, x, startSample, endSample,
+      offset, raw.length, dsX.length, toZScore,
+    );
 
     // Reconvolution trace — same z-score space as raw
     const dsReconv = sliceAndDownsample(
@@ -274,11 +286,14 @@ export function ZoomWindow(props: ZoomWindowProps) {
       dsGTSpikes = new Array(dsX.length).fill(null) as number[];
     }
 
-    return [dsX, dsRaw, dsDeconv, dsReconv, dsResid, dsPinnedDeconv, dsPinnedReconv, dsGTCalcium, dsGTSpikes];
+    return [dsX, dsRaw, dsFiltered, dsDeconv, dsReconv, dsResid, dsPinnedDeconv, dsPinnedReconv, dsGTCalcium, dsGTSpikes];
   });
 
   const seriesConfig = createMemo<uPlot.Series[]>(() => {
-    const base = [{}, createRawSeries(), createDeconvolvedSeries(), createFitSeries(), createResidualSeries()];
+    const base: uPlot.Series[] = [{}, createRawSeries()];
+    // Filtered series: visible only when filter is active, hidden otherwise
+    base.push(props.filteredTrace ? createFilteredSeries() : { show: false } as uPlot.Series);
+    base.push(createDeconvolvedSeries(), createFitSeries(), createResidualSeries());
     // Always include pinned series slots (null data renders nothing)
     base.push(createPinnedOverlaySeries('Pinned Deconv', '#2ca02c', 1));
     base.push(createPinnedOverlaySeries('Pinned Fit', '#ff7f0e', 1.5));

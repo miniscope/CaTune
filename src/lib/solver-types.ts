@@ -28,6 +28,7 @@ export interface SolverParams {
   tauDecay: number;  // seconds (e.g., 0.4)
   lambda: number;    // sparsity penalty (e.g., 0.01)
   fs: number;        // sampling rate in Hz (e.g., 30)
+  filterEnabled: boolean;  // bandpass filter derived from kernel
 }
 
 /** Intermediate result emitted during solver iteration for live visualization. */
@@ -91,6 +92,7 @@ export type PoolWorkerOutbound =
       state: Uint8Array;
       iterations: number;
       converged: boolean;
+      filteredTrace?: Float32Array;
     }
   | { type: 'cancelled'; jobId: number }
   | { type: 'error'; jobId: number; message: string };

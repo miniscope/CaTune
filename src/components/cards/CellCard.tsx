@@ -16,6 +16,7 @@ export interface CellCardProps {
   rawTrace: Float64Array;
   deconvolvedTrace?: Float32Array;
   reconvolutionTrace?: Float32Array;
+  filteredTrace?: Float32Array;
   samplingRate: number;
   isActive?: boolean;
   solverStatus?: CellSolverStatus;
@@ -103,6 +104,7 @@ export function CellCard(props: CellCardProps) {
             rawTrace={props.rawTrace}
             deconvolvedTrace={props.deconvolvedTrace}
             reconvolutionTrace={props.reconvolutionTrace}
+            filteredTrace={props.filteredTrace}
             samplingRate={props.samplingRate}
             startTime={zoomStart()}
             endTime={zoomEnd()}

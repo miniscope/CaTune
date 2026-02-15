@@ -3,7 +3,7 @@
 // Replaces multi-cell-solver.ts, tuning-orchestrator.ts, and job-scheduler.ts.
 
 import { createEffect, on, onCleanup } from 'solid-js';
-import { tauRise, tauDecay, lambda, selectedCell } from './viz-store';
+import { tauRise, tauDecay, lambda, selectedCell, filterEnabled } from './viz-store';
 import { parsedData, effectiveShape, swapped, samplingRate } from './data-store';
 import {
   selectedCells,
@@ -41,6 +41,7 @@ interface CellSolveState {
   paddedResultEnd: number;
   fullPaddedSolution: Float32Array | null;
   fullPaddedReconvolution: Float32Array | null;
+  fullPaddedFilteredTrace: Float32Array | null;
 }
 
 let pool: WorkerPool | null = null;
@@ -57,6 +58,7 @@ function getCurrentParams(): SolverParams {
     tauDecay: tauDecay(),
     lambda: lambda(),
     fs: samplingRate() ?? 30,
+    filterEnabled: filterEnabled(),
   };
 }
 
@@ -85,15 +87,20 @@ function cachePaddedAndUpdateTraces(
   resultLength: number,
   visibleStart: number,
   iteration: number,
+  filteredTrace?: Float32Array,
 ): void {
   state.fullPaddedSolution = new Float32Array(solution);
   state.fullPaddedReconvolution = new Float32Array(reconvolution);
+  state.fullPaddedFilteredTrace = filteredTrace ? new Float32Array(filteredTrace) : null;
   state.paddedResultStart = paddedStart;
   state.paddedResultEnd = paddedEnd;
 
   const visSol = new Float32Array(solution.subarray(resultOffset, resultOffset + resultLength));
   const visReconv = new Float32Array(reconvolution.subarray(resultOffset, resultOffset + resultLength));
-  updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart);
+  const visFiltered = filteredTrace
+    ? new Float32Array(filteredTrace.subarray(resultOffset, resultOffset + resultLength))
+    : undefined;
+  updateOneCellTraces(state.cellIndex, visSol, visReconv, visibleStart, visFiltered);
   updateOneCellIteration(state.cellIndex, iteration);
 }
 
@@ -142,14 +149,14 @@ function dispatchCellSolve(state: CellSolveState): void {
         visibleStart, iteration,
       );
     },
-    onComplete(solution, reconvolution, solverState, iterations, converged) {
+    onComplete(solution, reconvolution, solverState, iterations, converged, filteredTrace) {
       if (state.activeJobId !== jobId) return;
       state.activeJobId = null;
       state.converged = converged;
       cachePaddedAndUpdateTraces(
         state, solution, reconvolution,
         paddedStart, paddedEnd, resultOffset, resultLength,
-        visibleStart, iterations,
+        visibleStart, iterations, filteredTrace,
       );
       state.warmStartCache.store(solverState, params, paddedStart, paddedEnd);
 
@@ -193,7 +200,8 @@ function drainDeferredCells(): void {
 
 function paramsMatch(a: SolverParams, b: SolverParams): boolean {
   return a.tauRise === b.tauRise && a.tauDecay === b.tauDecay
-    && a.lambda === b.lambda && a.fs === b.fs;
+    && a.lambda === b.lambda && a.fs === b.fs
+    && a.filterEnabled === b.filterEnabled;
 }
 
 function reEnqueueCell(state: CellSolveState): void {
@@ -243,6 +251,7 @@ function ensureCellState(cellIndex: number, data: NpyResult, shape: [number, num
       paddedResultEnd: 0,
       fullPaddedSolution: null,
       fullPaddedReconvolution: null,
+      fullPaddedFilteredTrace: null,
     };
     cellStates.set(cellIndex, state);
 
@@ -285,7 +294,10 @@ function tryExtractFromCache(state: CellSolveState, newVisStart: number, newVisE
   const length = newVisEnd - newVisStart;
   const visSol = new Float32Array(state.fullPaddedSolution.subarray(offsetInPadded, offsetInPadded + length));
   const visReconv = new Float32Array(state.fullPaddedReconvolution.subarray(offsetInPadded, offsetInPadded + length));
-  updateOneCellTraces(state.cellIndex, visSol, visReconv, newVisStart);
+  const visFiltered = state.fullPaddedFilteredTrace
+    ? new Float32Array(state.fullPaddedFilteredTrace.subarray(offsetInPadded, offsetInPadded + length))
+    : undefined;
+  updateOneCellTraces(state.cellIndex, visSol, visReconv, newVisStart, visFiltered);
   return true;
 }
 
@@ -346,7 +358,7 @@ export function initCellSolveManager(): void {
 
   // Effect 2: Watch global params — mark all cells stale, cancel all, re-dispatch all
   createEffect(
-    on([tauRise, tauDecay, lambda], () => {
+    on([tauRise, tauDecay, lambda, filterEnabled], () => {
       if (cellStates.size === 0) return;
 
       // Cancel everything
@@ -362,15 +374,14 @@ export function initCellSolveManager(): void {
         state.dispatchedParams = null;
         state.fullPaddedSolution = null;
         state.fullPaddedReconvolution = null;
+        state.fullPaddedFilteredTrace = null;
         updateOneCellStatus(state.cellIndex, 'stale');
         debouncedDispatch(state);
       }
     }),
   );
 
-  onCleanup(() => {
-    disposeCellSolveManager();
-  });
+  onCleanup(disposeCellSolveManager);
 }
 
 export function disposeCellSolveManager(): void {
