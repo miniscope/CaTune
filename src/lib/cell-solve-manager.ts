@@ -141,12 +141,12 @@ function dispatchCellSolve(state: CellSolveState): void {
     warmStrategy: strategy,
     getPriority: () => getCellPriority(state.cellIndex),
     maxIterations: QUANTUM_ITERATIONS,
-    onIntermediate(solution, reconvolution, iteration, filteredTrace) {
+    onIntermediate(solution, reconvolution, iteration) {
       if (state.activeJobId !== jobId) return;
       cachePaddedAndUpdateTraces(
         state, solution, reconvolution,
         paddedStart, paddedEnd, resultOffset, resultLength,
-        visibleStart, iteration, filteredTrace,
+        visibleStart, iteration,
       );
     },
     onComplete(solution, reconvolution, solverState, iterations, converged, filteredTrace) {

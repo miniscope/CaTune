@@ -7,25 +7,12 @@ import { createEffect, on, onCleanup, Show } from 'solid-js';
 import { spectrumData } from '../../lib/spectrum/spectrum-store';
 import { filterEnabled } from '../../lib/viz-store';
 import { samplingRate } from '../../lib/data-store';
+import { getThemeColors } from '../../lib/chart/theme-colors';
+import { withOpacity } from '../../lib/chart/series-config';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import '../../lib/chart/chart-theme.css';
 import './spectrum.css';
-
-/** Read CSS custom property values from :root. */
-function getThemeColors() {
-  const s = getComputedStyle(document.documentElement);
-  const v = (name: string) => s.getPropertyValue(name).trim() || undefined;
-  return {
-    textPrimary:   v('--text-primary')   ?? '#1a1a1a',
-    textSecondary: v('--text-secondary') ?? '#616161',
-    textTertiary:  v('--text-tertiary')  ?? '#9e9e9e',
-    borderSubtle:  v('--border-subtle')  ?? '#e8e8e8',
-    borderDefault: v('--border-default') ?? '#d4d4d4',
-    accent:        v('--accent')         ?? '#2171b5',
-    accentMuted:   v('--accent-muted')   ?? 'rgba(33, 113, 181, 0.08)',
-  };
-}
 
 /** uPlot plugin that draws the filter band overlay on the chart. */
 function filterBandPlugin(
@@ -55,7 +42,7 @@ function filterBandPlugin(
           ctx.save();
 
           // Shaded passband rectangle
-          ctx.fillStyle = 'rgba(33, 113, 181, 0.06)';
+          ctx.fillStyle = withOpacity(theme.accent, 0.06);
           ctx.fillRect(left, top, right - left, height);
 
           // Dashed cutoff lines
@@ -96,8 +83,9 @@ export function SpectrumPanel() {
   let containerRef: HTMLDivElement | undefined;
   let uplotInstance: uPlot | undefined;
 
+  // Rebuild chart when spectrum data changes
   createEffect(
-    on([spectrumData, filterEnabled], () => {
+    on(spectrumData, () => {
       if (uplotInstance) {
         uplotInstance.destroy();
         uplotInstance = undefined;
@@ -146,7 +134,7 @@ export function SpectrumPanel() {
             label: 'PSD',
             stroke: theme.accent,
             width: 1.5,
-            fill: 'rgba(33, 113, 181, 0.04)',
+            fill: withOpacity(theme.accent, 0.04),
           },
         ],
         axes: [
@@ -181,6 +169,13 @@ export function SpectrumPanel() {
       };
 
       uplotInstance = new uPlot(opts, chartData, containerRef);
+    }),
+  );
+
+  // Redraw (not rebuild) when filter toggle changes — plugin reads filterEnabled() live
+  createEffect(
+    on(filterEnabled, () => {
+      if (uplotInstance) uplotInstance.redraw();
     }),
   );
 

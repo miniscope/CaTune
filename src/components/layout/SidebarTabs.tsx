@@ -14,7 +14,8 @@ export interface SidebarTabsProps {
 }
 
 export function SidebarTabs(props: SidebarTabsProps) {
-  const [activeTab, setActiveTab] = createSignal<SidebarTab>('community');
+  const defaultTab: SidebarTab = props.communityContent ? 'community' : props.spectrumContent ? 'spectrum' : 'metrics';
+  const [activeTab, setActiveTab] = createSignal<SidebarTab>(defaultTab);
 
   return (
     <div class="sidebar-tabs">

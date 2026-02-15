@@ -9,18 +9,7 @@ import type { CommunitySubmission } from '../../lib/community/types';
 import 'uplot/dist/uPlot.min.css';
 import '../../lib/chart/chart-theme.css';
 import uPlot from 'uplot';
-
-/** Read CSS custom property values from :root for uPlot programmatic styling. */
-function getThemeColors() {
-  const s = getComputedStyle(document.documentElement);
-  const v = (name: string) => s.getPropertyValue(name).trim() || undefined;
-  return {
-    textPrimary:   v('--text-primary')   ?? '#1a1a1a',
-    textSecondary: v('--text-secondary') ?? '#616161',
-    borderSubtle:  v('--border-subtle')  ?? '#e8e8e8',
-    borderDefault: v('--border-default') ?? '#d4d4d4',
-  };
-}
+import { getThemeColors } from '../../lib/chart/theme-colors';
 
 export interface ScatterPlotProps {
   submissions: CommunitySubmission[];

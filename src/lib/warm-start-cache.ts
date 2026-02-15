@@ -82,7 +82,7 @@ export function shouldWarmStart(
   }
 
   // Filter state changed -- the trace itself is different, must cold start
-  if ((oldParams.filterEnabled ?? false) !== (newParams.filterEnabled ?? false)) {
+  if (oldParams.filterEnabled !== newParams.filterEnabled) {
     return 'cold';
   }
 

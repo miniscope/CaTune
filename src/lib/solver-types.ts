@@ -83,7 +83,6 @@ export type PoolWorkerOutbound =
       solution: Float32Array;
       reconvolution: Float32Array;
       iteration: number;
-      filteredTrace?: Float32Array;
     }
   | {
       type: 'complete';
@@ -94,11 +93,6 @@ export type PoolWorkerOutbound =
       iterations: number;
       converged: boolean;
       filteredTrace?: Float32Array;
-      spectrum?: {
-        frequencies: Float32Array;
-        power: Float32Array;
-        cutoffs: [number, number];
-      };
     }
   | { type: 'cancelled'; jobId: number }
   | { type: 'error'; jobId: number; message: string };

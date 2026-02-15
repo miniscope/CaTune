@@ -6,7 +6,7 @@ import type uPlot from 'uplot';
  * Convert a color to rgba with the specified opacity.
  * Handles #rrggbb and #rgb hex formats. Returns input unchanged for other formats.
  */
-function withOpacity(color: string, alpha: number): string {
+export function withOpacity(color: string, alpha: number): string {
   if (color.startsWith('#')) {
     let hex = color.slice(1);
 

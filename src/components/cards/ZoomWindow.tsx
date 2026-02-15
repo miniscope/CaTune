@@ -43,6 +43,11 @@ const DECONV_SCALE = 0.35; // scale deconvolved to this fraction of raw z-range
 const RESID_GAP = 0.5; // gap between deconv band bottom and residual band top
 const RESID_SCALE = 0.25; // scale residuals to this fraction of raw z-range
 
+// Series count: x + raw + filtered + deconv + fit + resid + pinnedDeconv + pinnedFit + gtCalcium + gtSpikes
+const SERIES_COUNT = 10;
+const emptySeriesData = (): [number[], ...number[][]] =>
+  Array.from({ length: SERIES_COUNT }, () => []) as unknown as [number[], ...number[][]];
+
 export function ZoomWindow(props: ZoomWindowProps) {
   const height = () => props.height ?? 150;
 
@@ -199,11 +204,11 @@ export function ZoomWindow(props: ZoomWindowProps) {
   const zoomData = createMemo<[number[], ...number[][]]>(() => {
     const raw = props.rawTrace;
     const fs = props.samplingRate;
-    if (!raw || raw.length === 0) return [[], [], [], [], [], [], [], []];
+    if (!raw || raw.length === 0) return emptySeriesData();
 
     const startSample = Math.max(0, Math.floor(props.startTime * fs));
     const endSample = Math.min(raw.length, Math.ceil(props.endTime * fs));
-    if (startSample >= endSample) return [[], [], [], [], [], [], [], []];
+    if (startSample >= endSample) return emptySeriesData();
 
     const len = endSample - startSample;
     const { mean, std, zMin, zMax } = rawStats();

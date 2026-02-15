@@ -64,9 +64,7 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
       if (now - lastIntermediateTime >= INTERMEDIATE_INTERVAL_MS) {
         const sol = solver.get_solution();
         const reconv = solver.get_reconvolution();
-        const ftCopy = filteredTrace ? new Float32Array(filteredTrace) : undefined;
         const transfer: Transferable[] = [sol.buffer, reconv.buffer];
-        if (ftCopy) transfer.push(ftCopy.buffer);
         post(
           {
             type: 'intermediate',
@@ -74,7 +72,6 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
             solution: sol,
             reconvolution: reconv,
             iteration: solver.iteration_count(),
-            filteredTrace: ftCopy,
           },
           transfer,
         );
@@ -95,19 +92,8 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
     const reconvolution = solver.get_reconvolution();
     const state = solver.export_state();
 
-    // Collect spectrum data for visualization
-    const power = solver.get_power_spectrum();
-    const frequencies = solver.get_spectrum_frequencies();
-    const cutoffsArr = solver.get_filter_cutoffs();
-    const spectrum = power.length > 0
-      ? { frequencies, power, cutoffs: [cutoffsArr[0], cutoffsArr[1]] as [number, number] }
-      : undefined;
-
     const ftCopy = filteredTrace ? new Float32Array(filteredTrace) : undefined;
     const transfer: Transferable[] = [solution.buffer, reconvolution.buffer, state.buffer];
-    if (spectrum) {
-      transfer.push(spectrum.power.buffer, spectrum.frequencies.buffer);
-    }
     if (ftCopy) transfer.push(ftCopy.buffer);
 
     post(
@@ -120,7 +106,6 @@ async function handleSolve(req: Extract<PoolWorkerInbound, { type: 'solve' }>): 
         iterations: solver.iteration_count(),
         converged: solver.converged(),
         filteredTrace: ftCopy,
-        spectrum,
       },
       transfer,
     );
