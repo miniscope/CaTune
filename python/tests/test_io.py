@@ -1,7 +1,8 @@
-"""Tests for save_for_tuning and load_tuning_data I/O functions.
+"""Tests for save_for_tuning, load_tuning_data, load_export_params,
+and deconvolve_from_export I/O functions.
 
 Covers round-trip fidelity, format compatibility with CaTune's browser
-.npy parser, metadata content, and error handling.
+.npy parser, metadata content, error handling, and the JSON import pipeline.
 """
 
 from __future__ import annotations
@@ -14,6 +15,51 @@ import numpy.testing as npt
 import pytest
 
 from catune import load_tuning_data, save_for_tuning
+from catune._io import load_export_params, deconvolve_from_export
+from catune._kernel import build_kernel
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _write_mock_export_json(path: Path, **overrides) -> Path:
+    """Write a mock CaTune export JSON and return its path."""
+    data = {
+        "schema_version": "1.1.0",
+        "catune_version": "dev",
+        "export_date": "2025-01-01T00:00:00Z",
+        "parameters": {
+            "tau_rise_s": 0.02,
+            "tau_decay_s": 0.4,
+            "lambda": 0.01,
+            "sampling_rate_hz": 30.0,
+            "filter_enabled": False,
+        },
+        "ar2_coefficients": {
+            "g1": 1.0,
+            "g2": -0.5,
+            "decayRoot": 0.9,
+            "riseRoot": 0.1,
+        },
+        "formulation": {
+            "model": "FISTA",
+            "objective": "test",
+            "kernel": "test",
+            "ar2_relation": "test",
+            "lambda_definition": "test",
+            "convergence": "test",
+        },
+        "metadata": {},
+    }
+    # Apply overrides to parameters
+    for key, val in overrides.items():
+        data["parameters"][key] = val
+
+    json_path = path / "export.json"
+    with open(json_path, "w") as f:
+        json.dump(data, f, indent=2)
+    return json_path
 
 
 # ---------------------------------------------------------------------------
@@ -178,3 +224,108 @@ def test_npy_format_compatible(tmp_path: Path):
 
     assert "'fortran_order': False" in header
     assert "'<f8'" in header or "'float64'" in header
+
+
+# ---------------------------------------------------------------------------
+# Test 10: load_export_params round-trip
+# ---------------------------------------------------------------------------
+
+def test_load_export_params_roundtrip(tmp_path: Path):
+    """Write mock export JSON -> load -> verify parameter values."""
+    json_path = _write_mock_export_json(
+        tmp_path,
+        tau_rise_s=0.05,
+        tau_decay_s=1.0,
+        sampling_rate_hz=20.0,
+        **{"lambda": 0.1},
+        filter_enabled=True,
+    )
+
+    params = load_export_params(json_path)
+
+    assert params["tau_rise"] == 0.05
+    assert params["tau_decay"] == 1.0
+    assert params["lambda_"] == 0.1
+    assert params["fs"] == 20.0
+    assert params["filter_enabled"] is True
+
+
+# ---------------------------------------------------------------------------
+# Test 11: load_export_params missing file
+# ---------------------------------------------------------------------------
+
+def test_load_export_params_missing_file(tmp_path: Path):
+    """Attempt to load from nonexistent path, expect FileNotFoundError."""
+    with pytest.raises(FileNotFoundError, match="not found"):
+        load_export_params(tmp_path / "nonexistent.json")
+
+
+# ---------------------------------------------------------------------------
+# Test 12: deconvolve_from_export pipeline (filter disabled)
+# ---------------------------------------------------------------------------
+
+def test_deconvolve_from_export_basic(tmp_path: Path):
+    """Mock JSON + synthetic trace -> verify activity is non-negative."""
+    json_path = _write_mock_export_json(tmp_path, filter_enabled=False)
+
+    # Create a synthetic trace
+    kernel = build_kernel(0.02, 0.4, 30.0)
+    n = 200
+    activity_gt = np.zeros(n)
+    activity_gt[50] = 1.0
+    activity_gt[120] = 1.0
+    trace = np.convolve(activity_gt, kernel)[:n]
+
+    result = deconvolve_from_export(trace, json_path)
+
+    assert result.shape == (n,)
+    assert np.all(result >= 0)
+    # Should detect activity near ground-truth locations
+    for loc in [50, 120]:
+        window = result[max(0, loc - 2) : loc + 3]
+        assert window.max() > 0.01, f"No activity near {loc}"
+
+
+# ---------------------------------------------------------------------------
+# Test 13: deconvolve_from_export with filter enabled
+# ---------------------------------------------------------------------------
+
+def test_deconvolve_from_export_with_filter(tmp_path: Path):
+    """Filter-enabled path: verify filter is applied."""
+    json_path = _write_mock_export_json(
+        tmp_path,
+        filter_enabled=True,
+        sampling_rate_hz=100.0,
+    )
+
+    # Create synthetic trace with DC offset + signal
+    kernel = build_kernel(0.02, 0.4, 100.0)
+    n = 500
+    activity_gt = np.zeros(n)
+    activity_gt[100] = 1.0
+    trace = np.convolve(activity_gt, kernel)[:n] + 5.0  # DC offset
+
+    result = deconvolve_from_export(trace, json_path)
+
+    assert result.shape == (n,)
+    assert np.all(result >= 0)
+
+
+# ---------------------------------------------------------------------------
+# Test 14: deconvolve_from_export with return_full
+# ---------------------------------------------------------------------------
+
+def test_deconvolve_from_export_full(tmp_path: Path):
+    """return_full=True returns DeconvolutionResult."""
+    json_path = _write_mock_export_json(tmp_path, filter_enabled=False)
+
+    kernel = build_kernel(0.02, 0.4, 30.0)
+    trace = np.convolve(np.eye(1, 100, 30).ravel(), kernel)[:100]
+
+    result = deconvolve_from_export(trace, json_path, return_full=True)
+
+    assert hasattr(result, "activity")
+    assert hasattr(result, "baseline")
+    assert hasattr(result, "reconvolution")
+    assert hasattr(result, "iterations")
+    assert hasattr(result, "converged")

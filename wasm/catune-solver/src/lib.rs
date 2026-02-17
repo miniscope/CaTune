@@ -55,6 +55,7 @@ impl Solver {
     /// Create a new Solver with default parameters.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Solver {
+        #[cfg(target_arch = "wasm32")]
         console_error_panic_hook::set_once();
 
         let mut solver = Solver {
@@ -133,6 +134,11 @@ impl Solver {
         self.converged = false;
         self.prev_objective = f64::INFINITY;
         self.baseline = 0.0;
+    }
+
+    /// Returns a copy of the kernel.
+    pub fn get_kernel(&self) -> Vec<f32> {
+        self.kernel.clone()
     }
 
     /// Returns a copy of the current solution (spike train) for the active region.
