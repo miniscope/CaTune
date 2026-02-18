@@ -3,7 +3,7 @@
  * Uses uPlot following ScatterPlot.tsx patterns (ResizeObserver, dark theme, canvas plugins).
  */
 
-import { createEffect, on, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { spectrumData } from '../../lib/spectrum/spectrum-store.ts';
 import { filterEnabled } from '../../lib/viz-store.ts';
 import { samplingRate } from '../../lib/data-store.ts';
@@ -14,55 +14,102 @@ import 'uplot/dist/uPlot.min.css';
 import '../../lib/chart/chart-theme.css';
 import './spectrum.css';
 
-/** uPlot plugin that draws the filter band overlay on the chart. */
+/**
+ * uPlot plugin that draws the filter band overlay on the chart.
+ * Shading + cutoff lines draw in drawClear (behind grid/series).
+ * Labels draw in draw (on top of everything).
+ */
 function filterBandPlugin(
   getFilterEnabled: () => boolean,
   getHighPass: () => number,
   getLowPass: () => number,
   theme: ReturnType<typeof getThemeColors>,
 ): uPlot.Plugin {
+  /** Compute shared pixel positions for both hooks. */
+  function getPositions(u: uPlot) {
+    const xScale = u.scales.x;
+    if (!xScale || xScale.min == null || xScale.max == null) return null;
+    const hp = Math.log10(Math.max(getHighPass(), 1e-6));
+    const lp = Math.log10(Math.max(getLowPass(), 1e-6));
+    return {
+      left: u.valToPos(hp, 'x', true),
+      right: u.valToPos(lp, 'x', true),
+      top: u.bbox.top,
+      height: u.bbox.height,
+      dpr: devicePixelRatio,
+    };
+  }
+
   return {
     hooks: {
+      // Shading + lines: behind grid and series
       drawClear: [
         (u: uPlot) => {
           if (!getFilterEnabled()) return;
+          const pos = getPositions(u);
+          if (!pos) return;
+          const { left, right, top, height, dpr } = pos;
           const ctx = u.ctx;
-          const xScale = u.scales.x;
-          if (!xScale || xScale.min == null || xScale.max == null) return;
-
-          const hp = Math.log10(Math.max(getHighPass(), 1e-6));
-          const lp = Math.log10(Math.max(getLowPass(), 1e-6));
-
-          // Convert log10(freq) to pixel positions
-          const left = u.valToPos(hp, 'x', true);
-          const right = u.valToPos(lp, 'x', true);
-          const top = u.bbox.top / devicePixelRatio;
-          const height = u.bbox.height / devicePixelRatio;
 
           ctx.save();
 
-          // Shaded passband rectangle
-          ctx.fillStyle = withOpacity(theme.accent, 0.06);
+          // Shaded passband rectangle — full plot height
+          ctx.fillStyle = withOpacity(theme.accent, 0.10);
           ctx.fillRect(left, top, right - left, height);
 
-          // Cutoff lines and labels
-          ctx.setLineDash([4, 4]);
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = theme.accent;
-          ctx.globalAlpha = 0.6;
-          for (const [x, label] of [[left, 'HP'], [right, 'LP']] as const) {
+          // Cutoff lines — dashed, full height
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.strokeStyle = withOpacity(theme.accent, 0.6);
+          ctx.setLineDash([6 * dpr, 3 * dpr]);
+          for (const x of [left, right]) {
             ctx.beginPath();
             ctx.moveTo(x, top);
             ctx.lineTo(x, top + height);
             ctx.stroke();
           }
-          ctx.setLineDash([]);
-          ctx.globalAlpha = 0.8;
-          ctx.font = '10px sans-serif';
-          ctx.fillStyle = theme.accent;
+
+          ctx.restore();
+        },
+      ],
+      // Labels: on top of grid, axes, and series
+      draw: [
+        (u: uPlot) => {
+          if (!getFilterEnabled()) return;
+          const pos = getPositions(u);
+          if (!pos) return;
+          const { left, right, top, dpr } = pos;
+          const ctx = u.ctx;
+
+          ctx.save();
+
+          const fontSize = Math.round(12 * dpr);
+          ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
           ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
           for (const [x, label] of [[left, 'HP'], [right, 'LP']] as const) {
-            ctx.fillText(label, x, top + 12);
+            const textW = ctx.measureText(label).width;
+            const pad = 5 * dpr;
+            const pillW = textW + pad * 2;
+            const pillH = fontSize + pad;
+            const pillX = x - pillW / 2;
+            const pillY = top + 5 * dpr;
+            // Opaque pill background
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = 0.9;
+            ctx.beginPath();
+            ctx.roundRect(pillX, pillY, pillW, pillH, 3 * dpr);
+            ctx.fill();
+            // Pill border
+            ctx.strokeStyle = theme.accent;
+            ctx.lineWidth = 1 * dpr;
+            ctx.globalAlpha = 0.5;
+            ctx.setLineDash([]);
+            ctx.stroke();
+            // Label text
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = theme.accent;
+            ctx.fillText(label, x, pillY + pillH / 2);
           }
 
           ctx.restore();
@@ -73,30 +120,34 @@ function filterBandPlugin(
 }
 
 export function SpectrumPanel() {
-  let containerRef: HTMLDivElement | undefined;
+  const [container, setContainer] = createSignal<HTMLDivElement>();
   let uplotInstance: uPlot | undefined;
 
-  // Rebuild chart when spectrum data changes
+  // Rebuild chart when spectrum data or container changes.
+  // container is a signal so the effect re-fires when Show renders the div.
   createEffect(
-    on(spectrumData, () => {
+    on([spectrumData, container], () => {
       if (uplotInstance) {
         uplotInstance.destroy();
         uplotInstance = undefined;
       }
 
       const data = spectrumData();
-      if (!data || !containerRef) return;
+      const el = container();
+      if (!data || !el) return;
 
       const theme = getThemeColors();
 
       // Convert frequency axis to log10 for display
       const logFreqs: number[] = [];
       const psdVals: number[] = [];
+      const allPsdVals: number[] = [];
       for (let i = 1; i < data.freqs.length; i++) {
         const f = data.freqs[i];
         if (f <= 0) continue;
         logFreqs.push(Math.log10(f));
         psdVals.push(data.psd[i]);
+        allPsdVals.push(data.allPsd[i]);
       }
 
       if (logFreqs.length === 0) return;
@@ -104,10 +155,11 @@ export function SpectrumPanel() {
       const chartData: uPlot.AlignedData = [
         new Float64Array(logFreqs),
         new Float64Array(psdVals),
+        new Float64Array(allPsdVals),
       ];
 
       const opts: uPlot.Options = {
-        width: containerRef.clientWidth || 400,
+        width: el.clientWidth || 400,
         height: 280,
         plugins: [
           filterBandPlugin(
@@ -121,10 +173,14 @@ export function SpectrumPanel() {
         series: [
           {},
           {
-            label: 'PSD',
+            label: 'Selected Cell',
             stroke: theme.accent,
             width: 1.5,
-            fill: withOpacity(theme.accent, 0.04),
+          },
+          {
+            label: 'All Cells',
+            stroke: withOpacity(theme.textTertiary, 0.55),
+            width: 1.5,
           },
         ],
         axes: [
@@ -157,7 +213,7 @@ export function SpectrumPanel() {
         legend: { show: false },
       };
 
-      uplotInstance = new uPlot(opts, chartData, containerRef);
+      uplotInstance = new uPlot(opts, chartData, el);
     }),
   );
 
@@ -173,15 +229,17 @@ export function SpectrumPanel() {
   const resizeObserver = new ResizeObserver(() => {
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     resizeRaf = requestAnimationFrame(() => {
-      if (uplotInstance && containerRef) {
-        const w = containerRef.clientWidth;
+      const el = container();
+      if (uplotInstance && el) {
+        const w = el.clientWidth;
         if (w > 0) uplotInstance.setSize({ width: w, height: 280 });
       }
     });
   });
 
   createEffect(() => {
-    if (containerRef) resizeObserver.observe(containerRef);
+    const el = container();
+    if (el) resizeObserver.observe(el);
   });
 
   onCleanup(() => {
@@ -193,9 +251,28 @@ export function SpectrumPanel() {
     }
   });
 
+  const allCellsColor = () => {
+    const theme = getThemeColors();
+    return withOpacity(theme.textTertiary, 0.5);
+  };
+
   return (
     <div class="spectrum-panel">
-      <h3 class="spectrum-panel__title">Spectrum</h3>
+      <div class="spectrum-panel__header">
+        <h3 class="spectrum-panel__title">Spectrum</h3>
+        <Show when={spectrumData()}>
+          <div class="spectrum-panel__legend">
+            <span class="spectrum-panel__legend-item">
+              <span class="spectrum-panel__legend-swatch" style={{ background: allCellsColor() }} />
+              All Cells
+            </span>
+            <span class="spectrum-panel__legend-item">
+              <span class="spectrum-panel__legend-swatch spectrum-panel__legend-swatch--accent" />
+              Selected
+            </span>
+          </div>
+        </Show>
+      </div>
       <Show
         when={spectrumData()}
         fallback={
@@ -206,19 +283,27 @@ export function SpectrumPanel() {
       >
         {(data) => (
           <>
-            <div ref={containerRef} class="spectrum-panel__chart" />
+            <div ref={setContainer} class="spectrum-panel__chart" />
             <div class="spectrum-panel__info">
-              {[
-                ['Cell', String(data().cellIndex + 1)],
-                ['Fs', `${samplingRate() ?? 0} Hz`],
-                ['HP', `${data().highPassHz.toFixed(3)} Hz`],
-                ['LP', `${data().lowPassHz.toFixed(1)} Hz`],
-              ].map(([label, value]) => (
-                <div class="spectrum-panel__stat">
-                  <span class="spectrum-panel__stat-label">{label}</span>
-                  <span class="spectrum-panel__stat-value">{value}</span>
-                </div>
-              ))}
+              <p class="spectrum-panel__desc">
+                Power spectral density averaged across all loaded cells (gray) and
+                for the selected cell (blue).
+                {filterEnabled()
+                  ? ' Dashed lines mark the kernel-derived bandpass cutoffs.'
+                  : ' Enable Noise Filter to see bandpass cutoffs.'}
+              </p>
+              <div class="spectrum-panel__stats">
+                {[
+                  ['Fs', `${samplingRate() ?? 0} Hz`, 'Sampling rate'],
+                  ['HP', `${data().highPassHz.toFixed(3)} Hz`, 'High-pass cutoff'],
+                  ['LP', `${data().lowPassHz.toFixed(1)} Hz`, 'Low-pass cutoff'],
+                ].map(([label, value, title]) => (
+                  <div class="spectrum-panel__stat" title={title}>
+                    <span class="spectrum-panel__stat-label">{label}</span>
+                    <span class="spectrum-panel__stat-value">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
