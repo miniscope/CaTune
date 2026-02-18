@@ -2,6 +2,7 @@
 
 Saves calcium traces as .npy files with JSON metadata sidecars,
 compatible with CaTune's browser-side .npy parser (src/lib/npy-parser.ts).
+Also loads CaTune export JSONs for offline deconvolution.
 """
 
 from __future__ import annotations
@@ -28,6 +29,29 @@ def save_for_tuning(
 
     The ``.npy`` file is loadable by CaTune's browser ``.npy`` parser, which
     expects ``dtype='<f8'`` and ``fortran_order=False``.
+
+    **Converting from CaImAn** (users have h5py)::
+
+        import h5py
+        import catune
+
+        with h5py.File("caiman_results.hdf5", "r") as f:
+            traces = f["estimates/C"][:]       # shape: (n_cells, n_timepoints)
+            fs = float(f["params/data/fr"][()])
+
+        catune.save_for_tuning(traces, fs, "my_recording")
+        # -> my_recording.npy + my_recording_metadata.json
+
+    **Converting from Minian** (users have zarr/xarray)::
+
+        import zarr
+        import catune
+
+        store = zarr.open("minian_output", mode="r")
+        traces = store["C"][:]  # shape: (n_cells, n_frames)
+        fs = 30.0  # user must know their frame rate
+
+        catune.save_for_tuning(traces, fs, "my_recording")
 
     Parameters
     ----------
@@ -120,3 +144,95 @@ def load_tuning_data(path: str | Path) -> tuple[np.ndarray, dict]:
         metadata = json.load(f)
 
     return traces, metadata
+
+
+def load_export_params(path: str | Path) -> dict:
+    """Load deconvolution parameters from a CaTune export JSON.
+
+    Parses the JSON export schema 1.1.0 (defined in src/lib/export.ts)
+    and returns the parameters needed for deconvolution.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to the CaTune export JSON file.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys: ``tau_rise``, ``tau_decay``, ``lambda_``,
+        ``fs``, ``filter_enabled``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the JSON file does not exist.
+    KeyError
+        If required parameter fields are missing.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Export JSON not found: {path}")
+
+    with open(path) as f:
+        data = json.load(f)
+
+    params = data["parameters"]
+
+    return {
+        "tau_rise": params["tau_rise_s"],
+        "tau_decay": params["tau_decay_s"],
+        "lambda_": params["lambda"],
+        "fs": params["sampling_rate_hz"],
+        "filter_enabled": params.get("filter_enabled", False),
+    }
+
+
+def deconvolve_from_export(
+    traces: np.ndarray,
+    params_path: str | Path,
+    return_full: bool = False,
+):
+    """Run deconvolution using parameters from a CaTune export JSON.
+
+    Loads parameters via :func:`load_export_params`, optionally applies
+    the bandpass filter, and runs FISTA deconvolution.
+
+    Parameters
+    ----------
+    traces : np.ndarray
+        Calcium traces, shape ``(n_timepoints,)`` or ``(n_cells, n_timepoints)``.
+    params_path : str or Path
+        Path to the CaTune export JSON file.
+    return_full : bool, optional
+        If True, return a :class:`~catune.DeconvolutionResult` namedtuple.
+        Default False returns just the activity array.
+
+    Returns
+    -------
+    np.ndarray or DeconvolutionResult
+        Deconvolved activity (or full result if ``return_full=True``).
+    """
+    from ._fista import run_deconvolution, run_deconvolution_full
+    from ._filter import bandpass_filter
+
+    params = load_export_params(params_path)
+
+    # Optionally apply bandpass filter
+    if params["filter_enabled"]:
+        traces = np.atleast_2d(np.asarray(traces, dtype=np.float64)).copy()
+        for i in range(traces.shape[0]):
+            traces[i] = bandpass_filter(
+                traces[i], params["tau_rise"], params["tau_decay"], params["fs"],
+            )
+        if traces.shape[0] == 1:
+            traces = traces[0]
+
+    solver = run_deconvolution_full if return_full else run_deconvolution
+    return solver(
+        traces,
+        fs=params["fs"],
+        tau_r=params["tau_rise"],
+        tau_d=params["tau_decay"],
+        lam=params["lambda_"],
+    )

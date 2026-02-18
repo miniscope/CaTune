@@ -18,6 +18,7 @@ from catune import (
     run_deconvolution,
     save_for_tuning,
 )
+from catune._fista import run_deconvolution_full
 
 
 # ---------------------------------------------------------------------------
@@ -62,25 +63,22 @@ def test_kernel_equivalence_across_params(tau_r: float, tau_d: float, fs: float)
 # ---------------------------------------------------------------------------
 
 def test_solver_self_consistency():
-    """trace = convolve(spikes, kernel) -> solver -> reconvolution ~ trace."""
+    """trace = convolve(activity, kernel) -> solver -> reconvolution ~ trace."""
     kernel = build_kernel(0.02, 0.4, 30.0)
     n = 300
-    spike_locs = [20, 80, 150, 230]
+    event_locs = [20, 80, 150, 230]
 
     # Create ground-truth trace
-    spikes_gt = np.zeros(n)
-    for loc in spike_locs:
-        spikes_gt[loc] = 1.0
-    trace = np.convolve(spikes_gt, kernel)[:n]
+    activity_gt = np.zeros(n)
+    for loc in event_locs:
+        activity_gt[loc] = 1.0
+    trace = np.convolve(activity_gt, kernel)[:n]
 
     # Solve with low lambda for faithful recovery
-    solution = run_deconvolution(trace, 30.0, 0.02, 0.4, 0.001)
-
-    # Reconvolve
-    reconvolution = np.convolve(solution, kernel, "full")[:n]
+    result = run_deconvolution_full(trace, 30.0, 0.02, 0.4, 0.001)
 
     # Relative error < 5%
-    rel_err = np.linalg.norm(trace - reconvolution) / np.linalg.norm(trace)
+    rel_err = np.linalg.norm(trace - result.reconvolution) / np.linalg.norm(trace)
     assert rel_err < 0.05, (
         f"Self-consistency relative error {rel_err:.6f} >= 0.05"
     )
@@ -95,14 +93,14 @@ def test_save_load_solve_pipeline(tmp_path):
     kernel = build_kernel(0.02, 0.4, 30.0)
     n = 500
     n_cells = 3
-    spike_locations = [[100], [200], [300]]
+    event_locations = [[100], [200], [300]]
 
     traces = np.zeros((n_cells, n))
-    for i, locs in enumerate(spike_locations):
+    for i, locs in enumerate(event_locations):
         for loc in locs:
-            spike = np.zeros(n)
-            spike[loc] = 1.0
-            traces[i] += np.convolve(spike, kernel)[:n]
+            activity = np.zeros(n)
+            activity[loc] = 1.0
+            traces[i] += np.convolve(activity, kernel)[:n]
 
     # Save
     path = str(tmp_path / "pipeline_test")
@@ -116,16 +114,16 @@ def test_save_load_solve_pipeline(tmp_path):
     assert meta["num_timepoints"] == 500
 
     # Solve
-    spikes = run_deconvolution(loaded, 30.0, 0.02, 0.4, 0.01)
-    assert spikes.shape == (n_cells, n)
-    assert np.all(spikes >= 0)
+    solution = run_deconvolution(loaded, 30.0, 0.02, 0.4, 0.01)
+    assert solution.shape == (n_cells, n)
+    assert np.all(solution >= 0)
 
-    # Verify spike locations
-    for i, locs in enumerate(spike_locations):
+    # Verify activity locations
+    for i, locs in enumerate(event_locations):
         for loc in locs:
-            window = spikes[i, max(0, loc - 2) : loc + 3]
+            window = solution[i, max(0, loc - 2) : loc + 3]
             assert window.max() > 0.01, (
-                f"Cell {i}: no spike detected near {loc}"
+                f"Cell {i}: no activity detected near {loc}"
             )
 
 
@@ -138,23 +136,28 @@ def test_objective_decreases_monotonically():
 
     FISTA with adaptive restart may have brief increases when restart fires,
     but the overall trend must be decreasing. We check that after the first
-    10 iterations, no sustained increase occurs (two consecutive increases
-    that are not followed by a decrease within 3 iterations).
+    10 iterations, no sustained increase occurs.
+
+    This inline loop matches the updated solver with baseline + lambda*G_dc.
     """
     kernel = build_kernel(0.02, 0.4, 30.0)
     n = 200
     klen = len(kernel)
     lipschitz = compute_lipschitz(kernel)
 
+    # Effective lambda with kernel DC gain scaling
+    lam = 0.01
+    kernel_dc_gain = float(kernel.sum())
+    effective_lambda = lam * kernel_dc_gain
+
     # Create synthetic trace
-    spikes_gt = np.zeros(n)
-    spikes_gt[50] = 1.0
-    spikes_gt[120] = 1.0
-    trace = np.convolve(spikes_gt, kernel)[:n]
+    activity_gt = np.zeros(n)
+    activity_gt[50] = 1.0
+    activity_gt[120] = 1.0
+    trace = np.convolve(activity_gt, kernel)[:n]
 
     step_size = 1.0 / lipschitz
-    lam = 0.01
-    threshold = step_size * lam
+    threshold = step_size * effective_lambda
 
     solution = np.zeros(n)
     solution_prev = np.zeros(n)
@@ -164,7 +167,13 @@ def test_objective_decreases_monotonically():
 
     for iteration in range(1, 501):
         reconvolution = np.convolve(solution_prev, kernel, "full")[:n]
-        residual = reconvolution - trace
+
+        # Baseline at y_k
+        baseline = float(np.mean(trace - reconvolution))
+
+        # Residual includes baseline
+        residual = reconvolution + baseline - trace
+
         gradient = np.convolve(residual, kernel[::-1], "full")[
             klen - 1 : klen - 1 + n
         ]
@@ -172,9 +181,13 @@ def test_objective_decreases_monotonically():
         solution = np.maximum(
             solution_prev - step_size * gradient - threshold, 0.0
         )
+
+        # Recompute baseline at x_{k+1}
         recon_new = np.convolve(solution, kernel, "full")[:n]
-        res = recon_new - trace
-        objective = 0.5 * np.dot(res, res) + lam * solution.sum()
+        baseline = float(np.mean(trace - recon_new))
+
+        res = recon_new + baseline - trace
+        objective = 0.5 * np.dot(res, res) + effective_lambda * solution.sum()
 
         if objective > prev_objective and iteration > 1:
             t_fista = 1.0
@@ -196,8 +209,6 @@ def test_objective_decreases_monotonically():
         objectives.append(objective)
 
     # After first 10 iterations, objective should generally decrease
-    # Allow for adaptive restart transients but final objective should be
-    # much smaller than initial
     if len(objectives) > 10:
         assert objectives[-1] < objectives[10] * 0.5, (
             f"Objective did not decrease sufficiently: "
