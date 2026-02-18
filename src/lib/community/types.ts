@@ -41,9 +41,8 @@ export interface CommunitySubmission {
   recording_length_s?: number;
   fps?: number;
 
-  // Quality & deduplication
+  // Deduplication
   dataset_hash: string;
-  quality_score?: number;
   catune_version: string;
 
   // Data source
@@ -91,9 +90,8 @@ export interface FilterState {
 }
 
 /** Result of parameter validation before submission. */
-export interface QualityCheckResult {
+export interface ValidationResult {
   valid: boolean;
-  score: number;
   issues: string[];
 }
 

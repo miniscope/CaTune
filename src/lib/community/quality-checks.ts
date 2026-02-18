@@ -1,8 +1,7 @@
-// Parameter validation and quality scoring for community submissions.
+// Parameter validation for community submissions.
 // Hard limits block submission (validateSubmission).
-// Soft scoring provides informational quality (computeQualityScore).
 
-import type { QualityCheckResult } from './types.ts';
+import type { ValidationResult } from './types.ts';
 
 /** Hard parameter range limits that block submission if violated. */
 const HARD_LIMITS = {
@@ -22,14 +21,10 @@ interface ValidationParams {
 /**
  * Validate parameters against hard limits.
  * Returns valid=false with human-readable issues if any check fails.
- * Also includes a soft quality score.
  */
 export function validateSubmission(
-  params: ValidationParams & {
-    numCells?: number;
-    recordingLengthS?: number;
-  },
-): QualityCheckResult {
+  params: ValidationParams,
+): ValidationResult {
   const issues: string[] = [];
 
   // tau_rise range check
@@ -67,55 +62,8 @@ export function validateSubmission(
     );
   }
 
-  const score = computeQualityScore(params);
-
   return {
     valid: issues.length === 0,
-    score,
     issues,
   };
-}
-
-/**
- * Compute a soft quality score from 0.0 to 1.0.
- * Does not block submission -- provides informational quality assessment.
- * Penalizes unusual parameter ranges and rewards larger datasets.
- */
-export function computeQualityScore(params: {
-  tauRise: number;
-  tauDecay: number;
-  lambda?: number;
-  samplingRate?: number;
-  numCells?: number;
-  recordingLengthS?: number;
-}): number {
-  let score = 1.0;
-
-  // Penalize unusual tau_rise (typical: 5-100ms)
-  if (params.tauRise < 0.005 || params.tauRise > 0.1) {
-    score *= 0.7;
-  }
-
-  // Penalize unusual tau_decay (typical: 100ms - 2s)
-  if (params.tauDecay < 0.1 || params.tauDecay > 2.0) {
-    score *= 0.7;
-  }
-
-  // Penalize if tau_rise >= tau_decay (physically implausible)
-  if (params.tauRise >= params.tauDecay) {
-    score *= 0.3;
-  }
-
-  // Bonus for adequate dataset size
-  if (params.numCells != null && params.numCells >= 10) {
-    score *= 1.1;
-  }
-
-  // Bonus for long recording
-  if (params.recordingLengthS != null && params.recordingLengthS >= 60) {
-    score *= 1.1;
-  }
-
-  // Clamp to [0.0, 1.0]
-  return Math.min(1.0, Math.max(0.0, score));
 }

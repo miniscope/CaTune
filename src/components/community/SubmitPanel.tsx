@@ -89,8 +89,6 @@ export function SubmitPanel() {
       tauDecay: tauDecay(),
       lambda: lambda(),
       samplingRate: fs,
-      numCells: shape?.[0],
-      recordingLengthS: durationSeconds() ?? undefined,
     });
 
     if (!validation.valid) {

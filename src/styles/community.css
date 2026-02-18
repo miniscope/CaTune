@@ -358,12 +358,6 @@
   margin-bottom: var(--space-sm);
 }
 
-.submission-summary__quality {
-  font-size: 0.85rem;
-  color: var(--accent);
-  margin: 0 0 var(--space-xs);
-}
-
 .submission-summary__timestamp {
   font-size: 0.8rem;
   color: var(--text-tertiary);

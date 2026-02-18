@@ -1,7 +1,6 @@
 /**
  * Post-submission confirmation card.
- * Displays what was submitted, quality score, and actions
- * (close or delete the submission).
+ * Displays what was submitted and actions (close or delete the submission).
  */
 
 import { createSignal, Show } from 'solid-js';
@@ -55,12 +54,6 @@ export function SubmissionSummary(props: SubmissionSummaryProps) {
         <span>Species: {props.submission.species}</span>
         <span>Brain region: {props.submission.brain_region}</span>
       </div>
-
-      <Show when={props.submission.quality_score != null}>
-        <p class="submission-summary__quality">
-          Quality score: {((props.submission.quality_score ?? 0) * 100).toFixed(0)}%
-        </p>
-      </Show>
 
       <p class="submission-summary__timestamp">
         Submitted: {new Date(props.submission.created_at).toLocaleString()}
