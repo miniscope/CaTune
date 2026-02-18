@@ -73,15 +73,17 @@ export function ParameterPanel(props: ParameterPanelProps) {
           data-tutorial="slider-lambda"
         />
       </div>
-      <label class="param-panel__toggle">
-        <input
-          type="checkbox"
-          checked={filterEnabled()}
-          onChange={(e) => setFilterEnabled(e.currentTarget.checked)}
-        />
-        <span class="param-panel__toggle-label">Noise Filter</span>
+      <div class="param-panel__toggle-group">
+        <label class="param-panel__toggle">
+          <input
+            type="checkbox"
+            checked={filterEnabled()}
+            onChange={(e) => setFilterEnabled(e.currentTarget.checked)}
+          />
+          <span class="param-panel__toggle-label">Noise Filter</span>
+        </label>
         <span class="param-panel__toggle-desc">Bandpass filter derived from kernel</span>
-      </label>
+      </div>
     </div>
   );
 }

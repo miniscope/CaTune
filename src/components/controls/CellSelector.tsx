@@ -183,6 +183,7 @@ export function CellSelector(props: CellSelectorProps) {
             <div class="legend-info__row"><strong>Deconv</strong> — Estimated spike train (deconvolution result)</div>
             <div class="legend-info__row"><strong>Resid</strong> — Residuals (Raw minus Fit)</div>
             <div class="legend-info__row"><strong>True Ca/Spk</strong> — Ground truth (demo only)</div>
+            <div class="legend-info__hint">Click legend items to toggle traces on/off</div>
           </div>
         </Show>
         <LegendItem color="#1f77b4" label="Raw" visible={showRaw} setVisible={setShowRaw} />

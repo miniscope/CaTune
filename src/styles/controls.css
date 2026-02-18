@@ -177,13 +177,16 @@
 }
 
 /* --- Filter Toggle --- */
+.param-panel__toggle-group {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-sm);
+}
+
 .param-panel__toggle {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border-subtle);
-  margin-top: var(--space-sm);
   cursor: pointer;
   user-select: none;
 }
@@ -235,9 +238,11 @@
 }
 
 .param-panel__toggle-desc {
+  display: block;
   font-size: 0.7rem;
   color: var(--text-tertiary);
-  white-space: nowrap;
+  margin-top: var(--space-xs);
+  line-height: 1.3;
 }
 
 /* ========================

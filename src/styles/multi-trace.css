@@ -251,6 +251,14 @@
   color: var(--text-primary);
 }
 
+.legend-info__hint {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
 /* ========================
    Export Panel
    ======================== */
