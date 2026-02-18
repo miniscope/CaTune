@@ -6,7 +6,6 @@
  */
 
 import { computeAR2 } from '../ar2.ts';
-import { computeQualityScore } from './quality-checks.ts';
 import { computeDatasetHash } from './dataset-hash.ts';
 import { submitParameters } from './community-service.ts';
 import type { SubmissionPayload, CommunitySubmission } from './types.ts';
@@ -59,16 +58,8 @@ export async function submitToSupabase(
     datasetHash = await computeDatasetHash(floatData);
   }
 
-  // Compute AR2 coefficients and quality score
+  // Compute AR2 coefficients
   const ar2 = computeAR2(ctx.tauRise, ctx.tauDecay, ctx.samplingRate);
-  const qualityScore = computeQualityScore({
-    tauRise: ctx.tauRise,
-    tauDecay: ctx.tauDecay,
-    lambda: ctx.lambda,
-    samplingRate: ctx.samplingRate,
-    numCells: ctx.numCells,
-    recordingLengthS: ctx.recordingLengthS,
-  });
 
   // Build payload
   const payload: SubmissionPayload = {
@@ -101,7 +92,6 @@ export async function submitToSupabase(
     recording_length_s: ctx.recordingLengthS,
     fps: ctx.samplingRate,
     dataset_hash: datasetHash,
-    quality_score: qualityScore,
     filter_enabled: ctx.filterEnabled,
     data_source: ctx.rawFileName ? 'user' : 'demo',
     catune_version: import.meta.env.VITE_APP_VERSION || 'dev',
