@@ -241,57 +241,6 @@
 }
 
 /* ========================
-   Convergence Indicator
-   ======================== */
-.convergence {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.convergence__dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.convergence__text {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-/* Solving: pulsing accent dot */
-.convergence--solving .convergence__dot {
-  background: var(--accent);
-  animation: convergence-pulse 1s ease-in-out infinite;
-}
-
-.convergence--solving .convergence__text {
-  color: var(--accent);
-}
-
-/* Converged: solid green */
-.convergence--converged .convergence__dot {
-  background: var(--success);
-}
-
-.convergence--converged .convergence__text {
-  color: var(--success);
-}
-
-/* Error: solid red */
-.convergence--error .convergence__dot {
-  background: var(--error);
-}
-
-.convergence--error .convergence__text {
-  color: var(--error);
-}
-
-/* ========================
    Responsive
    ======================== */
 @media (max-width: 600px) {

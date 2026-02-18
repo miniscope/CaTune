@@ -3,8 +3,6 @@
 // Parameter changes trigger solver dispatch; results flow back here.
 
 import { createSignal } from 'solid-js';
-import type { SolverStatus } from './solver-types.ts';
-export type { SolverStatus } from './solver-types.ts';
 import { pinMultiCellResults, unpinMultiCellResults } from './multi-cell-store.ts';
 
 // --- Cell selection ---
@@ -37,10 +35,6 @@ const [showGTSpikes, setShowGTSpikes] = createSignal<boolean>(true);
 // --- Card height (shared across all cell cards) ---
 
 const [cardHeight, setCardHeight] = createSignal<number>(280);
-
-// --- Solver status ---
-
-const [solverStatus] = createSignal<SolverStatus>('idle');
 
 // --- Pinned snapshot for before/after comparison ---
 
@@ -95,8 +89,6 @@ export {
   showGTSpikes, setShowGTSpikes,
   // Card height
   cardHeight, setCardHeight,
-  // Solver status
-  solverStatus,
   // Pinned snapshot
   pinnedParams,
   pinCurrentSnapshot,

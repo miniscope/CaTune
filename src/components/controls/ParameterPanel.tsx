@@ -10,7 +10,6 @@ import {
 import { isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
 import { PARAM_RANGES } from '../../lib/param-config.ts';
 import { ParameterSlider } from './ParameterSlider.tsx';
-import { ConvergenceIndicator } from './ConvergenceIndicator.tsx';
 import '../../styles/controls.css';
 
 export interface ParameterPanelProps {
@@ -35,9 +34,6 @@ export function ParameterPanel(props: ParameterPanelProps) {
 
   return (
     <div class="param-panel" data-tutorial="param-panel">
-      <div class="param-panel__header">
-        <ConvergenceIndicator />
-      </div>
       <div class="param-panel__sliders">
         <ParameterSlider
           label="Rise Time"
