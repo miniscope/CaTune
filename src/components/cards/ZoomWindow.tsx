@@ -8,6 +8,7 @@ import type uPlot from 'uplot';
 import { TracePanel } from '../traces/TracePanel';
 import { downsampleMinMax } from '../../lib/chart/downsample';
 import { createRawSeries, createFilteredSeries, createFitSeries, createDeconvolvedSeries, createResidualSeries, createPinnedOverlaySeries, createGroundTruthSpikesSeries, createGroundTruthCalciumSeries } from '../../lib/chart/series-config';
+import { showRaw, showFiltered, showFit, showDeconv, showResid, showGTCalcium, showGTSpikes } from '../../lib/viz-store';
 
 export interface ZoomWindowProps {
   rawTrace: Float64Array;
@@ -231,16 +232,24 @@ export function ZoomWindow(props: ZoomWindowProps) {
     // z-score transform for traces in raw-space (reconv, pinned reconv)
     const toZScore = (values: number[]) => values.map(v => (v - mean) / std);
 
+    // When the bandpass filter is active it strips the DC component, so filtered
+    // and fit values are centered near zero instead of rawMean.  Dividing by
+    // rawStd without subtracting rawMean keeps them aligned with the raw z-score
+    // axis.  This only depends on the stable rawStats memo — no dependency on the
+    // filtered array content — so it can't flicker during solver iterations.
+    const toZScoreFiltered = (values: number[]) => values.map(v => v / std);
+
     // Filtered trace — same z-score space as raw (only present when filter is active)
     const dsFiltered = sliceAndDownsample(
       props.filteredTrace, x, startSample, endSample,
-      offset, raw.length, dsX.length, toZScore,
+      offset, raw.length, dsX.length, props.filteredTrace ? toZScoreFiltered : toZScore,
     );
 
     // Reconvolution trace — same z-score space as raw
+    // Uses filtered transform when filter is active (fit sits on filtered data)
     const dsReconv = sliceAndDownsample(
       props.reconvolutionTrace, x, startSample, endSample,
-      offset, raw.length, dsX.length, toZScore,
+      offset, raw.length, dsX.length, props.filteredTrace ? toZScoreFiltered : toZScore,
     );
 
     // Deconvolved trace — scaled into deconv band below raw
@@ -290,16 +299,26 @@ export function ZoomWindow(props: ZoomWindowProps) {
   });
 
   const seriesConfig = createMemo<uPlot.Series[]>(() => {
-    const base: uPlot.Series[] = [{}, createRawSeries()];
-    // Filtered series: visible only when filter is active, hidden otherwise
-    base.push(props.filteredTrace ? createFilteredSeries() : { show: false } as uPlot.Series);
-    base.push(createDeconvolvedSeries(), createFitSeries(), createResidualSeries());
-    // Always include pinned series slots (null data renders nothing)
-    base.push(createPinnedOverlaySeries('Pinned Deconv', '#2ca02c', 1));
-    base.push(createPinnedOverlaySeries('Pinned Fit', '#ff7f0e', 1.5));
+    const base: uPlot.Series[] = [{}, { ...createRawSeries(), show: showRaw() }];
+    // Filtered series: visible only when filter is active AND user hasn't hidden it
+    base.push(props.filteredTrace
+      ? { ...createFilteredSeries(), show: showFiltered() }
+      : { show: false } as uPlot.Series);
+    base.push(
+      { ...createDeconvolvedSeries(), show: showDeconv() },
+      { ...createFitSeries(), show: showFit() },
+      { ...createResidualSeries(), show: showResid() },
+    );
+    // Pinned overlays follow their base trace's visibility
+    base.push({ ...createPinnedOverlaySeries('Pinned Deconv', '#2ca02c', 1), show: showDeconv() });
+    base.push({ ...createPinnedOverlaySeries('Pinned Fit', '#ff7f0e', 1.5), show: showFit() });
     // GT series: always present to keep series count stable
-    base.push(props.groundTruthCalcium ? createGroundTruthCalciumSeries() : { show: false } as uPlot.Series);
-    base.push(props.groundTruthSpikes ? createGroundTruthSpikesSeries() : { show: false } as uPlot.Series);
+    base.push(props.groundTruthCalcium
+      ? { ...createGroundTruthCalciumSeries(), show: showGTCalcium() }
+      : { show: false } as uPlot.Series);
+    base.push(props.groundTruthSpikes
+      ? { ...createGroundTruthSpikesSeries(), show: showGTSpikes() }
+      : { show: false } as uPlot.Series);
     return base;
   });
 

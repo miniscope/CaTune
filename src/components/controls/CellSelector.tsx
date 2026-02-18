@@ -3,7 +3,7 @@
  * Supports three modes: top-active, random, and manual cell selection.
  */
 
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import type { SelectionMode } from '../../lib/multi-cell-store';
 import {
   selectionMode,
@@ -17,6 +17,16 @@ import {
   setGridColumns,
 } from '../../lib/multi-cell-store';
 import { numCells, groundTruthVisible } from '../../lib/data-store';
+import {
+  filterEnabled,
+  showRaw, setShowRaw,
+  showFiltered, setShowFiltered,
+  showFit, setShowFit,
+  showDeconv, setShowDeconv,
+  showResid, setShowResid,
+  showGTCalcium, setShowGTCalcium,
+  showGTSpikes, setShowGTSpikes,
+} from '../../lib/viz-store';
 import '../../styles/multi-trace.css';
 
 export interface CellSelectorProps {
@@ -69,6 +79,7 @@ export function CellSelector(props: CellSelectorProps) {
   };
 
   const maxCount = () => Math.min(20, numCells());
+  const [showLegendInfo, setShowLegendInfo] = createSignal(false);
 
   return (
     <div class="cell-selector" data-tutorial="cell-selector">
@@ -133,28 +144,79 @@ export function CellSelector(props: CellSelectorProps) {
       </Show>
 
       <div class="cell-selector__legend">
-        <span class="cell-selector__legend-item">
+        <button
+          class="legend-info__btn"
+          title="What do these traces mean?"
+          onClick={() => setShowLegendInfo(v => !v)}
+        >
+          ?
+        </button>
+        <Show when={showLegendInfo()}>
+          <div class="legend-info__popover">
+            <div class="legend-info__row"><strong>Raw</strong> — Original fluorescence recording</div>
+            <div class="legend-info__row"><strong>Filtered</strong> — Bandpass-filtered trace (drift + noise removed)</div>
+            <div class="legend-info__row"><strong>Fit</strong> — Reconvolved model fit (kernel * spikes + baseline)</div>
+            <div class="legend-info__row"><strong>Deconv</strong> — Estimated spike train (deconvolution result)</div>
+            <div class="legend-info__row"><strong>Resid</strong> — Residuals (Raw minus Fit)</div>
+            <div class="legend-info__row"><strong>True Ca/Spk</strong> — Ground truth (demo only)</div>
+          </div>
+        </Show>
+        <span
+          class="cell-selector__legend-item"
+          classList={{ 'cell-selector__legend-item--hidden': !showRaw() }}
+          onClick={() => setShowRaw(v => !v)}
+        >
           <span class="cell-selector__legend-swatch" style={{ background: '#1f77b4' }} />
           Raw
         </span>
-        <span class="cell-selector__legend-item">
+        <Show when={filterEnabled()}>
+          <span
+            class="cell-selector__legend-item"
+            classList={{ 'cell-selector__legend-item--hidden': !showFiltered() }}
+            onClick={() => setShowFiltered(v => !v)}
+          >
+            <span class="cell-selector__legend-swatch" style={{ background: '#17becf' }} />
+            Filtered
+          </span>
+        </Show>
+        <span
+          class="cell-selector__legend-item"
+          classList={{ 'cell-selector__legend-item--hidden': !showFit() }}
+          onClick={() => setShowFit(v => !v)}
+        >
           <span class="cell-selector__legend-swatch" style={{ background: '#ff7f0e' }} />
           Fit
         </span>
-        <span class="cell-selector__legend-item">
+        <span
+          class="cell-selector__legend-item"
+          classList={{ 'cell-selector__legend-item--hidden': !showDeconv() }}
+          onClick={() => setShowDeconv(v => !v)}
+        >
           <span class="cell-selector__legend-swatch" style={{ background: '#2ca02c' }} />
           Deconv
         </span>
-        <span class="cell-selector__legend-item">
+        <span
+          class="cell-selector__legend-item"
+          classList={{ 'cell-selector__legend-item--hidden': !showResid() }}
+          onClick={() => setShowResid(v => !v)}
+        >
           <span class="cell-selector__legend-swatch" style={{ background: '#d62728' }} />
           Resid
         </span>
         <Show when={groundTruthVisible()}>
-          <span class="cell-selector__legend-item">
+          <span
+            class="cell-selector__legend-item"
+            classList={{ 'cell-selector__legend-item--hidden': !showGTCalcium() }}
+            onClick={() => setShowGTCalcium(v => !v)}
+          >
             <span class="cell-selector__legend-swatch cell-selector__legend-swatch--dashed" style={{ 'border-color': 'rgba(0, 188, 212, 0.7)' }} />
             True Ca
           </span>
-          <span class="cell-selector__legend-item">
+          <span
+            class="cell-selector__legend-item"
+            classList={{ 'cell-selector__legend-item--hidden': !showGTSpikes() }}
+            onClick={() => setShowGTSpikes(v => !v)}
+          >
             <span class="cell-selector__legend-swatch" style={{ background: 'rgba(255, 193, 7, 0.7)' }} />
             True Spk
           </span>

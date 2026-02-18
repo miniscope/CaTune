@@ -32,6 +32,20 @@ const [lambda, setLambda] = createSignal<number>(0); // start at minimum sparsit
 
 const [filterEnabled, setFilterEnabled] = createSignal<boolean>(false);
 
+// --- Trace visibility toggles (legend click-to-hide) ---
+
+const [showRaw, setShowRaw] = createSignal<boolean>(true);
+const [showFiltered, setShowFiltered] = createSignal<boolean>(true);
+const [showFit, setShowFit] = createSignal<boolean>(true);
+const [showDeconv, setShowDeconv] = createSignal<boolean>(true);
+const [showResid, setShowResid] = createSignal<boolean>(true);
+const [showGTCalcium, setShowGTCalcium] = createSignal<boolean>(true);
+const [showGTSpikes, setShowGTSpikes] = createSignal<boolean>(true);
+
+// --- Card height (shared across all cell cards) ---
+
+const [cardHeight, setCardHeight] = createSignal<number>(280);
+
 // --- Solver status ---
 
 const [solverStatus, setSolverStatus] = createSignal<SolverStatus>('idle');
@@ -114,6 +128,16 @@ export {
   // Filter toggle
   filterEnabled,
   setFilterEnabled,
+  // Trace visibility toggles
+  showRaw, setShowRaw,
+  showFiltered, setShowFiltered,
+  showFit, setShowFit,
+  showDeconv, setShowDeconv,
+  showResid, setShowResid,
+  showGTCalcium, setShowGTCalcium,
+  showGTSpikes, setShowGTSpikes,
+  // Card height
+  cardHeight, setCardHeight,
   // Solver status
   solverStatus,
   setSolverStatus,

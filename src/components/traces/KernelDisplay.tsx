@@ -5,7 +5,8 @@
  */
 
 import { createMemo } from 'solid-js';
-import { computeKernel } from '../../lib/chart/kernel-math';
+import { computeKernel, computeKernelAnnotations } from '../../lib/chart/kernel-math';
+import { kernelAnnotationsPlugin } from '../../lib/chart/kernel-annotations-plugin';
 import { tauRise, tauDecay } from '../../lib/viz-store';
 import { samplingRate, isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store';
 import { createGroundTruthKernelSeries } from '../../lib/chart/series-config';
@@ -60,6 +61,15 @@ export function KernelDisplay() {
     return base;
   });
 
+  const annotations = createMemo(() => {
+    const fs = samplingRate() ?? 30;
+    return computeKernelAnnotations(tauRise(), tauDecay(), fs);
+  });
+
+  const kernelPlugins = createMemo<uPlot.Plugin[]>(() => [
+    kernelAnnotationsPlugin(() => annotations()),
+  ]);
+
   return (
     <div class="kernel-section" data-tutorial="kernel-display">
       <h4 class="panel-label">Calcium Kernel</h4>
@@ -69,6 +79,7 @@ export function KernelDisplay() {
         height={140}
         syncKey={KERNEL_SYNC_KEY}
         xLabel="Time (s)"
+        plugins={kernelPlugins()}
       />
     </div>
   );
