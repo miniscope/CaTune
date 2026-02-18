@@ -68,7 +68,6 @@ const App: Component = () => {
     return <AuthCallback />;
   }
 
-  const step = () => importStep();
   const hasFile = () => !!rawFile();
 
   // Tutorial panel state
@@ -141,7 +140,7 @@ const App: Component = () => {
 
     {/* Import flow (full-page) OR Dashboard */}
     <Show
-      when={step() === 'ready'}
+      when={importStep() === 'ready'}
       fallback={
         <ImportOverlay
           hasFile={hasFile()}
