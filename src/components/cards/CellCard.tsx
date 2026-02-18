@@ -10,6 +10,7 @@ import { QualityBadge } from '../metrics/QualityBadge';
 import type { CellSolverStatus } from '../../lib/solver-types';
 import { computePeakSNR, snrToQuality } from '../../lib/metrics/snr';
 import { setHoveredCell } from '../../lib/multi-cell-store';
+import { cardHeight, setCardHeight } from '../../lib/viz-store';
 
 export interface CellCardProps {
   cellIndex: number;
@@ -34,6 +35,8 @@ export interface CellCardProps {
 
 const DEFAULT_ZOOM_WINDOW_S = 20; // 20 seconds default zoom window
 const ZOOM_SYNC_KEY = 'catune-card-zoom';
+const MIN_CARD_HEIGHT = 200;
+const MAX_CARD_HEIGHT = 800;
 
 export function CellCard(props: CellCardProps) {
   const totalDuration = createMemo(() => props.rawTrace.length / props.samplingRate);
@@ -60,6 +63,27 @@ export function CellCard(props: CellCardProps) {
     props.onZoomChange?.(props.cellIndex, start, end);
   };
 
+  const handleResizeStart = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startHeight = cardHeight();
+
+    const onMove = (ev: MouseEvent) => {
+      ev.preventDefault();
+      const delta = ev.clientY - startY;
+      setCardHeight(Math.max(MIN_CARD_HEIGHT, Math.min(MAX_CARD_HEIGHT, startHeight + delta)));
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
   const statusClass = () => {
     if (props.isActive) return 'cell-card--active';
     const s = props.solverStatus ?? 'stale';
@@ -75,6 +99,7 @@ export function CellCard(props: CellCardProps) {
       onClick={() => props.onClick?.()}
       onMouseEnter={() => setHoveredCell(props.cellIndex)}
       onMouseLeave={() => setHoveredCell(null)}
+      style={{ height: `${cardHeight()}px` }}
     >
       <div class="cell-card__header">
         <span class="cell-card__title">
@@ -120,6 +145,7 @@ export function CellCard(props: CellCardProps) {
           />
         </div>
       </Show>
+      <div class="cell-card__resize-handle" onMouseDown={handleResizeStart} />
     </div>
   );
 }

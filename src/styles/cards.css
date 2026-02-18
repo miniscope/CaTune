@@ -105,6 +105,35 @@
 }
 
 /* ========================
+   Resize Handle
+   ======================== */
+.cell-card__resize-handle {
+  flex-shrink: 0;
+  height: 6px;
+  cursor: ns-resize;
+  position: relative;
+  margin-top: auto;
+}
+
+.cell-card__resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 3px;
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+  opacity: 0.4;
+  transition: opacity var(--transition-fast);
+}
+
+.cell-card__resize-handle:hover::after {
+  opacity: 0.8;
+}
+
+/* ========================
    Trace Overview (minimap)
    ======================== */
 .cell-card__overview {

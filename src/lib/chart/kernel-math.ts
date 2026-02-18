@@ -44,3 +44,41 @@ export function computeKernel(
 
   return { x, y };
 }
+
+/**
+ * Compute annotation positions for the kernel chart.
+ *
+ * @param tauRise - Rise time constant in seconds
+ * @param tauDecay - Decay time constant in seconds
+ * @param fs - Sampling rate in Hz
+ * @returns Peak time and half-decay time in seconds, or null if degenerate
+ */
+export function computeKernelAnnotations(
+  tauRise: number,
+  tauDecay: number,
+  fs: number,
+): { peakTime: number; halfDecayTime: number } | null {
+  if (tauDecay <= tauRise || tauRise <= 0 || tauDecay <= 0) return null;
+
+  // Analytical peak time: t_peak = (τ_r × τ_d) / (τ_d - τ_r) × ln(τ_d / τ_r)
+  const peakTime = (tauRise * tauDecay) / (tauDecay - tauRise) * Math.log(tauDecay / tauRise);
+
+  // Numerical search for half-decay: first sample after peak where kernel ≤ 0.5
+  const dt = 1 / fs;
+  const peakSample = Math.round(peakTime * fs);
+  const maxSamples = Math.ceil(5 * tauDecay * fs);
+
+  // Compute kernel value at peak for normalization
+  const peakVal = Math.exp(-peakTime / tauDecay) - Math.exp(-peakTime / tauRise);
+  if (peakVal <= 0) return null;
+
+  for (let i = peakSample + 1; i < maxSamples; i++) {
+    const t = i * dt;
+    const val = (Math.exp(-t / tauDecay) - Math.exp(-t / tauRise)) / peakVal;
+    if (val <= 0.5) {
+      return { peakTime, halfDecayTime: t };
+    }
+  }
+
+  return null;
+}
