@@ -17,12 +17,22 @@
 }
 
 .spectrum-panel__info {
-  display: flex;
-  gap: var(--space-md);
-  flex-wrap: wrap;
   margin-top: var(--space-sm);
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border-subtle);
+}
+
+.spectrum-panel__desc {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.spectrum-panel__stats {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
 }
 
 .spectrum-panel__stat {

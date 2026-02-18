@@ -258,17 +258,24 @@ export function SpectrumPanel() {
           <>
             <div ref={setContainer} class="spectrum-panel__chart" />
             <div class="spectrum-panel__info">
-              {[
-                ['Cell', String(data().cellIndex + 1)],
-                ['Fs', `${samplingRate() ?? 0} Hz`],
-                ['HP', `${data().highPassHz.toFixed(3)} Hz`],
-                ['LP', `${data().lowPassHz.toFixed(1)} Hz`],
-              ].map(([label, value]) => (
-                <div class="spectrum-panel__stat">
-                  <span class="spectrum-panel__stat-label">{label}</span>
-                  <span class="spectrum-panel__stat-value">{value}</span>
-                </div>
-              ))}
+              <p class="spectrum-panel__desc">
+                Power spectral density of the selected cell's raw trace.
+                {filterEnabled()
+                  ? ' Dashed lines mark the kernel-derived bandpass cutoffs.'
+                  : ' Enable Noise Filter to see bandpass cutoffs.'}
+              </p>
+              <div class="spectrum-panel__stats">
+                {[
+                  ['Fs', `${samplingRate() ?? 0} Hz`, 'Sampling rate'],
+                  ['HP', `${data().highPassHz.toFixed(3)} Hz`, 'High-pass cutoff'],
+                  ['LP', `${data().lowPassHz.toFixed(1)} Hz`, 'Low-pass cutoff'],
+                ].map(([label, value, title]) => (
+                  <div class="spectrum-panel__stat" title={title}>
+                    <span class="spectrum-panel__stat-label">{label}</span>
+                    <span class="spectrum-panel__stat-value">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
