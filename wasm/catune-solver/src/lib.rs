@@ -126,8 +126,20 @@ impl Solver {
         self.kernel_dc_gain = self.kernel.iter().map(|&k| k as f64).sum();
         self.bandpass.update_cutoffs(tau_rise, tau_decay, fs);
 
-        // Invalidate FFT length so kernel FFT is recomputed on next set_trace/ensure_fft_buffers
-        self.fft_len = 0;
+        // Update kernel FFT if buffers are already set up and large enough.
+        // On re-enqueue quanta with unchanged trace length, this avoids a full
+        // FFT plan + buffer rebuild in ensure_fft_buffers.
+        if self.fft_len > 0 && self.active_len > 0 {
+            let min_len = self.active_len + self.kernel.len() - 1;
+            if min_len <= self.fft_len {
+                // Existing FFT buffers are large enough — just re-FFT the kernel
+                self.prepare_kernel_fft();
+            } else {
+                // New kernel is longer; need larger FFT — invalidate
+                self.fft_len = 0;
+            }
+        }
+        // If fft_len == 0 or active_len == 0, ensure_fft_buffers in set_trace handles it
     }
 
     /// Load a trace for deconvolution. Grows buffers if needed (never shrinks).

@@ -22,7 +22,11 @@ import type { SolverParams } from './solver-types.ts';
 import type { NpyResult } from './types.ts';
 
 const DEBOUNCE_MS = 30;
-const QUANTUM_ITERATIONS = 15;
+// With FFT convolutions each iteration is very fast (~0.1-1ms depending on trace length).
+// Small quanta cause excessive main-thread overhead from complete→re-enqueue→dispatch round-trips,
+// starving the UI event loop. 200 iterations keeps quanta under ~40ms for typical traces while
+// reducing round-trip overhead by ~13×. Cancel responsiveness is still ~2ms via BATCH_SIZE yields.
+const QUANTUM_ITERATIONS = 200;
 const DEFAULT_ZOOM_WINDOW_S = 20;
 
 interface CellSolveState {
