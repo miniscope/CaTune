@@ -25,6 +25,7 @@ function computeFilterCutoffs(
 export interface SpectrumData {
   freqs: Float64Array;
   psd: Float64Array;
+  allPsd: Float64Array;
   highPassHz: number;
   lowPassHz: number;
   cellIndex: number;
@@ -93,11 +94,32 @@ function computeSpectrum(): void {
   if (raw.length < 16) { setSpectrumData(null); return; }
 
   const { freqs, psd } = computePeriodogram(raw, fs);
+
+  // Average PSD across all loaded cells
+  const allTraces = resultKeys.map((k) => results[Number(k)]?.raw).filter(
+    (t): t is Float64Array => t != null && t.length >= 16,
+  );
+  let allPsd: Float64Array;
+  if (allTraces.length <= 1) {
+    allPsd = psd;
+  } else {
+    const first = computePeriodogram(allTraces[0], fs);
+    const avgPsd = new Float64Array(first.psd.length);
+    for (let i = 0; i < avgPsd.length; i++) avgPsd[i] = first.psd[i];
+    for (let t = 1; t < allTraces.length; t++) {
+      const { psd: cellPsd } = computePeriodogram(allTraces[t], fs);
+      for (let i = 0; i < avgPsd.length; i++) avgPsd[i] += cellPsd[i];
+    }
+    for (let i = 0; i < avgPsd.length; i++) avgPsd[i] /= allTraces.length;
+    allPsd = avgPsd;
+  }
+
   const { highPass, lowPass } = computeFilterCutoffs(tauRise(), tauDecay());
 
   setSpectrumData({
     freqs,
     psd,
+    allPsd,
     highPassHz: highPass,
     lowPassHz: Math.min(lowPass, fs / 2),
     cellIndex: resolvedIdx,

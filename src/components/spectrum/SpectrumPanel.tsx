@@ -141,17 +141,20 @@ export function SpectrumPanel() {
       // Convert frequency axis to log10 for display
       const logFreqs: number[] = [];
       const psdVals: number[] = [];
+      const allPsdVals: number[] = [];
       for (let i = 1; i < data.freqs.length; i++) {
         const f = data.freqs[i];
         if (f <= 0) continue;
         logFreqs.push(Math.log10(f));
         psdVals.push(data.psd[i]);
+        allPsdVals.push(data.allPsd[i]);
       }
 
       if (logFreqs.length === 0) return;
 
       const chartData: uPlot.AlignedData = [
         new Float64Array(logFreqs),
+        new Float64Array(allPsdVals),
         new Float64Array(psdVals),
       ];
 
@@ -170,7 +173,12 @@ export function SpectrumPanel() {
         series: [
           {},
           {
-            label: 'PSD',
+            label: 'All Cells',
+            stroke: withOpacity(theme.textTertiary, 0.5),
+            width: 1,
+          },
+          {
+            label: 'Selected Cell',
             stroke: theme.accent,
             width: 1.5,
           },
@@ -243,9 +251,28 @@ export function SpectrumPanel() {
     }
   });
 
+  const allCellsColor = () => {
+    const theme = getThemeColors();
+    return withOpacity(theme.textTertiary, 0.5);
+  };
+
   return (
     <div class="spectrum-panel">
-      <h3 class="spectrum-panel__title">Spectrum</h3>
+      <div class="spectrum-panel__header">
+        <h3 class="spectrum-panel__title">Spectrum</h3>
+        <Show when={spectrumData()}>
+          <div class="spectrum-panel__legend">
+            <span class="spectrum-panel__legend-item">
+              <span class="spectrum-panel__legend-swatch" style={{ background: allCellsColor() }} />
+              All Cells
+            </span>
+            <span class="spectrum-panel__legend-item">
+              <span class="spectrum-panel__legend-swatch spectrum-panel__legend-swatch--accent" />
+              Selected
+            </span>
+          </div>
+        </Show>
+      </div>
       <Show
         when={spectrumData()}
         fallback={
@@ -259,7 +286,8 @@ export function SpectrumPanel() {
             <div ref={setContainer} class="spectrum-panel__chart" />
             <div class="spectrum-panel__info">
               <p class="spectrum-panel__desc">
-                Power spectral density of the selected cell's raw trace.
+                Power spectral density averaged across all loaded cells (gray) and
+                for the selected cell (blue).
                 {filterEnabled()
                   ? ' Dashed lines mark the kernel-derived bandpass cutoffs.'
                   : ' Enable Noise Filter to see bandpass cutoffs.'}
