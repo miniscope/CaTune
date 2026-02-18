@@ -39,7 +39,7 @@ export const advancedTutorial: Tutorial = {
       element: '[data-tutorial="kernel-display"]',
       title: 'Indicator-Specific Guidance',
       description:
-        'Different calcium indicators have different kinetics. <b>GCaMP6f:</b> fast, decay ~200\u2013400ms. <b>GCaMP6s:</b> slow, decay ~500\u20131500ms. <b>GCaMP7f:</b> medium-fast, decay ~300\u2013600ms. <b>jGCaMP8f:</b> ultra-fast, decay ~50\u2013200ms. Published kinetics may not match your exact experimental conditions (area, expression time, cell type). Use ranges as starting points and refine on your data.',
+        'Different calcium indicators have very different kinetics \u2014 some are fast, others much slower. Published values may not match your exact experimental conditions (brain area, expression time, cell type). Browse the <b>Community Parameters</b> tab in the sidebar to see what others use for your indicator and brain region, then refine on your own data.',
       side: 'right',
     },
     // Step 5: Recognizing artifacts

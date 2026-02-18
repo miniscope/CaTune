@@ -111,7 +111,7 @@ export const basicsTutorial: Tutorial = {
       element: '[data-tutorial="slider-lambda"]',
       title: 'Sparsity Penalty (lambda)',
       description:
-        'Controls event count. Start at 0 and increase until noise spikes disappear from the green trace without losing real events. <b>Prefer adjusting decay time over relying on high sparsity</b> to control overfitting. Increasing decay can help reduce dense deconvolved activity under big fluorescence events.',
+        'Controls event count. Start low and increase until noise spikes disappear from the green trace without losing real events. <b>Prefer adjusting decay time over relying on high sparsity</b> to control overfitting. Increasing decay can help reduce dense deconvolved activity under big fluorescence events.',
       side: 'right',
     },
     // Step 14: Kernel display
