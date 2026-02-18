@@ -28,42 +28,42 @@ export const basicsTutorial: Tutorial = {
     },
     // Step 3: Cell card
     {
-      element: '[data-tutorial="cell-card-active"]',
-      title: 'Your Cell Card',
+      element: '[data-tutorial="card-grid"]',
+      title: 'Your Cell Cards',
       description:
         'Each cell gets its own card with a minimap overview at the top and a zoom window below. Click any card to select it as the active cell.',
       side: 'bottom',
     },
     // Step 4: Minimap
     {
-      element: '[data-tutorial="minimap"]',
+      element: '[data-tutorial="card-grid"]',
       title: 'The Minimap',
       description:
-        'The minimap shows the full recording for this cell. The shaded region is your zoom window. <b>Click anywhere on the minimap</b> to jump to that timepoint, or <b>drag</b> to reposition the zoom window.',
+        'At the top of each card is the minimap \u2014 a full-recording overview. The shaded region is your zoom window. <b>Click anywhere on the minimap</b> to jump to that timepoint, or <b>drag</b> to reposition the zoom window.',
       side: 'bottom',
     },
     // Step 5: Zoom window
     {
-      element: '[data-tutorial="zoom-window"]',
+      element: '[data-tutorial="card-grid"]',
       title: 'The Zoom Window',
       description:
-        'The zoom window shows a detailed view of the selected time range. <b>Drag left/right to pan</b> through the recording. <b>Ctrl+Scroll</b> (or Cmd+Scroll) to zoom in and out.',
+        'Below the minimap is the zoom window showing a detailed view of the selected time range. <b>Drag left/right to pan</b> through the recording. <b>Ctrl+Scroll</b> (or Cmd+Scroll) to zoom in and out.',
       side: 'bottom',
     },
     // Step 6: Reading the traces
     {
-      element: '[data-tutorial="zoom-window"]',
+      element: '[data-tutorial="card-grid"]',
       title: 'Reading the Traces',
       description:
-        'Four trace bands are overlaid: raw fluorescence (blue) with the model\u2019s fit (orange) on top, inferred deconvolved activity (green) in the middle, and residuals (red) at the bottom. When the fit is good, residuals look like random noise.',
+        'Four trace bands are overlaid in the zoom window: raw fluorescence (blue) with the model\u2019s fit (orange) on top, inferred deconvolved activity (green) in the middle, and residuals (red) at the bottom. When the fit is good, residuals look like random noise.',
       side: 'bottom',
     },
-    // Step 7: Quality badge / convergence indicator
+    // Step 7: Solver status indicator
     {
-      element: '[data-tutorial="convergence-indicator"]',
-      title: 'Quality Badge',
+      element: '[data-tutorial="card-grid"]',
+      title: 'Solver Status',
       description:
-        'Shows solver status: <b>Iter N</b> while solving, then an <b>SNR value</b> when done. The colored dot indicates fit quality (green = good, yellow = fair, red = poor). Wait for solving to finish before judging the fit.',
+        'The badge in each card header shows solver state. The colored dot indicates: <b>green</b> = solver finished, <b>yellow</b> = solver running, <b>red</b> = solver needs to run. When finished it displays the SNR value. Wait for the solver to complete before judging the fit.',
       side: 'bottom',
     },
     // Step 8: Resize handle
@@ -103,7 +103,7 @@ export const basicsTutorial: Tutorial = {
       element: '[data-tutorial="slider-rise"]',
       title: 'Rise Time (tau_rise)',
       description:
-        'Controls how quickly calcium rises at event onset. Usually much shorter than decay (5\u201350ms). Fine-tune after decay is set. Note: <b>changing rise slightly changes optimal decay</b> \u2014 they\u2019re coupled, so re-check decay after adjusting rise.',
+        'Controls how quickly calcium rises at event onset. Usually much shorter than decay. Fine-tune after decay is set. Note: <b>changing rise slightly changes optimal decay</b> \u2014 they\u2019re coupled, so re-check decay after adjusting rise.',
       side: 'right',
     },
     // Step 13: Lambda slider
@@ -127,7 +127,7 @@ export const basicsTutorial: Tutorial = {
       element: '[data-tutorial="param-panel"]',
       title: 'Good Fit vs Bad Fit',
       description:
-        '<b>Good:</b> orange tracks blue peaks, green has clean events during the rise phase only, red looks like noise. <b>Bad:</b> orange misses peaks, green has spikes spread across the decay, red shows structured patterns.',
+        '<b>Good:</b> orange tracks blue peaks, green deconvolved events ride on the rise and decay of the calcium trace, red looks like noise. <b>Bad:</b> orange misses peaks, green has spikes spread beyond the actual transients, red shows structured patterns.',
       side: 'left',
     },
     // Step 16: Pin for comparison
