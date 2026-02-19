@@ -25,7 +25,6 @@ export type {
   DataSource,
   CommunitySubmission,
   SubmissionPayload,
-  SubmissionMetadata,
   FilterState,
   SubmissionValidationResult,
   FieldOption,
