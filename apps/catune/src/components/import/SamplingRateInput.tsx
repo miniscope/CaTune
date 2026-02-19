@@ -2,7 +2,7 @@
 // Required gate: user cannot proceed without setting a valid sampling rate
 
 import { createSignal, Show, For } from 'solid-js';
-import { SAMPLING_RATE_PRESETS } from '../../lib/types.ts';
+import { SAMPLING_RATE_PRESETS } from '@catune/core';
 import { numTimepoints, setSamplingRate } from '../../lib/data-store.ts';
 
 export function SamplingRateInput() {

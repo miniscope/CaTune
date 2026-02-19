@@ -2,7 +2,7 @@
 // Uses SolidJS signals for fine-grained reactivity
 
 import { createSignal, createMemo } from 'solid-js';
-import type { NpyResult, NpzResult, ValidationResult, ImportStep } from './types.ts';
+import type { NpyResult, NpzResult, ValidationResult, ImportStep } from '@catune/core';
 import { generateSyntheticDataset } from './chart/mock-traces.ts';
 import type { DemoPreset } from './chart/demo-presets.ts';
 import { getPresetById, DEFAULT_PRESET_ID } from './chart/demo-presets.ts';

@@ -14,7 +14,7 @@ import {
   validationResult,
   npzArrays,
 } from '../../lib/data-store.ts';
-import { formatDuration } from '../../lib/format-utils.ts';
+import { formatDuration } from '@catune/core';
 import { DEMO_PRESETS, DEFAULT_PRESET_ID } from '../../lib/chart/demo-presets.ts';
 import {
   buildFeedbackUrl,

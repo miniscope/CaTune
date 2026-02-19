@@ -3,7 +3,7 @@
 // cancel messages between solver batches via MessageChannel yields.
 
 import { initWasm, Solver } from '@catune/core';
-import type { PoolWorkerInbound, PoolWorkerOutbound } from '../lib/solver-types.ts';
+import type { PoolWorkerInbound, PoolWorkerOutbound } from '@catune/core';
 
 const INTERMEDIATE_INTERVAL_MS = 100;
 const BATCH_SIZE = 15;

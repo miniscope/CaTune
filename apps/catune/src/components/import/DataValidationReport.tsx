@@ -3,7 +3,7 @@
 
 import { createEffect, Show, For } from 'solid-js';
 import { validateTraceData } from '../../lib/validation.ts';
-import type { NumericTypedArray } from '../../lib/types.ts';
+import type { NumericTypedArray } from '@catune/core';
 import {
   parsedData,
   effectiveShape,

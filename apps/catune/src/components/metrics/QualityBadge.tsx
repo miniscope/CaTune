@@ -6,8 +6,8 @@
  *   - stale: SNR dot + "Stale"
  */
 
-import type { QualityTier } from '../../lib/metrics/snr.ts';
-import type { CellSolverStatus } from '../../lib/solver-types.ts';
+import type { QualityTier } from '@catune/core';
+import type { CellSolverStatus } from '@catune/core';
 
 export interface QualityBadgeProps {
   quality: QualityTier;
