@@ -22,6 +22,14 @@ import { saveProgress } from './progress.ts';
 let driverInstance: Driver | null = null;
 let activeRenderCleanup: (() => void) | null = null;
 
+/** Run and clear any active figure render cleanup. */
+function cleanupActiveRender(): void {
+  if (activeRenderCleanup) {
+    activeRenderCleanup();
+    activeRenderCleanup = null;
+  }
+}
+
 // --- Step mapping ---
 
 /**
@@ -31,7 +39,6 @@ let activeRenderCleanup: (() => void) | null = null;
  */
 function mapSteps(tutorial: Tutorial): DriveStep[] {
   return tutorial.steps.map((step, index) => {
-    // Capture render callback for this step (if any)
     const renderFn = step.onPopoverRender;
 
     const driveStep: DriveStep = {
@@ -42,14 +49,8 @@ function mapSteps(tutorial: Tutorial): DriveStep[] {
         side: step.side,
         ...(renderFn && {
           onPopoverRender: (popover: PopoverDOM) => {
-            // Widen the popover for side-by-side figure layout
             popover.wrapper.classList.add('catune-tutorial-figure');
-
-            // Clean up previous figure
-            if (activeRenderCleanup) {
-              activeRenderCleanup();
-              activeRenderCleanup = null;
-            }
+            cleanupActiveRender();
             const cleanup = renderFn(popover.description);
             if (cleanup) activeRenderCleanup = cleanup;
           },
@@ -113,13 +114,8 @@ export function startTutorial(tutorial: Tutorial, resumeFromStep?: number): void
     popoverClass: 'catune-tutorial',
 
     // Track step transitions: update reactive store and persist progress
-    onHighlightStarted: (_element, step, { driver: drv }) => {
-      // Clean up any previous figure render
-      if (activeRenderCleanup) {
-        activeRenderCleanup();
-        activeRenderCleanup = null;
-      }
-
+    onHighlightStarted: (_element, _step, { driver: drv }) => {
+      cleanupActiveRender();
       const activeIdx = drv.getActiveIndex();
       if (activeIdx !== undefined) {
         setCurrentStepIndex(activeIdx);
@@ -129,11 +125,7 @@ export function startTutorial(tutorial: Tutorial, resumeFromStep?: number): void
 
     // Handle tour destruction: persist completion and reset reactive state
     onDestroyed: () => {
-      // Clean up any active figure render
-      if (activeRenderCleanup) {
-        activeRenderCleanup();
-        activeRenderCleanup = null;
-      }
+      cleanupActiveRender();
 
       // Only mark completed if user reached the final step
       const lastIndex = tutorial.steps.length - 1;

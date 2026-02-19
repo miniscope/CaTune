@@ -41,6 +41,7 @@ function runSolver(
 
 // --- Colors (match dashboard palette) ---
 const RAW_COLOR = '#1f77b4';
+const FIT_COLOR = '#ff7f0e';
 const GOOD_COLOR = '#2ca02c';
 const BAD_COLOR = '#d62728';
 const KERNEL_COLOR = 'hsl(280,70%,60%)';
@@ -157,9 +158,11 @@ function drawBaseline(
   }
 }
 
-/** Mount a canvas beside the existing text in a side-by-side layout. */
-function mountFigure(container: HTMLElement, canvas: HTMLCanvasElement): () => void {
-  // Save original child nodes (move into a DocumentFragment)
+/** Set up the side-by-side layout (text + figure column). Returns refs for cleanup. */
+function createFigureLayout(container: HTMLElement): {
+  figCol: HTMLElement;
+  cleanup: () => void;
+} {
   const savedNodes = document.createDocumentFragment();
   while (container.firstChild) {
     savedNodes.appendChild(container.firstChild);
@@ -174,19 +177,26 @@ function mountFigure(container: HTMLElement, canvas: HTMLCanvasElement): () => v
 
   const figCol = document.createElement('div');
   figCol.className = 'theory-figure-canvas';
-  figCol.appendChild(canvas);
 
   wrapper.appendChild(textCol);
   wrapper.appendChild(figCol);
   container.appendChild(wrapper);
 
-  return () => {
-    // Restore original nodes back to container
+  const cleanup = () => {
     while (textCol.firstChild) {
       container.appendChild(textCol.firstChild);
     }
     wrapper.remove();
   };
+
+  return { figCol, cleanup };
+}
+
+/** Mount a canvas beside the existing text in a side-by-side layout. */
+function mountFigure(container: HTMLElement, canvas: HTMLCanvasElement): () => void {
+  const { figCol, cleanup } = createFigureLayout(container);
+  figCol.appendChild(canvas);
+  return cleanup;
 }
 
 /** Compute the plot area from canvas dimensions and margins. */
@@ -353,28 +363,50 @@ export function renderDeltaTrap(descriptionEl: HTMLElement): (() => void) | void
 // Figure 4: Good vs Bad Deconvolution (Step 8 — "Reading the Signs")
 // ============================================================
 
+/** Scale activity trace to fill a fraction of the y-range, anchored at yMin. */
+function scaleActivity(
+  activity: Float32Array,
+  range: { yMin: number; yMax: number },
+  fraction: number = 0.4,
+): Float64Array {
+  const n = activity.length;
+  let actMax = 0;
+  for (let i = 0; i < n; i++) {
+    if (activity[i] > actMax) actMax = activity[i];
+  }
+  const scale = actMax > 0 ? (range.yMax - range.yMin) * fraction / actMax : 1;
+  const scaled = new Float64Array(n);
+  for (let i = 0; i < n; i++) scaled[i] = activity[i] * scale + range.yMin;
+  return scaled;
+}
+
+/** Draw a single deconvolution comparison panel (raw + fit + activity). */
+function drawDeconvPanel(
+  ctx: CanvasRenderingContext2D,
+  timeArr: Float64Array,
+  raw: ArrayLike<number>,
+  result: { solution: Float32Array; fit: Float32Array },
+  area: { x: number; y: number; w: number; h: number },
+  label: string,
+  labelColor: string,
+): void {
+  const range = dataRange(timeArr, raw);
+
+  drawBaseline(ctx, area, range);
+  drawPolyline(ctx, timeArr, raw, RAW_COLOR, 1, area, range);
+  drawPolyline(ctx, timeArr, result.fit, FIT_COLOR, 1.5, area, range);
+
+  const actScaled = scaleActivity(result.solution, range);
+  drawPolyline(ctx, timeArr, actScaled, GOOD_COLOR, 1.2, area, range);
+
+  drawLabel(ctx, label, area.x + 4, area.y + 2, labelColor);
+}
+
 export function renderGoodVsBad(descriptionEl: HTMLElement): (() => void) | void {
   let cancelled = false;
 
-  // Set up layout synchronously (text column is ready immediately)
-  const savedNodes = document.createDocumentFragment();
-  while (descriptionEl.firstChild) {
-    savedNodes.appendChild(descriptionEl.firstChild);
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'theory-figure-layout';
-
-  const textCol = document.createElement('div');
-  textCol.className = 'theory-figure-text';
-  textCol.appendChild(savedNodes);
-
-  const figCol = document.createElement('div');
-  figCol.className = 'theory-figure-canvas';
-
-  wrapper.appendChild(textCol);
-  wrapper.appendChild(figCol);
-  descriptionEl.appendChild(wrapper);
+  // Set up layout synchronously so text is visible while WASM loads
+  const { figCol, cleanup } = createFigureLayout(descriptionEl);
 
   // Async: init WASM, run solver, draw canvas
   (async () => {
@@ -389,19 +421,15 @@ export function renderGoodVsBad(descriptionEl: HTMLElement): (() => void) | void
     const TAU_RISE_BAD = 0.02;
     const LAMBDA = 0.05;
 
-    // Generate synthetic raw data with known ground truth
     const { raw } = generateSyntheticTrace(N, TAU_RISE, TAU_DECAY_GOOD, fs, 42, 25,
       { noise: { driftAmplitude: 0, amplitudeSigma: 0.3, driftCyclesMin: 2, driftCyclesMax: 4 } });
 
-    // Convert to Float32Array for solver
     const rawF32 = new Float32Array(N);
     for (let i = 0; i < N; i++) rawF32[i] = raw[i];
 
-    // Run solver with CORRECT kernel
     const good = runSolver(rawF32, TAU_RISE, TAU_DECAY_GOOD, LAMBDA, fs);
     if (cancelled) return;
 
-    // Run solver with TOO-FAST kernel
     const bad = runSolver(rawF32, TAU_RISE_BAD, TAU_DECAY_BAD, LAMBDA, fs);
     if (cancelled) return;
 
@@ -410,52 +438,16 @@ export function renderGoodVsBad(descriptionEl: HTMLElement): (() => void) | void
     const ctx = canvas.getContext('2d')!;
 
     const panelGap = 16;
-    const topH = (DUAL_H - MARGIN.top - MARGIN.bottom - panelGap) / 2;
-    const topArea = { x: MARGIN.left, y: MARGIN.top, w: SINGLE_W - MARGIN.left - MARGIN.right, h: topH };
-    const botArea = { x: MARGIN.left, y: MARGIN.top + topH + panelGap, w: topArea.w, h: topH };
+    const panelH = (DUAL_H - MARGIN.top - MARGIN.bottom - panelGap) / 2;
+    const panelW = SINGLE_W - MARGIN.left - MARGIN.right;
+    const topArea = { x: MARGIN.left, y: MARGIN.top, w: panelW, h: panelH };
+    const botArea = { x: MARGIN.left, y: MARGIN.top + panelH + panelGap, w: panelW, h: panelH };
 
     const timeArr = new Float64Array(N);
     for (let i = 0; i < N; i++) timeArr[i] = i / fs;
 
-    const FIT_COLOR = '#ff7f0e';
-
-    // ---- Top panel: GOOD kernel ----
-    const rawRange = dataRange(timeArr, raw);
-
-    drawBaseline(ctx, topArea, rawRange);
-    drawPolyline(ctx, timeArr, raw, RAW_COLOR, 1, topArea, rawRange);
-    drawPolyline(ctx, timeArr, good.fit, FIT_COLOR, 1.5, topArea, rawRange);
-
-    // Activity: scale to fill lower portion of panel
-    let goodActMax = 0;
-    for (let i = 0; i < N; i++) {
-      if (good.solution[i] > goodActMax) goodActMax = good.solution[i];
-    }
-    const goodActScaled = new Float64Array(N);
-    const goodScale = goodActMax > 0 ? (rawRange.yMax - rawRange.yMin) * 0.4 / goodActMax : 1;
-    for (let i = 0; i < N; i++) goodActScaled[i] = good.solution[i] * goodScale + rawRange.yMin;
-    drawPolyline(ctx, timeArr, goodActScaled, GOOD_COLOR, 1.2, topArea, rawRange);
-
-    drawLabel(ctx, 'Good kernel — activity at onsets', topArea.x + 4, topArea.y + 2, GOOD_COLOR);
-
-    // ---- Bottom panel: BAD kernel (too fast) ----
-    const botRange = dataRange(timeArr, raw);
-
-    drawBaseline(ctx, botArea, botRange);
-    drawPolyline(ctx, timeArr, raw, RAW_COLOR, 1, botArea, botRange);
-    drawPolyline(ctx, timeArr, bad.fit, FIT_COLOR, 1.5, botArea, botRange);
-
-    // Activity: scale same way
-    let badActMax = 0;
-    for (let i = 0; i < N; i++) {
-      if (bad.solution[i] > badActMax) badActMax = bad.solution[i];
-    }
-    const badActScaled = new Float64Array(N);
-    const badScale = badActMax > 0 ? (botRange.yMax - botRange.yMin) * 0.4 / badActMax : 1;
-    for (let i = 0; i < N; i++) badActScaled[i] = bad.solution[i] * badScale + botRange.yMin;
-    drawPolyline(ctx, timeArr, badActScaled, GOOD_COLOR, 1.2, botArea, botRange);
-
-    drawLabel(ctx, 'Bad kernel — activity everywhere', botArea.x + 4, botArea.y + 2, BAD_COLOR);
+    drawDeconvPanel(ctx, timeArr, raw, good, topArea, 'Good kernel \u2014 activity at onsets', GOOD_COLOR);
+    drawDeconvPanel(ctx, timeArr, raw, bad, botArea, 'Bad kernel \u2014 activity everywhere', BAD_COLOR);
 
     // Shared legend
     let lx = MARGIN.left + 4;
@@ -470,10 +462,6 @@ export function renderGoodVsBad(descriptionEl: HTMLElement): (() => void) | void
 
   return () => {
     cancelled = true;
-    // Restore original nodes
-    while (textCol.firstChild) {
-      descriptionEl.appendChild(textCol.firstChild);
-    }
-    wrapper.remove();
+    cleanup();
   };
 }
