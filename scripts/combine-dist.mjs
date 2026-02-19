@@ -6,8 +6,8 @@ const root = resolve(import.meta.dirname, '..');
 const out = resolve(root, 'dist/CaLab');
 
 mkdirSync(out, { recursive: true });
-cpSync(resolve(root, 'apps/catune/dist'), resolve(out, 'catune'), { recursive: true });
-cpSync(resolve(root, 'apps/carank/dist'), resolve(out, 'carank'), { recursive: true });
+cpSync(resolve(root, 'apps/catune/dist'), resolve(out, 'CaTune'), { recursive: true });
+cpSync(resolve(root, 'apps/carank/dist'), resolve(out, 'CaRank'), { recursive: true });
 
 writeFileSync(
   resolve(out, 'index.html'),
@@ -28,8 +28,8 @@ writeFileSync(
   <h1>CaLab</h1>
   <p>Calcium imaging analysis tools</p>
   <ul>
-    <li><a href="catune/">CaTune</a> — Deconvolution parameter tuning</li>
-    <li><a href="carank/">CaRank</a> — Trace quality ranking</li>
+    <li><a href="CaTune/">CaTune</a> — Deconvolution parameter tuning</li>
+    <li><a href="CaRank/">CaRank</a> — Trace quality ranking</li>
   </ul>
 </body>
 </html>
