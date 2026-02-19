@@ -87,7 +87,7 @@ export interface FilterState {
 }
 
 /** Result of parameter validation before submission. */
-export interface ValidationResult {
+export interface SubmissionValidationResult {
   valid: boolean;
   issues: string[];
 }
