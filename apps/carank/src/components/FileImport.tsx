@@ -22,9 +22,7 @@ export function FileImport(props: FileImportProps): JSX.Element {
       }
 
       const data: Float64Array =
-        result.data instanceof Float64Array
-          ? result.data
-          : new Float64Array(result.data);
+        result.data instanceof Float64Array ? result.data : new Float64Array(result.data);
 
       props.onImport({
         traces: data,

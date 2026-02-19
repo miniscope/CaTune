@@ -12,10 +12,7 @@ const App: Component = () => {
   const handleClear = () => setData(null);
 
   return (
-    <Show
-      when={data()}
-      fallback={<FileImport onImport={setData} />}
-    >
+    <Show when={data()} fallback={<FileImport onImport={setData} />}>
       {(cnmf) => (
         <DashboardShell
           header={

@@ -70,10 +70,7 @@ export function RankingDashboard(props: RankingDashboardProps): JSX.Element {
               <td>{m.index}</td>
               <td>{m.snr.toFixed(2)}</td>
               <td>
-                <span
-                  class="ranking__dot"
-                  style={{ background: TIER_COLORS[m.quality] }}
-                />
+                <span class="ranking__dot" style={{ background: TIER_COLORS[m.quality] }} />
                 {m.quality}
               </td>
             </tr>
