@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@catune/core": ["../core/src/index.ts"],
+      "@catune/core/*": ["../core/src/*"]
+    }
+  },
+  "include": ["src"],
+  "references": [{ "path": "../core" }]
+}

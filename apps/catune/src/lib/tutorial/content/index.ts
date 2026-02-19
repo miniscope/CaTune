@@ -1,7 +1,7 @@
 // Tutorial content registry.
 // Aggregates all tutorial definitions in progression order.
 
-import type { Tutorial } from '../types.ts';
+import type { Tutorial } from '@catune/tutorials';
 import { basicsTutorial } from './01-basics.ts';
 import { workflowTutorial } from './02-workflow.ts';
 import { advancedTutorial } from './03-advanced.ts';

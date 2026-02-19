@@ -4,8 +4,8 @@ import {
   shouldWarmStart,
   WarmStartCache,
   type WarmStartEntry,
-} from '../lib/warm-start-cache.ts';
-import type { SolverParams } from '../lib/solver-types.ts';
+} from '@catune/compute';
+import type { SolverParams } from '@catune/core';
 
 // ---------- computePaddedWindow ----------
 

@@ -2,8 +2,7 @@
 // Accepts .npy and .npz files, parses them, and updates the data store
 
 import { createSignal, Show } from 'solid-js';
-import { parseNpy } from '../../lib/npy-parser.ts';
-import { parseNpz } from '../../lib/npz-parser.ts';
+import { parseNpy, parseNpz, processNpyResult } from '@catune/io';
 import {
   rawFile,
   setRawFile,
@@ -12,7 +11,6 @@ import {
   setImportError,
   importError,
 } from '../../lib/data-store.ts';
-import { processNpyResult } from '../../lib/array-utils.ts';
 
 export function FileDropZone() {
   const [isDragging, setIsDragging] = createSignal(false);

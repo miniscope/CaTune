@@ -5,9 +5,9 @@
 
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import type { CellSolverStatus } from './solver-types.ts';
-export type { CellSolverStatus } from './solver-types.ts';
-import { rankCellsByActivity, sampleRandomCells } from './cell-ranking.ts';
+import type { CellSolverStatus } from '@catune/core';
+export type { CellSolverStatus } from '@catune/core';
+import { rankCellsByActivity, sampleRandomCells } from '@catune/io';
 import { parsedData, effectiveShape, swapped } from './data-store.ts';
 
 // --- Types ---

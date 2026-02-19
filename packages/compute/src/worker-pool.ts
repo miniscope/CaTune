@@ -2,7 +2,7 @@
 // Dispatches jobs to idle workers, queues when all busy,
 // supports per-job cancellation and bulk cancelAll.
 
-import type { SolverParams, WarmStartStrategy, PoolWorkerOutbound } from './solver-types.ts';
+import type { SolverParams, WarmStartStrategy, PoolWorkerOutbound } from '@catune/core';
 
 export interface PoolJob {
   jobId: number;
@@ -41,7 +41,7 @@ export interface WorkerPool {
   dispose(): void;
 }
 
-export function createWorkerPool(poolSize?: number): WorkerPool {
+export function createWorkerPool(workerUrl: URL, poolSize?: number): WorkerPool {
   const size = poolSize ?? Math.min(navigator.hardwareConcurrency ?? 4, 4);
   const entries: PoolEntry[] = [];
   const queue: PoolJob[] = [];
@@ -51,7 +51,7 @@ export function createWorkerPool(poolSize?: number): WorkerPool {
 
   // Create workers
   for (let i = 0; i < size; i++) {
-    const worker = new Worker(new URL('../workers/pool-worker.ts', import.meta.url), {
+    const worker = new Worker(workerUrl, {
       type: 'module',
     });
 

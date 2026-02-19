@@ -9,8 +9,8 @@
  */
 
 import * as v from 'valibot';
-import { computeAR2 } from './ar2.ts';
-import type { AR2Coefficients } from './ar2.ts';
+import { computeAR2 } from '@catune/core';
+import type { AR2Coefficients } from '@catune/core';
 import { CaTuneExportSchema } from '@catune/core';
 
 export interface CaTuneExport {

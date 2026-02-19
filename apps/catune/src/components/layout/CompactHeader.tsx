@@ -7,11 +7,11 @@ import {
   resetImport,
 } from '../../lib/data-store.ts';
 import { clearMultiCellState } from '../../lib/multi-cell-store.ts';
-import { supabaseEnabled } from '../../lib/supabase.ts';
+import { supabaseEnabled } from '../../lib/community/index.ts';
 import { sidebarOpen, setSidebarOpen } from './DashboardShell.tsx';
 import { TutorialLauncher } from '../tutorial/TutorialLauncher.tsx';
 import { FeedbackMenu } from './FeedbackMenu.tsx';
-import { formatDuration } from '../../lib/format-utils.ts';
+import { formatDuration } from '@catune/core';
 import '../../styles/compact-header.css';
 
 export interface CompactHeaderProps {

@@ -9,6 +9,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@catune/core': path.resolve(repoRoot, 'packages/core/src'),
+      '@catune/compute': path.resolve(repoRoot, 'packages/compute/src'),
+      '@catune/io': path.resolve(repoRoot, 'packages/io/src'),
+      '@catune/community': path.resolve(repoRoot, 'packages/community/src'),
+      '@catune/tutorials': path.resolve(repoRoot, 'packages/tutorials/src'),
     },
   },
   envDir: repoRoot,

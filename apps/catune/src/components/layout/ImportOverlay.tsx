@@ -14,13 +14,13 @@ import {
   validationResult,
   npzArrays,
 } from '../../lib/data-store.ts';
-import { formatDuration } from '../../lib/format-utils.ts';
+import { formatDuration } from '@catune/core';
 import { DEMO_PRESETS, DEFAULT_PRESET_ID } from '../../lib/chart/demo-presets.ts';
 import {
   buildFeedbackUrl,
   buildFeatureRequestUrl,
   buildBugReportUrl,
-} from '../../lib/community/github-issue-url.ts';
+} from '../../lib/community/index.ts';
 import { getTutorialById } from '../../lib/tutorial/content/index.ts';
 import { startTutorial } from '../../lib/tutorial/tutorial-engine.ts';
 import { isTutorialActive } from '../../lib/tutorial/tutorial-store.ts';
