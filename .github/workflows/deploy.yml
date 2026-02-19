@@ -25,7 +25,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install Rust toolchain
@@ -47,7 +47,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './apps/catune/dist'
 
       - id: deployment
         uses: actions/deploy-pages@v4

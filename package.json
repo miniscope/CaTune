@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w apps/catune",
     "build": "npm run build:wasm && npm run build -w apps/catune",

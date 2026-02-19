@@ -6,7 +6,15 @@ import globals from 'globals';
 export default tseslint.config(
   // Global ignores
   {
-    ignores: ['dist/', 'apps/*/dist/', 'packages/*/dist/', 'wasm/', '.planning/', '*.config.js', '*.config.ts'],
+    ignores: [
+      'dist/',
+      'apps/*/dist/',
+      'packages/*/dist/',
+      'wasm/',
+      '.planning/',
+      '*.config.js',
+      '*.config.ts',
+    ],
   },
 
   // Base JS recommended rules

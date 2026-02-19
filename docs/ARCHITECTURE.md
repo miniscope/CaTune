@@ -2,43 +2,63 @@
 
 CaTune is a browser-based calcium imaging deconvolution tool built with SolidJS, TypeScript, and a Rust/WASM solver.
 
-## Directory Layout
+## Monorepo Structure
+
+CaTune uses npm workspaces with two workspaces:
+
+- **`apps/catune`** — the SolidJS single-page application
+- **`packages/core`** (`@catune/core`) — shared library consumed as source (no build step; Vite transpiles it)
 
 ```
-src/
-  App.tsx                  # Root component, routing, layout
-  components/              # UI components organized by feature
-    cards/                 # Cell cards, trace overview, zoom window
-    community/             # Community browser, submit form, scatter plot
-    import/                # File drop zone, trace preview, validation
-    layout/                # Header, sidebar, panels, overlays
-    spectrum/              # Power spectrum visualization
-    traces/                # Trace panel, kernel display
-    tutorial/              # Tutorial launcher, popover
-  lib/                     # Core logic (non-UI)
-    chart/                 # Chart helpers: kernel math, downsample, series config
-    community/             # Community service, store, types
-    metrics/               # Quality metrics
-    schemas/               # Runtime validation schemas (Valibot)
-    spectrum/              # Spectrum computation
-    tutorial/              # Tutorial engine, content, progress
-    ar2.ts                 # AR(2) coefficient computation
-    cell-solve-manager.ts  # Orchestrates per-cell solver jobs
-    data-store.ts          # Global data state (signals)
-    export.ts              # JSON export/import
-    multi-cell-store.ts    # Multi-cell selection state
-    solver-types.ts        # Worker protocol types
-    supabase.ts            # Supabase singleton (lazy, isolated)
-    viz-store.ts           # Visualization state (signals)
-    warm-start-cache.ts    # Solver warm-start state cache
-    wasm-adapter.ts        # Single WASM import point
-    worker-pool.ts         # Web Worker pool with typed dispatch
-  workers/
-    pool-worker.ts         # WASM solver worker (raw postMessage)
-  styles/                  # CSS files
-wasm/
-  catune-solver/           # Rust FISTA solver crate
-    pkg/                   # wasm-pack output (committed)
+.
+├── apps/
+│   └── catune/                  # SolidJS SPA
+│       ├── index.html
+│       ├── src/
+│       │   ├── App.tsx          # Root component, routing, layout
+│       │   ├── components/      # UI components organized by feature
+│       │   │   ├── cards/       # Cell cards, trace overview, zoom window
+│       │   │   ├── community/   # Community browser, submit form, scatter plot
+│       │   │   ├── controls/    # Parameter sliders, cell selector
+│       │   │   ├── import/      # File drop zone, trace preview, validation
+│       │   │   ├── layout/      # Header, sidebar, panels, overlays
+│       │   │   ├── metrics/     # Quality metrics display
+│       │   │   ├── spectrum/    # Power spectrum visualization
+│       │   │   ├── traces/      # Trace panel, kernel display
+│       │   │   └── tutorial/    # Tutorial launcher, popover
+│       │   ├── lib/             # Core logic (non-UI)
+│       │   │   ├── chart/       # Chart helpers: kernel math, downsample, series config
+│       │   │   ├── community/   # Community service, store, types
+│       │   │   ├── metrics/     # Quality metrics
+│       │   │   ├── spectrum/    # Spectrum computation
+│       │   │   ├── tutorial/    # Tutorial engine, content, progress
+│       │   │   └── ...          # State stores, worker pool, exports
+│       │   ├── workers/
+│       │   │   └── pool-worker.ts  # WASM solver worker (raw postMessage)
+│       │   └── styles/          # CSS files
+│       ├── vite.config.ts
+│       ├── vitest.config.ts
+│       ├── tsconfig.json        # Extends ../../tsconfig.base.json
+│       └── package.json
+├── packages/
+│   └── core/                    # @catune/core
+│       ├── src/
+│       │   ├── index.ts         # Barrel re-exports
+│       │   ├── wasm-adapter.ts  # Single WASM import point
+│       │   └── schemas/
+│       │       └── export-schema.ts  # Valibot export validation
+│       ├── tsconfig.json
+│       └── package.json
+├── wasm/
+│   └── catune-solver/           # Rust FISTA solver crate
+│       └── pkg/                 # wasm-pack output (committed)
+├── supabase/                    # Supabase config
+├── python/                      # Python utilities
+├── test/                        # Test fixtures
+├── docs/                        # Documentation
+├── package.json                 # Workspace root
+├── tsconfig.base.json           # Shared TS compiler options
+└── eslint.config.js             # Shared lint config
 ```
 
 ## State Management
@@ -59,7 +79,7 @@ User adjusts params
   → cell-solve-manager debounces and dispatches
   → worker-pool assigns job to idle Web Worker
   → pool-worker.ts (in worker thread):
-      → wasm-adapter.ts → WASM Solver
+      → @catune/core wasm-adapter → WASM Solver
       → cooperative cancellation via MessageChannel yields
       → intermediate results posted at ~100ms intervals
   → worker-pool routes results back to data-store
@@ -75,15 +95,15 @@ Key design decisions:
 
 ### WASM Adapter Rule
 
-Only `src/lib/wasm-adapter.ts` imports from `wasm/catune-solver/pkg/`. All other code imports `{ initWasm, Solver }` from the adapter. Enforced by ESLint `no-restricted-imports`.
+Only `packages/core/src/wasm-adapter.ts` imports from `wasm/catune-solver/pkg/`. All other code imports `{ initWasm, Solver }` from `@catune/core`. Enforced by ESLint `no-restricted-imports`.
 
 ### Supabase Isolation
 
-Only `src/lib/supabase.ts` dynamically imports `@supabase/supabase-js` (~45KB). The SDK is lazy-loaded on first use. The `supabaseEnabled` boolean is read by layout components to conditionally render community features. Enforced by ESLint `no-restricted-imports`.
+Only `apps/catune/src/lib/supabase.ts` dynamically imports `@supabase/supabase-js` (~45KB). The SDK is lazy-loaded on first use. The `supabaseEnabled` boolean is read by layout components to conditionally render community features. Enforced by ESLint `no-restricted-imports`.
 
 ### Barrel Files
 
-Each sub-module (`chart/`, `community/`, `tutorial/`) has an `index.ts` barrel file that re-exports the public API. Prefer importing from the barrel rather than internal files.
+Each sub-module (`chart/`, `community/`, `tutorial/`) has an `index.ts` barrel file that re-exports the public API. `@catune/core` also uses a barrel (`packages/core/src/index.ts`). Prefer importing from barrels rather than internal files.
 
 ## CSS Conventions
 
