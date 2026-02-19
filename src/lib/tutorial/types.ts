@@ -21,6 +21,9 @@ export interface TutorialStep {
   };
   /** Whether to disable interaction with the highlighted element. Undefined = driver.js default. */
   disableActiveInteraction?: boolean;
+  /** Called after popover renders. Receives description HTMLElement for canvas injection.
+   *  May return a cleanup function. */
+  onPopoverRender?: (descriptionEl: HTMLElement) => (() => void) | void;
 }
 
 /** A complete tutorial definition with metadata and step array. */

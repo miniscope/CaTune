@@ -5,6 +5,12 @@
 // Pure data definition -- no driver.js imports (TUTR-05 compliance).
 
 import type { Tutorial } from '../types.ts';
+import {
+  renderKernelShape,
+  renderDecayComparison,
+  renderDeltaTrap,
+  renderGoodVsBad,
+} from '../theory-figures.ts';
 
 export const theoryTutorial: Tutorial = {
   id: 'theory',
@@ -43,6 +49,7 @@ export const theoryTutorial: Tutorial = {
         'The kernel shape:<br>' +
         '<b>k(t) = e<sup>−t/τ_decay</sup> − e<sup>−t/τ_rise</sup></b><br><br>' +
         'This is the <b>template</b> the solver uses to match events in your data. Getting its shape right is the single most critical step in the entire analysis.',
+      onPopoverRender: renderKernelShape,
     },
     // Step 4: The deconvolution problem
     {
@@ -69,7 +76,8 @@ export const theoryTutorial: Tutorial = {
       description:
         '<b>Decay time (τ_decay)</b> sets how quickly the kernel returns to baseline.<br><br>' +
         'When τ_decay <b>matches</b> the true indicator dynamics, the solver cleanly separates individual events — each transient is explained by a brief burst of activity at the onset.<br><br>' +
-        'When τ_decay is <b>too short</b>, the kernel decays faster than the real signal. The solver must <b>re-fire spikes during the decay phase</b> to explain the lingering fluorescence. This creates artificial activity spread across the tail of each transient.',
+        'When τ_decay is <b>too short</b>, the kernel decays faster than the real signal. The solver must <b>produce extra activity during the decay phase</b> to explain the lingering fluorescence. This creates artificial activity spread across the tail of each transient.',
+      onPopoverRender: renderDecayComparison,
     },
     // Step 7: The delta function trap
     {
@@ -78,6 +86,7 @@ export const theoryTutorial: Tutorial = {
         'A critical insight: making the kernel <b>sharper and faster</b> will almost always <b>improve the solver\'s fit</b> (lower residuals, higher R²).<br><br>' +
         'As the kernel approaches a delta function, the deconvolved trace simply <b>mirrors the calcium dynamics</b> — including the full rise and decay tail. The fit looks great, but the result is meaningless.<br><br>' +
         'This is the trap <b>automated parameter optimization</b> falls into: it converges on kernels that are much too fast because the fit metric keeps improving. This is why CaTune does not auto-optimize kernel parameters.',
+      onPopoverRender: renderDeltaTrap,
     },
     // Step 8: Why sparsity doesn't fix it
     {
@@ -96,12 +105,13 @@ export const theoryTutorial: Tutorial = {
         '<b>2.</b> Residuals (red) are <b>suspiciously low</b> — near-zero residuals mean the model is fitting noise, not just signal<br>' +
         '<b>3.</b> The deconvolved trace <b>mirrors the shape</b> of the raw fluorescence<br><br>' +
         'If you see these signs, <b>increase decay time</b>.',
+      onPopoverRender: renderGoodVsBad,
     },
     // Step 10: The role of noise filtering
     {
       title: 'The Role of Noise Filtering',
       description:
-        'High-frequency noise creates <b>spurious spikes</b> in the deconvolved trace. The <b>Noise Filter</b> applies a bandpass derived from your kernel parameters:<br><br>' +
+        'High-frequency noise creates <b>spurious transients</b> in the deconvolved trace. The <b>Noise Filter</b> applies a bandpass derived from your kernel parameters:<br><br>' +
         '• The <b>high-pass</b> removes slow drift (baseline)<br>' +
         '• The <b>low-pass</b> removes noise above what your calcium dynamics can produce<br><br>' +
         'Filtering is conservative — it won\'t change transient shapes — but it significantly cleans up the deconvolution.',
@@ -110,12 +120,8 @@ export const theoryTutorial: Tutorial = {
     {
       title: 'What Deconvolved Activity Is',
       description:
-        'The deconvolved trace <b>s(t)</b> is, at best, a measure of underlying neural activity <b>scaled by an unknown factor</b>. That factor depends on:<br><br>' +
-        '• Indicator expression level<br>' +
-        '• Imaging conditions (laser power, PMT gain, LED intensity)<br>' +
-        '• Cell depth and optical access<br>' +
-        '• Many other variables<br><br>' +
-        'The absolute amplitude of s(t) has <b>no fixed physical meaning</b>. Only <b>relative differences</b> within the same cell under the same conditions are meaningful.',
+        'The deconvolved trace <b>s(t)</b> is, at best, a measure of underlying neural activity <b>scaled by an unknown factor</b>. The variable name <b>s</b> is a convention from the optimization literature — it does <b>not</b> stand for "spikes." The output is a continuous, graded signal, not a series of discrete events.<br><br>' +
+        'The absolute amplitude of s(t) depends on indicator expression, imaging conditions, cell depth, and many other variables. It has <b>no fixed physical meaning</b>. Only <b>relative differences</b> within the same cell under the same conditions are meaningful.',
     },
     // Step 12: What deconvolved activity is NOT
     {

@@ -1,7 +1,7 @@
 // Tutorial engine: driver.js integration for CaTune's guided tours.
 // Maps typed Tutorial objects to driver.js DriveStep arrays and manages lifecycle.
 
-import { driver, type DriveStep, type Config, type Driver } from 'driver.js';
+import { driver, type DriveStep, type Config, type Driver, type PopoverDOM } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import '../../styles/tutorial.css';
 
@@ -20,6 +20,7 @@ import { saveProgress } from './progress.ts';
 // --- Module state ---
 
 let driverInstance: Driver | null = null;
+let activeRenderCleanup: (() => void) | null = null;
 
 // --- Step mapping ---
 
@@ -30,12 +31,29 @@ let driverInstance: Driver | null = null;
  */
 function mapSteps(tutorial: Tutorial): DriveStep[] {
   return tutorial.steps.map((step, index) => {
+    // Capture render callback for this step (if any)
+    const renderFn = step.onPopoverRender;
+
     const driveStep: DriveStep = {
       element: step.element,
       popover: {
         title: step.title,
         description: step.description,
         side: step.side,
+        ...(renderFn && {
+          onPopoverRender: (popover: PopoverDOM) => {
+            // Widen the popover for side-by-side figure layout
+            popover.wrapper.classList.add('catune-tutorial-figure');
+
+            // Clean up previous figure
+            if (activeRenderCleanup) {
+              activeRenderCleanup();
+              activeRenderCleanup = null;
+            }
+            const cleanup = renderFn(popover.description);
+            if (cleanup) activeRenderCleanup = cleanup;
+          },
+        }),
       },
     };
 
@@ -96,6 +114,12 @@ export function startTutorial(tutorial: Tutorial, resumeFromStep?: number): void
 
     // Track step transitions: update reactive store and persist progress
     onHighlightStarted: (_element, step, { driver: drv }) => {
+      // Clean up any previous figure render
+      if (activeRenderCleanup) {
+        activeRenderCleanup();
+        activeRenderCleanup = null;
+      }
+
       const activeIdx = drv.getActiveIndex();
       if (activeIdx !== undefined) {
         setCurrentStepIndex(activeIdx);
@@ -105,6 +129,12 @@ export function startTutorial(tutorial: Tutorial, resumeFromStep?: number): void
 
     // Handle tour destruction: persist completion and reset reactive state
     onDestroyed: () => {
+      // Clean up any active figure render
+      if (activeRenderCleanup) {
+        activeRenderCleanup();
+        activeRenderCleanup = null;
+      }
+
       // Only mark completed if user reached the final step
       const lastIndex = tutorial.steps.length - 1;
       const reachedEnd = currentStepIndex() >= lastIndex;
