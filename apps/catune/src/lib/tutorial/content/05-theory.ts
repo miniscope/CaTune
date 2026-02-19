@@ -4,7 +4,7 @@
 // All steps are centered modals (no element field).
 // Pure data definition -- no driver.js imports (TUTR-05 compliance).
 
-import type { Tutorial } from '../types.ts';
+import type { Tutorial } from '@catune/tutorials';
 import {
   renderKernelShape,
   renderDecayComparison,

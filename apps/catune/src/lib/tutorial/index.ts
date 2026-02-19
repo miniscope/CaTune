@@ -1,13 +1,7 @@
-// Barrel file — public API for the tutorial module.
-// Import from 'lib/tutorial' rather than reaching into internals.
-
-export { saveProgress, getProgress, getAllProgress, isCompleted } from './progress.ts';
-export {
-  renderKernelShape,
-  renderDecayComparison,
-  renderDeltaTrap,
-  renderGoodVsBad,
-} from './theory-figures.ts';
+// Re-export package API + local modules
+export type { TutorialStep, Tutorial, TutorialProgress } from '@catune/tutorials';
+export { saveProgress, getProgress, getAllProgress, isCompleted } from '@catune/tutorials';
+export { renderKernelShape, renderDecayComparison, renderDeltaTrap, renderGoodVsBad } from './theory-figures.ts';
 export { startTutorial, stopTutorial, notifyTutorialAction } from './tutorial-engine.ts';
 export {
   activeTutorial,
@@ -19,4 +13,3 @@ export {
   setIsTutorialActive,
   setTutorialActionFired,
 } from './tutorial-store.ts';
-export type { TutorialStep, Tutorial, TutorialProgress } from './types.ts';
