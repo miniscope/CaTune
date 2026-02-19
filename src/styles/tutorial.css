@@ -109,6 +109,20 @@
 .tutorial-card__title {
   font-weight: var(--font-weight-semibold);
   margin-bottom: var(--space-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.recommended-badge {
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(33, 113, 181, 0.15);
+  color: var(--accent);
 }
 
 .tutorial-card__meta {
@@ -157,6 +171,11 @@
   color: var(--warning);
 }
 
+.level-badge--theory {
+  background: rgba(150, 100, 220, 0.12);
+  color: hsl(270, 60%, 65%);
+}
+
 /* ========================
    First-Time Tutorial Banner
    ======================== */
@@ -190,4 +209,34 @@
   cursor: pointer;
   font-size: 1.2rem;
   padding: var(--space-xs);
+}
+
+/* ========================
+   Theory Figures (canvas)
+   ======================== */
+
+/* Wider popover for steps with side-by-side figures */
+.catune-tutorial-figure {
+  max-width: 740px !important;
+}
+
+.theory-figure-layout {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.theory-figure-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.theory-figure-canvas {
+  flex-shrink: 0;
+}
+
+.theory-figure {
+  display: block;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
 }

@@ -27,7 +27,8 @@ export function TutorialPanel(props: TutorialPanelProps): JSX.Element {
   const dataReady = () => importStep() === 'ready';
 
   const handleCardClick = (tutorial: Tutorial) => {
-    if (!dataReady()) return;
+    const needsData = tutorial.requiresData !== false;
+    if (needsData && !dataReady()) return;
     if (!arePrerequisitesMet(tutorial)) return;
     if (isTutorialActive()) return;
 
@@ -69,6 +70,9 @@ export function TutorialPanel(props: TutorialPanelProps): JSX.Element {
                   <span style={{ color: 'var(--success)', 'margin-right': '6px' }}>&#10003;</span>
                 </Show>
                 {tutorial.title}
+                <Show when={tutorial.recommended}>
+                  <span class="recommended-badge">Recommended</span>
+                </Show>
               </div>
               <div class="tutorial-card__meta">
                 <span class={`level-badge level-badge--${tutorial.level}`}>
@@ -83,12 +87,12 @@ export function TutorialPanel(props: TutorialPanelProps): JSX.Element {
                     Complete {tutorial.prerequisites.map(getPrereqName).join(', ')} first
                   </span>
                 </Show>
-                <Show when={!locked() && !dataReady()}>
+                <Show when={!locked() && !dataReady() && tutorial.requiresData !== false}>
                   <span style={{ color: 'var(--text-secondary)' }}>
                     Load data first to start tutorials
                   </span>
                 </Show>
-                <Show when={!locked() && dataReady()}>
+                <Show when={!locked() && (dataReady() || tutorial.requiresData === false)}>
                   <span style={{ color: completed() ? 'var(--success)' : 'var(--accent)' }}>
                     {statusText()}
                   </span>

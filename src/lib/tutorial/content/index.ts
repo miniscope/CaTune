@@ -6,9 +6,11 @@ import { basicsTutorial } from './01-basics.ts';
 import { workflowTutorial } from './02-workflow.ts';
 import { advancedTutorial } from './03-advanced.ts';
 import { featuresTutorial } from './04-features.ts';
+import { theoryTutorial } from './05-theory.ts';
 
 /** All tutorials in recommended progression order. */
 export const tutorials: Tutorial[] = [
+  theoryTutorial,
   basicsTutorial,
   workflowTutorial,
   advancedTutorial,

@@ -21,6 +21,9 @@ export interface TutorialStep {
   };
   /** Whether to disable interaction with the highlighted element. Undefined = driver.js default. */
   disableActiveInteraction?: boolean;
+  /** Called after popover renders. Receives description HTMLElement for canvas injection.
+   *  May return a cleanup function. */
+  onPopoverRender?: (descriptionEl: HTMLElement) => (() => void) | void;
 }
 
 /** A complete tutorial definition with metadata and step array. */
@@ -32,11 +35,15 @@ export interface Tutorial {
   /** Short description of what the tutorial covers. */
   description: string;
   /** Difficulty level for progressive disclosure. */
-  level: 'beginner' | 'intermediate' | 'advanced';
+  level: 'beginner' | 'intermediate' | 'advanced' | 'theory';
   /** Tutorial IDs that should be completed before this one. */
   prerequisites: string[];
   /** Estimated completion time in minutes. */
   estimatedMinutes: number;
+  /** Highlight this tutorial as recommended in the tutorial panel. */
+  recommended?: boolean;
+  /** Whether this tutorial requires data to be loaded. Defaults to true. */
+  requiresData?: boolean;
   /** Ordered array of tutorial steps. */
   steps: TutorialStep[];
 }
