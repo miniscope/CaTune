@@ -3,7 +3,7 @@
 Repo-level changelog for the CaLab monorepo. Uses [Keep a Changelog](https://keepachangelog.com/) format.
 Versions correspond to git tags (`v*`) and apply to the entire monorepo.
 
-## [Unreleased]
+## [2.0.4] - 2026-02-19
 
 ### Added
 
