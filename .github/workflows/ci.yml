@@ -26,10 +26,10 @@ jobs:
         run: npm run lint
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Tests
-        run: npx vitest run
+        run: npm run test
 
       - name: Build
-        run: npx vite build
+        run: npm run build -w apps/catune

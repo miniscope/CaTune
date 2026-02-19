@@ -1,6 +1,9 @@
 .planning/
 node_modules/
 dist/
+apps/*/dist/
+packages/*/dist/
+*.tsbuildinfo
 .vite/
 wasm/catune-solver/target/
 test/

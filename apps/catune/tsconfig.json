@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "baseUrl": ".",
+    "paths": {
+      "@catune/core": ["../../packages/core/src/index.ts"],
+      "@catune/core/*": ["../../packages/core/src/*"]
+    }
+  },
+  "include": ["src"],
+  "references": [{ "path": "../../packages/core" }]
+}
