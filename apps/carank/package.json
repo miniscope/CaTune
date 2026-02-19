@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "calab": {
+    "displayName": "CaRank",
+    "description": "Trace quality ranking"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

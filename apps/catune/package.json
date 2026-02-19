@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "calab": {
+    "displayName": "CaTune",
+    "description": "Deconvolution parameter tuning"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
