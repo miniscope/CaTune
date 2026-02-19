@@ -1,13 +1,45 @@
 #!/usr/bin/env node
-import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { cpSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
+const appsDir = resolve(root, 'apps');
 const out = resolve(root, 'dist/CaLab');
 
 mkdirSync(out, { recursive: true });
-cpSync(resolve(root, 'apps/catune/dist'), resolve(out, 'CaTune'), { recursive: true });
-cpSync(resolve(root, 'apps/carank/dist'), resolve(out, 'CaRank'), { recursive: true });
+
+const apps = readdirSync(appsDir)
+  .filter((name) => {
+    if (name === '_template') return false;
+    const dir = join(appsDir, name);
+    if (!statSync(dir).isDirectory()) return false;
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'));
+      return pkg.calab?.displayName != null;
+    } catch {
+      return false;
+    }
+  })
+  .map((name) => {
+    const pkg = JSON.parse(readFileSync(join(appsDir, name, 'package.json'), 'utf-8'));
+    return {
+      dir: name,
+      displayName: pkg.calab.displayName,
+      description: pkg.calab.description ?? '',
+    };
+  });
+
+for (const app of apps) {
+  const src = resolve(appsDir, app.dir, 'dist');
+  cpSync(src, resolve(out, app.displayName), { recursive: true });
+}
+
+const listItems = apps
+  .map(
+    (app) =>
+      `    <li><a href="${app.displayName}/">${app.displayName}</a> — ${app.description}</li>`,
+  )
+  .join('\n');
 
 writeFileSync(
   resolve(out, 'index.html'),
@@ -28,12 +60,11 @@ writeFileSync(
   <h1>CaLab</h1>
   <p>Calcium imaging analysis tools</p>
   <ul>
-    <li><a href="CaTune/">CaTune</a> — Deconvolution parameter tuning</li>
-    <li><a href="CaRank/">CaRank</a> — Trace quality ranking</li>
+${listItems}
   </ul>
 </body>
 </html>
 `,
 );
 
-console.log('Combined dist created at dist/CaLab/');
+console.log(`Combined dist created at dist/CaLab/ (${apps.length} apps)`);
