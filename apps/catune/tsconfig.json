@@ -14,7 +14,9 @@
       "@catune/community": ["../../packages/community/src/index.ts"],
       "@catune/community/*": ["../../packages/community/src/*"],
       "@catune/tutorials": ["../../packages/tutorials/src/index.ts"],
-      "@catune/tutorials/*": ["../../packages/tutorials/src/*"]
+      "@catune/tutorials/*": ["../../packages/tutorials/src/*"],
+      "@catune/ui": ["../../packages/ui/src/index.ts"],
+      "@catune/ui/*": ["../../packages/ui/src/*"]
     }
   },
   "include": ["src"],
@@ -23,6 +25,7 @@
     { "path": "../../packages/compute" },
     { "path": "../../packages/io" },
     { "path": "../../packages/community" },
-    { "path": "../../packages/tutorials" }
+    { "path": "../../packages/tutorials" },
+    { "path": "../../packages/ui" }
   ]
 }

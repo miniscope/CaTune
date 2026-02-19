@@ -15,7 +15,7 @@
     "test:watch": "npm run test:watch -w apps/catune",
     "lint": "eslint apps/ packages/",
     "lint:fix": "eslint --fix apps/ packages/",
-    "typecheck": "tsc -b apps/catune packages/core packages/compute packages/io packages/community packages/tutorials",
+    "typecheck": "tsc -b apps/catune packages/core packages/compute packages/io packages/community packages/tutorials packages/ui",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
