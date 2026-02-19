@@ -50,7 +50,7 @@ const AXIS_COLOR = 'rgba(255,255,255,0.15)';
 
 // --- Dimensions ---
 const SINGLE_W = 400;
-const SINGLE_H = 150;
+const SINGLE_H = 240;
 const DUAL_H = 320;
 const MARGIN = { top: 8, right: 12, bottom: 20, left: 8 };
 
