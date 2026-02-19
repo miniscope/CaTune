@@ -11,7 +11,7 @@
     "dev": "npm run dev -w apps/catune",
     "build": "npm run build:wasm && npm run build -w apps/catune",
     "build:wasm": "cd wasm/catune-solver && wasm-pack build --target web --release",
-    "test": "npm run test -w apps/catune",
+    "test": "npm run test --workspaces --if-present",
     "test:watch": "npm run test:watch -w apps/catune",
     "lint": "eslint apps/ packages/",
     "lint:fix": "eslint --fix apps/ packages/",

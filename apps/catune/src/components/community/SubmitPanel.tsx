@@ -18,7 +18,7 @@ import {
   demoPreset,
   groundTruthLocked,
 } from '../../lib/data-store.ts';
-import { buildExportData, downloadExport } from '../../lib/export.ts';
+import { buildExportData, downloadExport } from '@catune/io';
 import { validateSubmission } from '../../lib/community/quality-checks.ts';
 import { loadFieldOptions } from '../../lib/community/community-store.ts';
 import { supabaseEnabled } from '../../lib/supabase.ts';

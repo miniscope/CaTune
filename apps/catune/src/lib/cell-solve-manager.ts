@@ -15,7 +15,7 @@ import {
   visibleCellIndices,
   hoveredCell,
 } from './multi-cell-store.ts';
-import { extractCellTrace } from './array-utils.ts';
+import { extractCellTrace } from '@catune/io';
 import { computePaddedWindow, computeSafeMargin, WarmStartCache } from './warm-start-cache.ts';
 import { createWorkerPool, type WorkerPool } from './worker-pool.ts';
 import type { SolverParams } from '@catune/core';
