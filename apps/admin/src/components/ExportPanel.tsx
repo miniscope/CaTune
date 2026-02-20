@@ -66,7 +66,7 @@ export function ExportPanel(): JSX.Element {
       <h2 class="view__title">Export CSV</h2>
       <p class="view__desc">
         Download data as CSV for the selected date range. Open in any spreadsheet application for
-        NIH progress reports.
+        grant progress reports.
       </p>
       <div class="export-grid">
         <button class="export-btn" onClick={exportSessions}>

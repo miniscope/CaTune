@@ -1,4 +1,4 @@
-// Lightweight usage analytics for NIH grant reporting.
+// Lightweight usage analytics.
 // All calls no-op if Supabase is not configured or session init failed.
 // Analytics never throws — all errors are silently caught.
 

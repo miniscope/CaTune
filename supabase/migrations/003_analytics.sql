@@ -1,4 +1,4 @@
--- Analytics tables for usage tracking (NIH grant reporting)
+-- Analytics tables for usage tracking
 -- Two tables: analytics_sessions (one per browser session) and
 -- analytics_events (high-level actions within a session).
 
