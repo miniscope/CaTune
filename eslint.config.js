@@ -65,6 +65,7 @@ export default tseslint.config(
       'packages/core/src/wasm-adapter.ts',
       'packages/community/src/supabase.ts',
       'packages/community/src/auth.ts',
+      'packages/community/src/submission-service.ts',
     ],
     rules: {
       'no-restricted-imports': [

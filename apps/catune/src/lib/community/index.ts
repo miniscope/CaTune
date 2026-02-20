@@ -1,8 +1,6 @@
 // Shared infrastructure from @calab/community
 export {
   supabaseEnabled,
-  fetchFieldOptions,
-  computeDatasetHash,
   buildFieldOptionRequestUrl,
   buildFeedbackUrl,
   buildFeatureRequestUrl,

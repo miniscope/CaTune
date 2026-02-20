@@ -66,14 +66,7 @@ describe('createSubmissionService', () => {
 
     it('returns all rows when no filters', async () => {
       const rows = [{ id: '1', score: 5 }];
-      const mockSelect = vi.fn().mockResolvedValue({ data: rows, error: null });
-      mockGetSupabase.mockResolvedValue({
-        from: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue(mockSelect()) }),
-      } as never);
-
-      // Need to re-mock with chainable query
-      const mockQuery = { data: rows, error: null };
-      const selectFn = vi.fn().mockReturnValue(mockQuery);
+      const selectFn = vi.fn().mockReturnValue({ data: rows, error: null });
       mockGetSupabase.mockResolvedValue({
         from: vi.fn().mockReturnValue({ select: selectFn }),
       } as never);

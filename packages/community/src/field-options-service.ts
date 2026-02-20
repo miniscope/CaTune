@@ -20,31 +20,24 @@ export async function fetchFieldOptions(): Promise<FieldOptions> {
   if (error) throw new Error(`Fetch field options failed: ${error.message}`);
 
   const rows = data as FieldOption[];
-  const indicators: string[] = [];
-  const species: string[] = [];
-  const brainRegions: string[] = [];
-  const microscopeTypes: string[] = [];
-  const cellTypes: string[] = [];
 
+  // Group rows by field_name, then map to the FieldOptions shape
+  const grouped: Record<FieldOption['field_name'], string[]> = {
+    indicator: [],
+    species: [],
+    brain_region: [],
+    microscope_type: [],
+    cell_type: [],
+  };
   for (const row of rows) {
-    switch (row.field_name) {
-      case 'indicator':
-        indicators.push(row.value);
-        break;
-      case 'species':
-        species.push(row.value);
-        break;
-      case 'brain_region':
-        brainRegions.push(row.value);
-        break;
-      case 'microscope_type':
-        microscopeTypes.push(row.value);
-        break;
-      case 'cell_type':
-        cellTypes.push(row.value);
-        break;
-    }
+    grouped[row.field_name].push(row.value);
   }
 
-  return { indicators, species, brainRegions, microscopeTypes, cellTypes };
+  return {
+    indicators: grouped.indicator,
+    species: grouped.species,
+    brainRegions: grouped.brain_region,
+    microscopeTypes: grouped.microscope_type,
+    cellTypes: grouped.cell_type,
+  };
 }

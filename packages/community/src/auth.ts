@@ -25,7 +25,8 @@ export function subscribeAuth(callback: (state: AuthState) => void): () => void 
 
   let unsubscribe = () => {};
 
-  getSupabase().then((client) => {
+  // Fire-and-forget: SDK loads lazily, then subscribes to auth events
+  void getSupabase().then((client) => {
     if (!client) {
       callback({ user: null, loading: false });
       return;

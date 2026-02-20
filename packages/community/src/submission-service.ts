@@ -2,6 +2,7 @@
 // Apps create a typed service as a one-liner:
 //   const service = createSubmissionService<MySubmission>('my_table');
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabase } from './supabase.ts';
 import type { BaseSubmission, BaseFilterState } from './types.ts';
 
@@ -9,6 +10,13 @@ export interface SubmissionService<T extends BaseSubmission> {
   submit(payload: Omit<T, 'id' | 'created_at' | 'user_id'>): Promise<T>;
   fetch(filters?: BaseFilterState): Promise<T[]>;
   delete(id: string): Promise<void>;
+}
+
+/** Resolve the Supabase client, throwing if not configured. */
+async function requireClient(): Promise<SupabaseClient> {
+  const client = await getSupabase();
+  if (!client) throw new Error('Community features not configured');
+  return client;
 }
 
 /**
@@ -20,8 +28,7 @@ export function createSubmissionService<T extends BaseSubmission>(
 ): SubmissionService<T> {
   return {
     async submit(payload) {
-      const client = await getSupabase();
-      if (!client) throw new Error('Community features not configured');
+      const client = await requireClient();
 
       const {
         data: { user },
@@ -39,8 +46,7 @@ export function createSubmissionService<T extends BaseSubmission>(
     },
 
     async fetch(filters?) {
-      const client = await getSupabase();
-      if (!client) throw new Error('Community features not configured');
+      const client = await requireClient();
 
       let query = client.from(tableName).select('*');
 
@@ -60,8 +66,7 @@ export function createSubmissionService<T extends BaseSubmission>(
     },
 
     async delete(id) {
-      const client = await getSupabase();
-      if (!client) throw new Error('Community features not configured');
+      const client = await requireClient();
 
       const { error } = await client.from(tableName).delete().eq('id', id);
       if (error) throw new Error(`Delete failed: ${error.message}`);
