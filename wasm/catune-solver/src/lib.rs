@@ -1,11 +1,10 @@
-mod kernel;
-mod fista;
+mod fft;
 mod filter;
+mod fista;
+mod kernel;
 
-use kernel::{build_kernel, compute_lipschitz};
 use filter::BandpassFilter;
-use realfft::RealFftPlanner;
-use rustfft::num_complex::Complex;
+use kernel::{build_kernel, compute_lipschitz};
 use std::io::{Cursor, Read};
 use wasm_bindgen::prelude::*;
 
@@ -49,17 +48,9 @@ pub struct Solver {
     pub(crate) baseline: f64,
     kernel_dc_gain: f64,
 
-    // FFT-based convolution infrastructure
-    pub(crate) fft_planner: RealFftPlanner<f32>,
-    pub(crate) fft_len: usize,             // padded FFT length (power of 2 >= n + k_len - 1)
-    pub(crate) kernel_fft: Vec<Complex<f32>>,      // pre-computed FFT of kernel (spectrum_len)
-    pub(crate) kernel_conj_fft: Vec<Complex<f32>>, // conjugate of kernel FFT (for adjoint)
-    pub(crate) fft_input: Vec<f32>,                // scratch: real input buffer (fft_len)
-    pub(crate) fft_spectrum: Vec<Complex<f32>>,    // scratch: complex spectrum (fft_len/2 + 1)
-    pub(crate) fft_scratch_fwd: Vec<Complex<f32>>, // scratch for forward FFT
-    pub(crate) fft_scratch_inv: Vec<Complex<f32>>, // scratch for inverse FFT
-    pub(crate) fft_output: Vec<f32>,               // scratch: real output buffer (fft_len)
-    pub(crate) reconvolution_stale: bool,          // dirty flag for lazy reconvolution
+    // FFT-based convolution engine (owns plans, buffers, kernel spectrum)
+    pub(crate) fft: fft::FftConvolver,
+    pub(crate) reconvolution_stale: bool, // dirty flag for lazy reconvolution
 
     // Bandpass filter
     bandpass: BandpassFilter,
@@ -94,15 +85,7 @@ impl Solver {
             lipschitz_constant: 1.0,
             baseline: 0.0,
             kernel_dc_gain: 1.0,
-            fft_planner: RealFftPlanner::new(),
-            fft_len: 0,
-            kernel_fft: Vec::new(),
-            kernel_conj_fft: Vec::new(),
-            fft_input: Vec::new(),
-            fft_spectrum: Vec::new(),
-            fft_scratch_fwd: Vec::new(),
-            fft_scratch_inv: Vec::new(),
-            fft_output: Vec::new(),
+            fft: fft::FftConvolver::new(),
             reconvolution_stale: true,
             bandpass: BandpassFilter::new(),
         };
@@ -128,18 +111,18 @@ impl Solver {
 
         // Update kernel FFT if buffers are already set up and large enough.
         // On re-enqueue quanta with unchanged trace length, this avoids a full
-        // FFT plan + buffer rebuild in ensure_fft_buffers.
-        if self.fft_len > 0 && self.active_len > 0 {
+        // FFT plan + buffer rebuild in ensure_buffers.
+        if self.fft.fft_len() > 0 && self.active_len > 0 {
             let min_len = self.active_len + self.kernel.len() - 1;
-            if min_len <= self.fft_len {
+            if min_len <= self.fft.fft_len() {
                 // Existing FFT buffers are large enough — just re-FFT the kernel
-                self.prepare_kernel_fft();
+                self.fft.prepare_kernel(&self.kernel);
             } else {
                 // New kernel is longer; need larger FFT — invalidate
-                self.fft_len = 0;
+                self.fft.invalidate();
             }
         }
-        // If fft_len == 0 or active_len == 0, ensure_fft_buffers in set_trace handles it
+        // If fft_len == 0 or active_len == 0, ensure_buffers in set_trace handles it
     }
 
     /// Load a trace for deconvolution. Grows buffers if needed (never shrinks).
@@ -176,7 +159,7 @@ impl Solver {
         self.reconvolution_stale = true;
 
         // Prepare FFT infrastructure for this trace length
-        self.ensure_fft_buffers();
+        self.fft.ensure_buffers(self.active_len, &self.kernel);
     }
 
     /// Returns a copy of the kernel.
@@ -216,7 +199,10 @@ impl Solver {
             self.compute_reconvolution();
         }
         let b = self.baseline as f32;
-        self.reconvolution[..self.active_len].iter().map(|&v| v + b).collect()
+        self.reconvolution[..self.active_len]
+            .iter()
+            .map(|&v| v + b)
+            .collect()
     }
 
     /// Returns the estimated scalar baseline.
@@ -277,172 +263,6 @@ impl Solver {
         buf
     }
 
-    // --- FFT convolution infrastructure ---
-
-    /// Ensure FFT buffers are allocated for the current active_len + kernel size.
-    /// Recomputes kernel FFT when the padded FFT length changes.
-    /// Buffers grow but never shrink.
-    pub(crate) fn ensure_fft_buffers(&mut self) {
-        let n = self.active_len;
-        let k_len = self.kernel.len();
-        if n == 0 || k_len == 0 {
-            return;
-        }
-
-        // Padded length: next power of 2 >= n + k_len - 1 for linear (non-circular) convolution
-        let min_len = n + k_len - 1;
-        let padded_len = min_len.next_power_of_two();
-
-        if padded_len == self.fft_len {
-            return; // Already set up for this length
-        }
-
-        self.fft_len = padded_len;
-        let spectrum_len = padded_len / 2 + 1;
-
-        // Grow buffers (never shrink)
-        if self.fft_input.len() < padded_len {
-            self.fft_input.resize(padded_len, 0.0);
-        }
-        if self.fft_output.len() < padded_len {
-            self.fft_output.resize(padded_len, 0.0);
-        }
-        if self.fft_spectrum.len() < spectrum_len {
-            self.fft_spectrum.resize(spectrum_len, Complex::new(0.0, 0.0));
-        }
-        if self.kernel_fft.len() < spectrum_len {
-            self.kernel_fft.resize(spectrum_len, Complex::new(0.0, 0.0));
-        }
-        if self.kernel_conj_fft.len() < spectrum_len {
-            self.kernel_conj_fft.resize(spectrum_len, Complex::new(0.0, 0.0));
-        }
-
-        // Plan FFTs and allocate scratch
-        let fwd = self.fft_planner.plan_fft_forward(padded_len);
-        let inv = self.fft_planner.plan_fft_inverse(padded_len);
-        let fwd_scratch = fwd.get_scratch_len();
-        let inv_scratch = inv.get_scratch_len();
-        if self.fft_scratch_fwd.len() < fwd_scratch {
-            self.fft_scratch_fwd.resize(fwd_scratch, Complex::new(0.0, 0.0));
-        }
-        if self.fft_scratch_inv.len() < inv_scratch {
-            self.fft_scratch_inv.resize(inv_scratch, Complex::new(0.0, 0.0));
-        }
-
-        // Pre-compute kernel FFT and its conjugate
-        self.prepare_kernel_fft();
-    }
-
-    /// Compute and cache the FFT of the kernel (forward) and its conjugate (adjoint).
-    fn prepare_kernel_fft(&mut self) {
-        let k_len = self.kernel.len();
-        let padded_len = self.fft_len;
-        let spectrum_len = padded_len / 2 + 1;
-
-        // Zero-pad kernel into fft_input
-        for i in 0..padded_len {
-            self.fft_input[i] = if i < k_len { self.kernel[i] } else { 0.0 };
-        }
-
-        // Forward FFT of kernel
-        let fwd = self.fft_planner.plan_fft_forward(padded_len);
-        fwd.process_with_scratch(
-            &mut self.fft_input[..padded_len],
-            &mut self.kernel_fft[..spectrum_len],
-            &mut self.fft_scratch_fwd,
-        )
-        .unwrap();
-
-        // Conjugate for adjoint (correlation = convolution with reversed kernel)
-        for i in 0..spectrum_len {
-            self.kernel_conj_fft[i] = self.kernel_fft[i].conj();
-        }
-    }
-
-    /// FFT-based forward convolution: writes K * source into self.reconvolution[..n].
-    /// source must have at least n elements.
-    pub(crate) fn convolve_forward_fft(&mut self, source: &[f32]) {
-        let n = self.active_len;
-        let padded_len = self.fft_len;
-        let spectrum_len = padded_len / 2 + 1;
-
-        // Zero-pad source into fft_input
-        for i in 0..padded_len {
-            self.fft_input[i] = if i < n { source[i] } else { 0.0 };
-        }
-
-        // Forward FFT of source
-        let fwd = self.fft_planner.plan_fft_forward(padded_len);
-        fwd.process_with_scratch(
-            &mut self.fft_input[..padded_len],
-            &mut self.fft_spectrum[..spectrum_len],
-            &mut self.fft_scratch_fwd,
-        )
-        .unwrap();
-
-        // Pointwise multiply with kernel FFT
-        for i in 0..spectrum_len {
-            self.fft_spectrum[i] *= self.kernel_fft[i];
-        }
-
-        // Inverse FFT
-        let inv = self.fft_planner.plan_fft_inverse(padded_len);
-        inv.process_with_scratch(
-            &mut self.fft_spectrum[..spectrum_len],
-            &mut self.fft_output[..padded_len],
-            &mut self.fft_scratch_inv,
-        )
-        .unwrap();
-
-        // Normalize and copy first n samples to reconvolution
-        let scale = 1.0 / padded_len as f32;
-        for i in 0..n {
-            self.reconvolution[i] = self.fft_output[i] * scale;
-        }
-    }
-
-    /// FFT-based adjoint convolution (correlation): writes K^T * source into self.gradient[..n].
-    /// Uses the conjugate kernel FFT. source must have at least n elements.
-    pub(crate) fn convolve_adjoint_fft(&mut self, source: &[f32]) {
-        let n = self.active_len;
-        let padded_len = self.fft_len;
-        let spectrum_len = padded_len / 2 + 1;
-
-        // Zero-pad source into fft_input
-        for i in 0..padded_len {
-            self.fft_input[i] = if i < n { source[i] } else { 0.0 };
-        }
-
-        // Forward FFT of source
-        let fwd = self.fft_planner.plan_fft_forward(padded_len);
-        fwd.process_with_scratch(
-            &mut self.fft_input[..padded_len],
-            &mut self.fft_spectrum[..spectrum_len],
-            &mut self.fft_scratch_fwd,
-        )
-        .unwrap();
-
-        // Pointwise multiply with conjugate kernel FFT
-        for i in 0..spectrum_len {
-            self.fft_spectrum[i] *= self.kernel_conj_fft[i];
-        }
-
-        // Inverse FFT
-        let inv = self.fft_planner.plan_fft_inverse(padded_len);
-        inv.process_with_scratch(
-            &mut self.fft_spectrum[..spectrum_len],
-            &mut self.fft_output[..padded_len],
-            &mut self.fft_scratch_inv,
-        )
-        .unwrap();
-
-        // Normalize and copy first n samples to gradient
-        let scale = 1.0 / padded_len as f32;
-        for i in 0..n {
-            self.gradient[i] = self.fft_output[i] * scale;
-        }
-    }
-
     /// Compute reconvolution (K * solution) on demand for getters.
     /// Called lazily when get_reconvolution() or get_reconvolution_with_baseline() is invoked
     /// and reconvolution_stale is true.
@@ -453,12 +273,9 @@ impl Solver {
         }
 
         // Use FFT-based convolution if infrastructure is ready
-        if self.fft_len > 0 {
-            // We need a temporary copy of solution since convolve_forward_fft borrows &[f32]
-            // but also mutates self. Use fft_output as temporary storage (it will be overwritten).
-            // Actually, we can use a slice reference trick: copy solution to a temp vec.
-            let solution_copy: Vec<f32> = self.solution[..n].to_vec();
-            self.convolve_forward_fft(&solution_copy);
+        if self.fft.fft_len() > 0 {
+            self.fft
+                .convolve_forward(&self.solution[..n], n, &mut self.reconvolution[..n]);
         } else {
             // Fallback to time-domain convolution for very small cases
             let k_len = self.kernel.len();

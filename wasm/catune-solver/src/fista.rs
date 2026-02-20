@@ -36,10 +36,8 @@ impl Solver {
             // (on first iteration, y_0 = x_0 = solution = zeros)
 
             // 1. Forward convolution at y_k: reconvolution = K * y_k
-            //    We need a temporary copy because convolve_forward_fft takes &[f32]
-            //    but mutates self. Reuse fft_output as temp storage before it gets overwritten.
-            let y_k_copy: Vec<f32> = self.solution_prev[..n].to_vec();
-            self.convolve_forward_fft(&y_k_copy);
+            self.fft
+                .convolve_forward(&self.solution_prev[..n], n, &mut self.reconvolution[..n]);
 
             // 1b. Compute baseline: b = mean(trace - K*y_k)
             {
@@ -57,9 +55,8 @@ impl Solver {
             }
 
             // 3. Adjoint convolution: gradient = K^T * residual
-            //    Same temporary copy pattern for residual_buf.
-            let residual_copy: Vec<f32> = self.residual_buf[..n].to_vec();
-            self.convolve_adjoint_fft(&residual_copy);
+            self.fft
+                .convolve_adjoint(&self.residual_buf[..n], n, &mut self.gradient[..n]);
 
             // 4. Proximal gradient step from y_k:
             //    x_{k+1} = prox(y_k - step_size * gradient)
@@ -287,12 +284,7 @@ mod tests {
 
         let solution = solver.get_solution();
         for (i, &v) in solution.iter().enumerate() {
-            assert!(
-                v >= 0.0,
-                "Solution at index {} is negative: {}",
-                i,
-                v
-            );
+            assert!(v >= 0.0, "Solution at index {} is negative: {}", i, v);
         }
     }
 
@@ -424,7 +416,10 @@ mod tests {
         solver.set_trace(&trace);
         // Run a few iterations to build up momentum
         solver.step_batch(20);
-        assert!(solver.t_fista > 1.0, "t_fista should have increased from 1.0");
+        assert!(
+            solver.t_fista > 1.0,
+            "t_fista should have increased from 1.0"
+        );
 
         // Reset momentum (simulating kernel change warm-start)
         solver.reset_momentum();
@@ -534,9 +529,10 @@ mod tests {
         }
 
         // FFT-based forward convolution
-        let source_copy: Vec<f32> = solver.solution_prev[..n].to_vec();
-        solver.convolve_forward_fft(&source_copy);
-        let fft_result: Vec<f32> = solver.reconvolution[..n].to_vec();
+        let mut fft_result = vec![0.0_f32; n];
+        solver
+            .fft
+            .convolve_forward(&solver.solution_prev[..n], n, &mut fft_result);
 
         // Time-domain forward convolution for comparison
         let k_len = kernel.len();
@@ -545,7 +541,7 @@ mod tests {
             let mut sum = 0.0;
             let k_max = k_len.min(t + 1);
             for k in 0..k_max {
-                sum += kernel[k] * source_copy[t - k];
+                sum += kernel[k] * solver.solution_prev[t - k];
             }
             td_result[t] = sum;
         }

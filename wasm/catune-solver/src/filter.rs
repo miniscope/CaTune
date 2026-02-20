@@ -365,10 +365,21 @@ mod tests {
         // Mean-subtracted correlation — robust to baseline shift
         let mean_t: f32 = trace.iter().sum::<f32>() / n as f32;
         let mean_o: f32 = original.iter().sum::<f32>() / n as f32;
-        let dot: f32 = trace.iter().zip(original.iter())
-            .map(|(a, b)| (a - mean_t) * (b - mean_o)).sum();
-        let norm_t: f32 = trace.iter().map(|x| (x - mean_t).powi(2)).sum::<f32>().sqrt();
-        let norm_o: f32 = original.iter().map(|x| (x - mean_o).powi(2)).sum::<f32>().sqrt();
+        let dot: f32 = trace
+            .iter()
+            .zip(original.iter())
+            .map(|(a, b)| (a - mean_t) * (b - mean_o))
+            .sum();
+        let norm_t: f32 = trace
+            .iter()
+            .map(|x| (x - mean_t).powi(2))
+            .sum::<f32>()
+            .sqrt();
+        let norm_o: f32 = original
+            .iter()
+            .map(|x| (x - mean_o).powi(2))
+            .sum::<f32>()
+            .sqrt();
         let correlation = dot / (norm_t * norm_o + 1e-10);
         assert!(
             correlation > 0.95,
