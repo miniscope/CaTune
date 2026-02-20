@@ -8,13 +8,13 @@ usage analytics, and admin moderation.
 Each CaLab app has its own submissions table (e.g., `catune_submissions`).
 All tables share a common set of base columns defined in `000_base_template.sql`.
 
-| Migration | Purpose |
-|-----------|---------|
-| `000_base_template.sql` | **Template only** (not executed). Copy and extend for new apps. |
-| `001_catune_submissions.sql` | CaTune submissions table with deconvolution-specific columns. |
-| `002_field_options.sql` | Shared canonical field options lookup table. |
-| `003_analytics.sql` | Analytics tables (`analytics_sessions`, `analytics_events`) for usage tracking. |
-| `004_admin_role.sql` | `is_admin()` helper function and admin moderation policies. |
+| Migration                    | Purpose                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `000_base_template.sql`      | **Template only** (not executed). Copy and extend for new apps.                 |
+| `001_catune_submissions.sql` | CaTune submissions table with deconvolution-specific columns.                   |
+| `002_field_options.sql`      | Shared canonical field options lookup table.                                    |
+| `003_analytics.sql`          | Analytics tables (`analytics_sessions`, `analytics_events`) for usage tracking. |
+| `004_admin_role.sql`         | `is_admin()` helper function and admin moderation policies.                     |
 
 ## Applying migrations
 
