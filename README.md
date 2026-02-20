@@ -19,7 +19,7 @@ A companion **Python package** (`calab`) provides the same deconvolution algorit
 
 ## Quick Start (Scientists)
 
-1. Open **[CaTune](https://miniscope.github.io/CaLab/catune/)** in your browser
+1. Open **[CaTune](https://miniscope.github.io/CaLab/CaTune/)** in your browser
 2. Try the built-in demo data to explore the interface
 3. Drag and drop your own `.npy` or `.npz` file containing calcium traces
 4. Adjust parameters with the sliders and observe real-time deconvolution
