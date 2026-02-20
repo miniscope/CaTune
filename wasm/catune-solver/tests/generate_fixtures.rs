@@ -79,17 +79,25 @@ fn generate_fixtures() {
 
         solve_to_convergence(&mut solver, &trace, 200, 10);
 
-        write_fixture("standard_clean", &Fixture {
-            params: FixtureParams { tau_rise: 0.02, tau_decay: 0.4, lambda: 0.01, fs: 30.0 },
-            trace: trace_f64,
-            kernel: kernel.clone(),
-            solution: solver.get_solution(),
-            baseline: solver.get_baseline(),
-            reconvolution: solver.get_reconvolution_with_baseline(),
-            iterations: solver.iteration_count(),
-            filter_enabled: false,
-            filtered_trace: None,
-        });
+        write_fixture(
+            "standard_clean",
+            &Fixture {
+                params: FixtureParams {
+                    tau_rise: 0.02,
+                    tau_decay: 0.4,
+                    lambda: 0.01,
+                    fs: 30.0,
+                },
+                trace: trace_f64,
+                kernel: kernel.clone(),
+                solution: solver.get_solution(),
+                baseline: solver.get_baseline(),
+                reconvolution: solver.get_reconvolution_with_baseline(),
+                iterations: solver.iteration_count(),
+                filter_enabled: false,
+                filtered_trace: None,
+            },
+        );
     }
 
     // --- standard_dc_offset ---
@@ -105,17 +113,25 @@ fn generate_fixtures() {
 
         solve_to_convergence(&mut solver, &trace, 200, 10);
 
-        write_fixture("standard_dc_offset", &Fixture {
-            params: FixtureParams { tau_rise: 0.02, tau_decay: 0.4, lambda: 0.01, fs: 30.0 },
-            trace: trace_f64,
-            kernel: kernel.clone(),
-            solution: solver.get_solution(),
-            baseline: solver.get_baseline(),
-            reconvolution: solver.get_reconvolution_with_baseline(),
-            iterations: solver.iteration_count(),
-            filter_enabled: false,
-            filtered_trace: None,
-        });
+        write_fixture(
+            "standard_dc_offset",
+            &Fixture {
+                params: FixtureParams {
+                    tau_rise: 0.02,
+                    tau_decay: 0.4,
+                    lambda: 0.01,
+                    fs: 30.0,
+                },
+                trace: trace_f64,
+                kernel: kernel.clone(),
+                solution: solver.get_solution(),
+                baseline: solver.get_baseline(),
+                reconvolution: solver.get_reconvolution_with_baseline(),
+                iterations: solver.iteration_count(),
+                filter_enabled: false,
+                filtered_trace: None,
+            },
+        );
     }
 
     // --- fast_kinetics ---
@@ -128,17 +144,25 @@ fn generate_fixtures() {
 
         solve_to_convergence(&mut solver, &trace, 200, 10);
 
-        write_fixture("fast_kinetics", &Fixture {
-            params: FixtureParams { tau_rise: 0.005, tau_decay: 0.1, lambda: 0.01, fs: 100.0 },
-            trace: trace_f64,
-            kernel: kernel.clone(),
-            solution: solver.get_solution(),
-            baseline: solver.get_baseline(),
-            reconvolution: solver.get_reconvolution_with_baseline(),
-            iterations: solver.iteration_count(),
-            filter_enabled: false,
-            filtered_trace: None,
-        });
+        write_fixture(
+            "fast_kinetics",
+            &Fixture {
+                params: FixtureParams {
+                    tau_rise: 0.005,
+                    tau_decay: 0.1,
+                    lambda: 0.01,
+                    fs: 100.0,
+                },
+                trace: trace_f64,
+                kernel: kernel.clone(),
+                solution: solver.get_solution(),
+                baseline: solver.get_baseline(),
+                reconvolution: solver.get_reconvolution_with_baseline(),
+                iterations: solver.iteration_count(),
+                filter_enabled: false,
+                filtered_trace: None,
+            },
+        );
     }
 
     // --- high_lambda ---
@@ -151,17 +175,25 @@ fn generate_fixtures() {
 
         solve_to_convergence(&mut solver, &trace, 200, 10);
 
-        write_fixture("high_lambda", &Fixture {
-            params: FixtureParams { tau_rise: 0.02, tau_decay: 0.4, lambda: 1.0, fs: 30.0 },
-            trace: trace_f64,
-            kernel: kernel.clone(),
-            solution: solver.get_solution(),
-            baseline: solver.get_baseline(),
-            reconvolution: solver.get_reconvolution_with_baseline(),
-            iterations: solver.iteration_count(),
-            filter_enabled: false,
-            filtered_trace: None,
-        });
+        write_fixture(
+            "high_lambda",
+            &Fixture {
+                params: FixtureParams {
+                    tau_rise: 0.02,
+                    tau_decay: 0.4,
+                    lambda: 1.0,
+                    fs: 30.0,
+                },
+                trace: trace_f64,
+                kernel: kernel.clone(),
+                solution: solver.get_solution(),
+                baseline: solver.get_baseline(),
+                reconvolution: solver.get_reconvolution_with_baseline(),
+                iterations: solver.iteration_count(),
+                filter_enabled: false,
+                filtered_trace: None,
+            },
+        );
     }
 
     // --- with_filter ---
@@ -185,16 +217,24 @@ fn generate_fixtures() {
             }
         }
 
-        write_fixture("with_filter", &Fixture {
-            params: FixtureParams { tau_rise: 0.02, tau_decay: 0.4, lambda: 0.01, fs: 100.0 },
-            trace: trace_f64,
-            kernel: kernel.clone(),
-            solution: solver.get_solution(),
-            baseline: solver.get_baseline(),
-            reconvolution: solver.get_reconvolution_with_baseline(),
-            iterations: solver.iteration_count(),
-            filter_enabled: true,
-            filtered_trace: Some(filtered_trace),
-        });
+        write_fixture(
+            "with_filter",
+            &Fixture {
+                params: FixtureParams {
+                    tau_rise: 0.02,
+                    tau_decay: 0.4,
+                    lambda: 0.01,
+                    fs: 100.0,
+                },
+                trace: trace_f64,
+                kernel: kernel.clone(),
+                solution: solver.get_solution(),
+                baseline: solver.get_baseline(),
+                reconvolution: solver.get_reconvolution_with_baseline(),
+                iterations: solver.iteration_count(),
+                filter_enabled: true,
+                filtered_trace: Some(filtered_trace),
+            },
+        );
     }
 }

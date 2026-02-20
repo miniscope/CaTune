@@ -139,12 +139,7 @@ mod tests {
     fn kernel_values_non_negative() {
         let kernel = build_kernel(0.02, 0.4, 30.0);
         for (i, &v) in kernel.iter().enumerate() {
-            assert!(
-                v >= -1e-7,
-                "Kernel value at index {} is negative: {}",
-                i,
-                v
-            );
+            assert!(v >= -1e-7, "Kernel value at index {} is negative: {}", i, v);
         }
     }
 
