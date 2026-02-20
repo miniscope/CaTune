@@ -59,6 +59,7 @@ const apps = readdirSync(appsDir)
       longDescription: pkg.calab.longDescription ?? '',
       features: pkg.calab.features ?? [],
       status: pkg.calab.status ?? 'coming-soon',
+      hidden: pkg.calab.hidden ?? false,
       screenshotFile,
     };
   })
@@ -109,7 +110,10 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY ?? '';
 const authEnabled = !!(supabaseUrl && supabaseAnonKey);
 
-const cards = apps.map(renderCard).join('\n');
+const cards = apps
+  .filter((a) => !a.hidden)
+  .map(renderCard)
+  .join('\n');
 
 writeFileSync(
   resolve(out, 'index.html'),
