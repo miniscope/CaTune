@@ -271,6 +271,7 @@ writeFileSync(
     footer a { color: #9e9e9e; }
     footer a:hover { color: #616161; }
     .version { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; }
+    .privacy-notice { margin-bottom: 12px; font-size: 0.75rem; line-height: 1.4; }
 
     /* Auth menu */
     .auth-landing { position: absolute; top: 16px; right: 16px; }
@@ -340,6 +341,7 @@ ${cards}
   </div>
   <footer>
     <div class="page">
+      <p class="privacy-notice">CaLab collects anonymous usage statistics to support grant reporting. No personal data or IP addresses are stored.</p>
       ${versionHtml}<a href="https://github.com/miniscope/CaLab">GitHub</a>
     </div>
   </footer>
