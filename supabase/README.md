@@ -40,7 +40,7 @@ curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_lin
 
 # Deploy from the repo root
 cd /path/to/CaTune
-/tmp/supabase functions deploy geo-session --project-ref <your-project-ref>
+/tmp/supabase functions deploy geo-session --no-verify-jwt --project-ref <your-project-ref>
 ```
 
 On macOS with Homebrew:
@@ -48,7 +48,7 @@ On macOS with Homebrew:
 ```bash
 brew install supabase/tap/supabase
 supabase login
-supabase functions deploy geo-session --project-ref <your-project-ref>
+supabase functions deploy geo-session --no-verify-jwt --project-ref <your-project-ref>
 ```
 
 Your project ref is the subdomain in your Supabase URL (e.g., `abcdefghijk` from `https://abcdefghijk.supabase.co`).
