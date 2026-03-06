@@ -16,6 +16,7 @@ import { notifyTutorialAction } from '@calab/tutorials';
 import { isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
 import { PARAM_RANGES } from '@calab/core';
 import { ParameterSlider } from './ParameterSlider.tsx';
+import { DualRangeSlider } from './DualRangeSlider.tsx';
 import '../../styles/controls.css';
 
 export function ParameterPanel() {
@@ -43,29 +44,26 @@ export function ParameterPanel() {
   return (
     <div class="param-panel" data-tutorial="param-panel">
       <div class="param-panel__sliders">
-        <ParameterSlider
-          label="Rise Time"
-          value={tauRise}
-          setValue={clampedSetTauRise}
+        <DualRangeSlider
+          label="Time Constants"
+          lowLabel="Rise"
+          highLabel="Decay"
+          lowValue={tauRise}
+          highValue={tauDecay}
+          setLowValue={clampedSetTauRise}
+          setHighValue={clampedSetTauDecay}
           min={PARAM_RANGES.tauRise.min}
-          max={PARAM_RANGES.tauRise.max}
-          step={PARAM_RANGES.tauRise.step}
-          format={(v) => (v * 1000).toFixed(1)}
-          unit="ms"
-          data-tutorial="slider-rise"
-          trueValue={trueRise()}
-        />
-        <ParameterSlider
-          label="Decay Time"
-          value={tauDecay}
-          setValue={clampedSetTauDecay}
-          min={PARAM_RANGES.tauDecay.min}
           max={PARAM_RANGES.tauDecay.max}
-          step={PARAM_RANGES.tauDecay.step}
+          lowMin={PARAM_RANGES.tauRise.min}
+          lowMax={PARAM_RANGES.tauRise.max}
+          highMin={PARAM_RANGES.tauDecay.min}
+          highMax={PARAM_RANGES.tauDecay.max}
           format={(v) => (v * 1000).toFixed(1)}
           unit="ms"
-          data-tutorial="slider-decay"
-          trueValue={trueDecay()}
+          data-tutorial-low="slider-rise"
+          data-tutorial-high="slider-decay"
+          lowTrueValue={trueRise()}
+          highTrueValue={trueDecay()}
         />
         <ParameterSlider
           label="Sparsity"
