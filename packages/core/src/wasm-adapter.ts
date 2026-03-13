@@ -11,6 +11,7 @@ import init, {
   indeca_solve_trace,
   indeca_estimate_kernel,
   indeca_fit_biexponential,
+  indeca_fit_biexp_direct,
   indeca_compute_upsample_factor,
 } from '../../../crates/solver/pkg/calab_solver';
 export {
@@ -18,6 +19,7 @@ export {
   indeca_solve_trace,
   indeca_estimate_kernel,
   indeca_fit_biexponential,
+  indeca_fit_biexp_direct,
   indeca_compute_upsample_factor,
 };
 

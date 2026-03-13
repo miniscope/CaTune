@@ -438,6 +438,34 @@ export function indeca_estimate_kernel(traces_flat, spikes_flat, trace_lengths, 
 }
 
 /**
+ * Direct bi-exponential kernel estimation from traces and spike trains.
+ *
+ * Unlike the two-step approach (indeca_estimate_kernel + indeca_fit_biexponential),
+ * this function optimizes (tau_r, tau_d) directly against trace reconstruction
+ * error, bypassing free-form kernel estimation entirely.
+ *
+ * Returns a JsValue containing the serialized BiexpResult:
+ * { tau_rise, tau_decay, beta, residual }
+ * where residual is total trace reconstruction SSR (not kernel shape mismatch).
+ * @param {Float32Array} traces_flat
+ * @param {Float32Array} spikes_flat
+ * @param {Uint32Array} trace_lengths
+ * @param {number} fs
+ * @param {boolean} refine
+ * @returns {any}
+ */
+export function indeca_fit_biexp_direct(traces_flat, spikes_flat, trace_lengths, fs, refine) {
+    const ptr0 = passArrayF32ToWasm0(traces_flat, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF32ToWasm0(spikes_flat, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray32ToWasm0(trace_lengths, wasm.__wbindgen_export2);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.indeca_fit_biexp_direct(ptr0, len0, ptr1, len1, ptr2, len2, fs, refine);
+    return takeObject(ret);
+}
+
+/**
  * Fit a bi-exponential model to a free-form kernel.
  *
  * Returns a JsValue containing the serialized BiexpResult:

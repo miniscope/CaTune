@@ -57,6 +57,9 @@ export type CaDeconWorkerInbound =
       biexpSkip: number;
       /** Previous iteration's free kernel for warm-start. */
       warmKernel?: Float32Array;
+      /** Kernel estimation mode: 'free-kernel' runs the two-step free-kernel + biexp fit;
+       *  'direct-biexp' optimizes (tau_r, tau_d) directly against trace reconstruction. */
+      kernelMode: 'free-kernel' | 'direct-biexp';
     }
   | { type: 'cancel' };
 

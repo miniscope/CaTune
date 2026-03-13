@@ -62,9 +62,12 @@ export function KernelDisplay(): JSX.Element {
     const tauD = snap.tauDecay;
     const beta = snap.beta;
 
-    // Find the max kernel length across subsets
-    const maxLen = Math.max(...snap.subsets.map((s) => s.hFree.length));
-    if (maxLen === 0) return [[]];
+    // Find the max kernel length across subsets. In direct-biexp mode hFree
+    // is empty, so fall back to a display length derived from the fit taus.
+    let maxLen = Math.max(...snap.subsets.map((s) => s.hFree.length));
+    if (maxLen === 0) {
+      maxLen = Math.max(10, Math.ceil(5 * tauD * fs));
+    }
 
     // X-axis in ms
     const xAxis = new Array(maxLen);
@@ -72,8 +75,12 @@ export function KernelDisplay(): JSX.Element {
       xAxis[i] = (i / fs) * 1000;
     }
 
-    // Per-subset h_free arrays (peak-normalized, padded with null)
+    // Per-subset h_free arrays (peak-normalized, padded with null).
+    // When hFree is empty (direct-biexp mode), fill with null so series count matches.
     const subsetArrays: (number | null)[][] = snap.subsets.map((s) => {
+      if (s.hFree.length === 0) {
+        return new Array(maxLen).fill(null);
+      }
       const raw = s.hFree.slice();
       peakNormalize(raw);
       const arr: (number | null)[] = new Array(maxLen).fill(null);

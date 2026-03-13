@@ -30,7 +30,9 @@ export function SubsetKernelFit(props: SubsetKernelFitProps): JSX.Element {
     const tauR = props.snapshot.tauRise;
     const tauD = props.snapshot.tauDecay;
     const beta = props.snapshot.beta;
-    const len = sub.hFree.length;
+
+    // In direct-biexp mode hFree is empty; compute display length from tauD.
+    const len = sub.hFree.length > 0 ? sub.hFree.length : Math.max(10, Math.ceil(5 * tauD * fs));
 
     const xAxis = new Array(len);
     const hFree = new Array(len);
@@ -38,11 +40,11 @@ export function SubsetKernelFit(props: SubsetKernelFitProps): JSX.Element {
 
     for (let i = 0; i < len; i++) {
       xAxis[i] = (i / fs) * 1000;
-      hFree[i] = sub.hFree[i];
+      hFree[i] = sub.hFree.length > 0 ? sub.hFree[i] : null;
       const t = i / fs;
       fit[i] = beta * (Math.exp(-t / tauD) - Math.exp(-t / tauR));
     }
-    peakNormalize(hFree);
+    if (sub.hFree.length > 0) peakNormalize(hFree);
     peakNormalize(fit);
 
     return [xAxis, hFree, fit];

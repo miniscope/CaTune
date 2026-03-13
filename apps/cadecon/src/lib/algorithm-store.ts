@@ -17,6 +17,7 @@ const [hpFilterEnabled, setHpFilterEnabled] = createSignal(true);
 const [lpFilterEnabled, setLpFilterEnabled] = createSignal(false);
 const [maxIterations, setMaxIterations] = createSignal(20);
 const [convergenceTol, setConvergenceTol] = createSignal(0.01);
+const [kernelMode, setKernelMode] = createSignal<'free-kernel' | 'direct-biexp'>('free-kernel');
 
 // --- Derived ---
 
@@ -44,4 +45,6 @@ export {
   convergenceTol,
   setConvergenceTol,
   upsampleFactor,
+  kernelMode,
+  setKernelMode,
 };

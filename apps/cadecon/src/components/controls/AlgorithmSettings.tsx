@@ -19,6 +19,8 @@ import {
   setMaxIterations,
   convergenceTol,
   setConvergenceTol,
+  kernelMode,
+  setKernelMode,
 } from '../../lib/algorithm-store.ts';
 import { isRunLocked } from '../../lib/iteration-store.ts';
 
@@ -77,6 +79,14 @@ export function AlgorithmSettings(): JSX.Element {
           format={(v) => v.toFixed(3)}
           disabled={isRunLocked()}
           noSlider
+        />
+
+        <ToggleSwitch
+          label="Direct Biexp Kernel"
+          description="Optimize kernel taus directly against trace reconstruction"
+          checked={kernelMode() === 'direct-biexp'}
+          onChange={(on) => setKernelMode(on ? 'direct-biexp' : 'free-kernel')}
+          disabled={isRunLocked()}
         />
 
         <ToggleSwitch

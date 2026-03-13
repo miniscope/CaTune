@@ -4,6 +4,7 @@
 /// serde-wasm-bindgen for complex return types (InDecaResult, BiexpResult).
 use wasm_bindgen::prelude::*;
 
+use crate::biexp_direct;
 use crate::biexp_fit;
 use crate::indeca;
 use crate::kernel_est;
@@ -95,6 +96,28 @@ pub fn indeca_estimate_kernel(
 #[wasm_bindgen]
 pub fn indeca_fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usize) -> JsValue {
     let result = biexp_fit::fit_biexponential(h_free, fs, refine, skip);
+    serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
+}
+
+/// Direct bi-exponential kernel estimation from traces and spike trains.
+///
+/// Unlike the two-step approach (indeca_estimate_kernel + indeca_fit_biexponential),
+/// this function optimizes (tau_r, tau_d) directly against trace reconstruction
+/// error, bypassing free-form kernel estimation entirely.
+///
+/// Returns a JsValue containing the serialized BiexpResult:
+/// { tau_rise, tau_decay, beta, residual }
+/// where residual is total trace reconstruction SSR (not kernel shape mismatch).
+#[wasm_bindgen]
+pub fn indeca_fit_biexp_direct(
+    traces_flat: &[f32],
+    spikes_flat: &[f32],
+    trace_lengths: &[u32],
+    fs: f64,
+    refine: bool,
+) -> JsValue {
+    let lengths: Vec<usize> = trace_lengths.iter().map(|&v| v as usize).collect();
+    let result = biexp_direct::fit_biexp_direct(traces_flat, spikes_flat, &lengths, fs, refine);
     serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
 }
 

@@ -35,6 +35,7 @@ import {
   convergenceTol,
   hpFilterEnabled,
   lpFilterEnabled,
+  kernelMode,
 } from './algorithm-store.ts';
 import {
   parsedData,
@@ -187,6 +188,7 @@ function dispatchKernelJobs(
   isSwapped: boolean,
   fs: number,
   kernelLength: number,
+  kMode: 'free-kernel' | 'direct-biexp',
   prevKernels?: Float32Array[],
 ): Promise<KernelResult[]> {
   return new Promise((resolve) => {
@@ -248,6 +250,7 @@ function dispatchKernelJobs(
         smoothLambda: KERNEL_SMOOTH_LAMBDA,
         biexpSkip: BIEXP_FIT_SKIP,
         warmKernel,
+        kernelMode: kMode,
         onComplete(result: KernelResult) {
           kernelResults.push(result);
           completed++;
@@ -288,6 +291,7 @@ export async function startRun(): Promise<void> {
   const nTp = numTimepoints();
   const hpOn = hpFilterEnabled();
   const lpOn = lpFilterEnabled();
+  const kMode = kernelMode();
 
   // Kernel length: 5x tau_decay in samples (matches CaTune's computeKernel convention)
   const kernelLength = Math.max(10, Math.ceil(5.0 * tauD * fs));
@@ -484,6 +488,7 @@ export async function startRun(): Promise<void> {
       isSwap,
       fs,
       kernelLength,
+      kMode,
       prevKernels,
     );
 
@@ -493,11 +498,10 @@ export async function startRun(): Promise<void> {
       break;
     }
 
-    // Store kernels for warm-starting next iteration.
-    // dispatchKernelJobs skips subsets with no valid traces, so kernelResults
-    // may have fewer entries than rects. Map them back by replaying the skip logic.
-    prevKernels = new Array(rects.length);
-    {
+    // Store kernels for warm-starting next iteration (free-kernel mode only;
+    // direct-biexp returns empty hFree so there's nothing to warm-start).
+    if (kMode === 'free-kernel') {
+      prevKernels = new Array(rects.length);
       let ki = 0;
       for (let si = 0; si < rects.length; si++) {
         if (hasValidTraceResults(traceResults[si]) && ki < kernelResults.length) {

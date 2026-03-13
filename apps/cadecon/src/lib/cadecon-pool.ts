@@ -38,6 +38,7 @@ interface KernelJobFields {
   smoothLambda: number;
   biexpSkip: number;
   warmKernel?: Float32Array;
+  kernelMode: 'free-kernel' | 'direct-biexp';
   onComplete(result: KernelResult): void;
 }
 
@@ -131,6 +132,7 @@ const caDeconRouter: MessageRouter<CaDeconPoolJob, CaDeconWorkerOutbound> = {
           smoothLambda: job.smoothLambda,
           biexpSkip: job.biexpSkip,
           warmKernel: warmCopy,
+          kernelMode: job.kernelMode,
         },
         transfers,
       ];

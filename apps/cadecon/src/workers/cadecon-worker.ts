@@ -6,6 +6,7 @@ import {
   indeca_solve_trace,
   indeca_estimate_kernel,
   indeca_fit_biexponential,
+  indeca_fit_biexp_direct,
 } from '@calab/core';
 import type { CaDeconWorkerInbound, CaDeconWorkerOutbound } from './cadecon-types.ts';
 
@@ -83,49 +84,83 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
   try {
     cancelled = false;
 
-    // Step 1: Free-form kernel estimation
-    const hFree = indeca_estimate_kernel(
-      req.tracesFlat,
-      req.spikesFlat,
-      req.traceLengths,
-      req.alphas,
-      req.baselines,
-      req.kernelLength,
-      req.maxIters,
-      req.tol,
-      req.warmKernel ?? EMPTY_F32,
-      req.smoothLambda,
-    );
+    if (req.kernelMode === 'direct-biexp') {
+      // Direct mode: optimize (tau_r, tau_d) against trace reconstruction.
+      // No free-form kernel is estimated — hFree is empty.
+      const biexpJs = indeca_fit_biexp_direct(
+        req.tracesFlat,
+        req.spikesFlat,
+        req.traceLengths,
+        req.fs,
+        req.refine,
+      ) as {
+        tau_rise: number;
+        tau_decay: number;
+        beta: number;
+        residual: number;
+      };
 
-    if (cancelled) {
-      post({ type: 'cancelled', jobId: req.jobId });
-      return;
-    }
-
-    const hFreeArr = new Float32Array(hFree);
-
-    // Step 2: Bi-exponential fit
-    const biexpJs = indeca_fit_biexponential(hFreeArr, req.fs, req.refine, req.biexpSkip) as {
-      tau_rise: number;
-      tau_decay: number;
-      beta: number;
-      residual: number;
-    };
-
-    post(
-      {
-        type: 'kernel-complete',
-        jobId: req.jobId,
-        result: {
-          hFree: hFreeArr,
-          tauRise: biexpJs.tau_rise,
-          tauDecay: biexpJs.tau_decay,
-          beta: biexpJs.beta,
-          residual: biexpJs.residual,
+      post(
+        {
+          type: 'kernel-complete',
+          jobId: req.jobId,
+          result: {
+            hFree: EMPTY_F32,
+            tauRise: biexpJs.tau_rise,
+            tauDecay: biexpJs.tau_decay,
+            beta: biexpJs.beta,
+            residual: biexpJs.residual,
+          },
         },
-      },
-      [hFreeArr.buffer],
-    );
+        [],
+      );
+    } else {
+      // Free-kernel mode: two-step approach (estimate free kernel + biexp fit)
+
+      // Step 1: Free-form kernel estimation
+      const hFree = indeca_estimate_kernel(
+        req.tracesFlat,
+        req.spikesFlat,
+        req.traceLengths,
+        req.alphas,
+        req.baselines,
+        req.kernelLength,
+        req.maxIters,
+        req.tol,
+        req.warmKernel ?? EMPTY_F32,
+        req.smoothLambda,
+      );
+
+      if (cancelled) {
+        post({ type: 'cancelled', jobId: req.jobId });
+        return;
+      }
+
+      const hFreeArr = new Float32Array(hFree);
+
+      // Step 2: Bi-exponential fit
+      const biexpJs = indeca_fit_biexponential(hFreeArr, req.fs, req.refine, req.biexpSkip) as {
+        tau_rise: number;
+        tau_decay: number;
+        beta: number;
+        residual: number;
+      };
+
+      post(
+        {
+          type: 'kernel-complete',
+          jobId: req.jobId,
+          result: {
+            hFree: hFreeArr,
+            tauRise: biexpJs.tau_rise,
+            tauDecay: biexpJs.tau_decay,
+            beta: biexpJs.beta,
+            residual: biexpJs.residual,
+          },
+        },
+        [hFreeArr.buffer],
+      );
+    }
   } catch (err) {
     post({ type: 'error', jobId: req.jobId, message: String(err) });
   }

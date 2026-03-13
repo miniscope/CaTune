@@ -1,6 +1,8 @@
 mod banded;
 pub(crate) mod baseline;
 #[allow(dead_code)]
+pub(crate) mod biexp_direct;
+#[allow(dead_code)]
 pub(crate) mod biexp_fit;
 mod fft;
 mod filter;
