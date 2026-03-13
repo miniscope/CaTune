@@ -105,7 +105,7 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
     const hFreeArr = new Float32Array(hFree);
 
     // Step 2: Bi-exponential fit
-    const biexpJs = indeca_fit_biexponential(hFreeArr, req.fs, req.refine) as {
+    const biexpJs = indeca_fit_biexponential(hFreeArr, req.fs, req.refine, req.biexpSkip) as {
       tau_rise: number;
       tau_decay: number;
       beta: number;

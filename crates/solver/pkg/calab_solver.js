@@ -445,12 +445,13 @@ export function indeca_estimate_kernel(traces_flat, spikes_flat, trace_lengths, 
  * @param {Float32Array} h_free
  * @param {number} fs
  * @param {boolean} refine
+ * @param {number} skip
  * @returns {any}
  */
-export function indeca_fit_biexponential(h_free, fs, refine) {
+export function indeca_fit_biexponential(h_free, fs, refine, skip) {
     const ptr0 = passArrayF32ToWasm0(h_free, wasm.__wbindgen_export2);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.indeca_fit_biexponential(ptr0, len0, fs, refine);
+    const ret = wasm.indeca_fit_biexponential(ptr0, len0, fs, refine, skip);
     return takeObject(ret);
 }
 
