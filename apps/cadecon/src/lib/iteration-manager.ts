@@ -58,6 +58,8 @@ const KERNEL_FISTA_MAX_ITERS = 200;
 const KERNEL_FISTA_TOL = 1e-4;
 /** TV-L1 smoothness penalty for free-form kernel estimation. */
 const KERNEL_SMOOTH_LAMBDA = 0;
+/** Number of early free-kernel samples to skip in bi-exponential fitting. */
+const BIEXP_FIT_SKIP = 0;
 
 let pool: WorkerPool<CaDeconPoolJob> | null = null;
 let nextJobId = 0;
@@ -244,6 +246,7 @@ function dispatchKernelJobs(
         tol: KERNEL_FISTA_TOL,
         refine: true,
         smoothLambda: KERNEL_SMOOTH_LAMBDA,
+        biexpSkip: BIEXP_FIT_SKIP,
         warmKernel,
         onComplete(result: KernelResult) {
           kernelResults.push(result);

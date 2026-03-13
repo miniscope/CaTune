@@ -53,6 +53,8 @@ export type CaDeconWorkerInbound =
       refine: boolean;
       /** TV-L1 smoothness penalty weight for kernel estimation. */
       smoothLambda: number;
+      /** Number of early free-kernel samples to skip in bi-exponential fitting. */
+      biexpSkip: number;
       /** Previous iteration's free kernel for warm-start. */
       warmKernel?: Float32Array;
     }

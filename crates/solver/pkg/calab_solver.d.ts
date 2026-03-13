@@ -204,7 +204,7 @@ export function indeca_estimate_kernel(traces_flat: Float32Array, spikes_flat: F
  * Returns a JsValue containing the serialized BiexpResult:
  * { tau_rise, tau_decay, beta, residual }
  */
-export function indeca_fit_biexponential(h_free: Float32Array, fs: number, refine: boolean): any;
+export function indeca_fit_biexponential(h_free: Float32Array, fs: number, refine: boolean, skip: number): any;
 
 /**
  * Solve a single trace using the InDeCa pipeline.
@@ -224,7 +224,7 @@ export interface InitOutput {
     readonly __wbg_solver_free: (a: number, b: number) => void;
     readonly indeca_compute_upsample_factor: (a: number, b: number) => number;
     readonly indeca_estimate_kernel: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => void;
-    readonly indeca_fit_biexponential: (a: number, b: number, c: number, d: number) => number;
+    readonly indeca_fit_biexponential: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly indeca_solve_trace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => number;
     readonly solver_apply_filter: (a: number) => number;
     readonly solver_converged: (a: number) => number;

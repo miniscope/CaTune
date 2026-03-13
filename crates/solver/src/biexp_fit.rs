@@ -22,8 +22,9 @@ pub struct BiexpResult {
 /// - `h_free`: the free-form kernel to fit (from estimate_free_kernel)
 /// - `fs`: sampling rate used for the kernel
 /// - `refine`: whether to apply golden-section refinement after grid search
-pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool) -> BiexpResult {
+pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usize) -> BiexpResult {
     let n = h_free.len();
+    let skip = skip.min(n.saturating_sub(1));
     if n == 0 {
         return BiexpResult {
             tau_rise: 0.02,
@@ -70,7 +71,7 @@ pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool) -> BiexpResult {
                 continue;
             }
 
-            let (beta, residual) = eval_biexp(h_free, tau_r, tau_d, dt);
+            let (beta, residual) = eval_biexp(h_free, tau_r, tau_d, dt, skip);
             if residual < best.residual {
                 best = BiexpResult {
                     tau_rise: tau_r,
@@ -84,8 +85,8 @@ pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool) -> BiexpResult {
 
     // Phase 2: Optional golden-section refinement
     if refine {
-        let (refined_tr, refined_td) = golden_section_refine(h_free, &best, dt, 20);
-        let (beta, residual) = eval_biexp(h_free, refined_tr, refined_td, dt);
+        let (refined_tr, refined_td) = golden_section_refine(h_free, &best, dt, 20, skip);
+        let (beta, residual) = eval_biexp(h_free, refined_tr, refined_td, dt, skip);
         if residual < best.residual {
             best = BiexpResult {
                 tau_rise: refined_tr,
@@ -106,14 +107,14 @@ pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool) -> BiexpResult {
 ///
 /// Uses the identity ||h - beta*t||^2 = ||h||^2 - <h,t>^2 / ||t||^2
 /// to compute both beta and residual in a single pass over the data.
-fn eval_biexp(h_free: &[f32], tau_r: f64, tau_d: f64, dt: f64) -> (f64, f64) {
+fn eval_biexp(h_free: &[f32], tau_r: f64, tau_d: f64, dt: f64, skip: usize) -> (f64, f64) {
     let n = h_free.len();
 
     let mut dot_ht = 0.0_f64; // <h_free, template>
     let mut dot_tt = 0.0_f64; // <template, template>
     let mut dot_hh = 0.0_f64; // <h_free, h_free>
 
-    for i in 0..n {
+    for i in skip..n {
         let t = i as f64 * dt;
         let template = (-t / tau_d).exp() - (-t / tau_r).exp();
         let hi = h_free[i] as f64;
@@ -141,6 +142,7 @@ fn golden_section_refine(
     best: &BiexpResult,
     dt: f64,
     max_steps: usize,
+    skip: usize,
 ) -> (f64, f64) {
     let phi = (5.0_f64.sqrt() - 1.0) / 2.0; // golden ratio conjugate
 
@@ -161,8 +163,8 @@ fn golden_section_refine(
             for _ in 0..10 {
                 let x1 = hi - phi * (hi - lo);
                 let x2 = lo + phi * (hi - lo);
-                let (_, r1) = eval_biexp(h_free, x1, tau_d, dt);
-                let (_, r2) = eval_biexp(h_free, x2, tau_d, dt);
+                let (_, r1) = eval_biexp(h_free, x1, tau_d, dt, skip);
+                let (_, r2) = eval_biexp(h_free, x2, tau_d, dt, skip);
                 if r1 < r2 {
                     hi = x2;
                 } else {
@@ -181,8 +183,8 @@ fn golden_section_refine(
             for _ in 0..10 {
                 let x1 = hi - phi * (hi - lo);
                 let x2 = lo + phi * (hi - lo);
-                let (_, r1) = eval_biexp(h_free, tau_r, x1, dt);
-                let (_, r2) = eval_biexp(h_free, tau_r, x2, dt);
+                let (_, r1) = eval_biexp(h_free, tau_r, x1, dt, skip);
+                let (_, r2) = eval_biexp(h_free, tau_r, x2, dt, skip);
                 if r1 < r2 {
                     hi = x2;
                 } else {
@@ -219,7 +221,7 @@ mod tests {
         let n = 60; // 2 seconds
         let h = make_biexp(tau_r_true, tau_d_true, 2.0, fs, n);
 
-        let result = fit_biexponential(&h, fs, true);
+        let result = fit_biexponential(&h, fs, true, 0);
 
         let tr_err = (result.tau_rise - tau_r_true).abs() / tau_r_true;
         let td_err = (result.tau_decay - tau_d_true).abs() / tau_d_true;
@@ -243,7 +245,7 @@ mod tests {
     #[test]
     fn tau_d_greater_than_tau_r() {
         let h = make_biexp(0.05, 0.8, 1.5, 30.0, 60);
-        let result = fit_biexponential(&h, 30.0, true);
+        let result = fit_biexponential(&h, 30.0, true, 0);
 
         assert!(
             result.tau_decay > result.tau_rise,
@@ -257,8 +259,8 @@ mod tests {
     fn refinement_improves_fit() {
         let h = make_biexp(0.04, 0.6, 2.0, 30.0, 60);
 
-        let coarse = fit_biexponential(&h, 30.0, false);
-        let refined = fit_biexponential(&h, 30.0, true);
+        let coarse = fit_biexponential(&h, 30.0, false, 0);
+        let refined = fit_biexponential(&h, 30.0, true, 0);
 
         assert!(
             refined.residual <= coarse.residual + 1e-10,
@@ -270,14 +272,14 @@ mod tests {
 
     #[test]
     fn empty_kernel() {
-        let result = fit_biexponential(&[], 30.0, true);
+        let result = fit_biexponential(&[], 30.0, true, 0);
         assert_eq!(result.residual, f64::INFINITY);
     }
 
     #[test]
     fn positive_beta() {
         let h = make_biexp(0.02, 0.4, 3.0, 30.0, 40);
-        let result = fit_biexponential(&h, 30.0, false);
+        let result = fit_biexponential(&h, 30.0, false, 0);
 
         assert!(
             result.beta > 0.0,
@@ -290,13 +292,43 @@ mod tests {
     fn various_parameter_ranges() {
         // Test with fast dynamics
         let h_fast = make_biexp(0.01, 0.1, 1.0, 100.0, 50);
-        let r = fit_biexponential(&h_fast, 100.0, true);
+        let r = fit_biexponential(&h_fast, 100.0, true, 0);
         assert!(r.tau_decay > r.tau_rise);
         assert!(r.residual < 1.0); // should fit well
 
         // Test with slow dynamics
         let h_slow = make_biexp(0.1, 2.0, 1.0, 10.0, 50);
-        let r = fit_biexponential(&h_slow, 10.0, true);
+        let r = fit_biexponential(&h_slow, 10.0, true, 0);
         assert!(r.tau_decay > r.tau_rise);
+    }
+
+    #[test]
+    fn skip_ignores_early_samples() {
+        let tau_r_true = 0.08;
+        let tau_d_true = 0.5;
+        let fs = 30.0;
+        let n = 60;
+        let mut h = make_biexp(tau_r_true, tau_d_true, 2.0, fs, n);
+
+        // Corrupt first 3 samples with high-frequency noise
+        h[0] = 10.0;
+        h[1] = -5.0;
+        h[2] = 8.0;
+
+        // Without skip: noise biases the fit
+        let no_skip = fit_biexponential(&h, fs, true, 0);
+
+        // With skip=3: noise is excluded, fit should be closer to truth
+        let with_skip = fit_biexponential(&h, fs, true, 3);
+
+        let err_no_skip = (no_skip.tau_rise - tau_r_true).abs();
+        let err_with_skip = (with_skip.tau_rise - tau_r_true).abs();
+
+        assert!(
+            err_with_skip < err_no_skip,
+            "skip=3 should improve tau_rise fit: err_skip={:.4} vs err_noskip={:.4}",
+            err_with_skip,
+            err_no_skip
+        );
     }
 }

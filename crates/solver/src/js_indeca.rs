@@ -93,8 +93,8 @@ pub fn indeca_estimate_kernel(
 /// Returns a JsValue containing the serialized BiexpResult:
 /// { tau_rise, tau_decay, beta, residual }
 #[wasm_bindgen]
-pub fn indeca_fit_biexponential(h_free: &[f32], fs: f64, refine: bool) -> JsValue {
-    let result = biexp_fit::fit_biexponential(h_free, fs, refine);
+pub fn indeca_fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usize) -> JsValue {
+    let result = biexp_fit::fit_biexponential(h_free, fs, refine, skip);
     serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
 }
 
