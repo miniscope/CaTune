@@ -60,8 +60,9 @@ pub fn upsample_counts_to_binary(counts: &[f32], factor: usize) -> Vec<f32> {
     let mut out = vec![0.0_f32; n * factor];
     for i in 0..n {
         let c = (counts[i].round() as usize).min(factor);
+        let start = (factor - c) / 2;
         for j in 0..c {
-            out[i * factor + j] = 1.0;
+            out[i * factor + start + j] = 1.0;
         }
     }
     out
@@ -207,15 +208,22 @@ mod tests {
         for &v in &bin {
             assert!(v == 0.0 || v == 1.0, "Non-binary value: {}", v);
         }
-        // Bin 0: 2 spikes → positions 0,1
-        assert_eq!(bin[0], 1.0);
+        // Bin 0: 2 spikes, start=(4-2)/2=1 → positions 1,2
+        assert_eq!(bin[0], 0.0);
         assert_eq!(bin[1], 1.0);
-        assert_eq!(bin[2], 0.0);
+        assert_eq!(bin[2], 1.0);
+        assert_eq!(bin[3], 0.0);
         // Bin 1: 0 spikes
         assert_eq!(bin[4], 0.0);
-        // Bin 2: 1 spike → position 8
-        assert_eq!(bin[8], 1.0);
-        assert_eq!(bin[9], 0.0);
+        // Bin 2: 1 spike, start=(4-1)/2=1 → position 9
+        assert_eq!(bin[8], 0.0);
+        assert_eq!(bin[9], 1.0);
+        assert_eq!(bin[10], 0.0);
+        // Bin 3: 3 spikes, start=(4-3)/2=0 → positions 12,13,14
+        assert_eq!(bin[12], 1.0);
+        assert_eq!(bin[13], 1.0);
+        assert_eq!(bin[14], 1.0);
+        assert_eq!(bin[15], 0.0);
     }
 
     #[test]
