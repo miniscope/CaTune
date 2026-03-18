@@ -205,7 +205,6 @@ pub fn solve_trace(
     hp_enabled: bool,
     lp_enabled: bool,
     lambda: f64,
-    spike_shift: f64,
 ) -> InDecaResult {
     let fs_up = fs * upsample_factor as f64;
     let upsampled = upsample_trace(trace, upsample_factor);
@@ -254,20 +253,9 @@ pub fn solve_trace(
     let mut alpha_est = estimate_alpha_interior(&working_trace, pad);
 
     // Convert original-rate spike counts to upsampled-rate binary for warm-start.
-    // When spike_shift is active, the previous s_counts were shifted left by
-    // half the upsample factor. Shift the warm-start right by the same amount
-    // to undo the shift and restore original spike timing for FISTA.
-    let shift_bins = ((upsample_factor as f64 / 2.0) * spike_shift).round() as usize;
-    let warm_binary = warm_counts.map(|counts| {
-        let mut binary = upsample_counts_to_binary(counts, upsample_factor);
-        if shift_bins > 0 {
-            binary.rotate_right(shift_bins);
-            for v in binary[..shift_bins].iter_mut() {
-                *v = 0.0;
-            }
-        }
-        binary
-    });
+    // upsample_counts_to_binary centers spikes on original sample positions,
+    // matching the centered bins used by downsample_binary.
+    let warm_binary = warm_counts.map(|counts| upsample_counts_to_binary(counts, upsample_factor));
 
     let banded = BandedAR2::new(tau_r, tau_d, fs_up);
 
@@ -383,19 +371,8 @@ pub fn solve_trace(
             (vec![0.0; wt_len], 0.0, 0.0, 0.0, 0.0, 0, false)
         });
 
-    // Optionally shift spikes left by half the upsample factor before
-    // downsampling, compensating for the half-bin offset between upsampled
-    // spike positions and original-rate bin centers.
-    let s_to_downsample = if shift_bins > 0 && s_binary.len() > shift_bins {
-        let mut shifted = vec![0.0_f32; s_binary.len()];
-        shifted[..s_binary.len() - shift_bins].copy_from_slice(&s_binary[shift_bins..]);
-        shifted
-    } else {
-        s_binary
-    };
-
-    // Downsample binary spike train to original rate
-    let s_counts = downsample_binary(&s_to_downsample, upsample_factor);
+    // Downsample binary spike train to original rate using centered bins
+    let s_counts = downsample_binary(&s_binary, upsample_factor);
 
     // Downsample filtered trace to original rate directly from working_trace
     // (working_trace is not modified after baseline subtraction).
@@ -435,7 +412,7 @@ mod tests {
     #[test]
     fn outputs_in_range() {
         let trace = make_trace(0.02, 0.4, 30.0, 300, &[20, 80, 150, 220]);
-        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 1, 500, 1e-4, None, false, false, 0.0, 0.0);
+        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 1, 500, 1e-4, None, false, false, 0.0);
 
         // Spike counts should be non-negative
         for (i, &v) in result.s_counts.iter().enumerate() {
@@ -461,7 +438,7 @@ mod tests {
                 }
             }
         }
-        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 1, 1000, 1e-4, None, false, false, 0.0, 0.0);
+        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 1, 1000, 1e-4, None, false, false, 0.0);
 
         // Check that spikes are detected near the true positions
         let mut detected = 0;
@@ -514,7 +491,7 @@ mod tests {
     #[test]
     fn upsampled_output_length() {
         let trace = make_trace(0.02, 0.4, 30.0, 100, &[20, 50]);
-        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 10, 200, 1e-3, None, false, false, 0.0, 0.0);
+        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 10, 200, 1e-3, None, false, false, 0.0);
 
         // Output should be same length as input regardless of upsample factor
         assert_eq!(
@@ -527,7 +504,7 @@ mod tests {
     #[test]
     fn zero_trace() {
         let trace = vec![0.0_f32; 100];
-        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 1, 100, 1e-4, None, false, false, 0.0, 0.0);
+        let result = solve_trace(&trace, 0.02, 0.4, 30.0, 1, 100, 1e-4, None, false, false, 0.0);
         let total_spikes: f32 = result.s_counts.iter().sum();
         assert!(
             total_spikes < 1e-6,
@@ -561,7 +538,7 @@ mod tests {
             }
         }
 
-        let result = solve_trace(&trace, tau_r, tau_d, fs, 10, 500, 1e-4, None, false, false, 0.0, 0.0);
+        let result = solve_trace(&trace, tau_r, tau_d, fs, 10, 500, 1e-4, None, false, false, 0.0);
 
         let total_counts: f32 = result.s_counts.iter().sum();
 
@@ -625,7 +602,7 @@ mod tests {
         let subset_end = 400;
         let subset = &full_trace[subset_start..subset_end];
 
-        let result = solve_trace(subset, tau_r, tau_d, fs, 1, 1000, 1e-4, None, false, false, 0.0, 0.0);
+        let result = solve_trace(subset, tau_r, tau_d, fs, 1, 1000, 1e-4, None, false, false, 0.0);
         let total_spikes: f32 = result.s_counts.iter().sum();
 
         // Should detect interior spikes, not just the edge artifact
@@ -661,7 +638,7 @@ mod tests {
             }
         }
 
-        let result = solve_trace(&trace, tau_r, tau_d, fs, 1, 1000, 1e-4, None, false, false, 0.0, 0.0);
+        let result = solve_trace(&trace, tau_r, tau_d, fs, 1, 1000, 1e-4, None, false, false, 0.0);
         let total_spikes: f32 = result.s_counts.iter().sum();
 
         assert!(

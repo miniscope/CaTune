@@ -37,8 +37,6 @@ export type CaDeconWorkerInbound =
       lpEnabled: boolean;
       /** L1 sparsity penalty on spike solution. */
       lambda: number;
-      /** Fraction of half-bin spike shift (0.0 = none, 1.0 = full half-bin). */
-      spikeShift: number;
       /** Previous iteration's s_counts at original rate for warm-start. */
       warmCounts?: Float32Array;
     }

@@ -36,7 +36,6 @@ function handleTraceJob(req: Extract<CaDeconWorkerInbound, { type: 'trace-job' }
       req.lpEnabled,
       req.warmCounts ?? EMPTY_F32,
       req.lambda,
-      req.spikeShift,
     ) as {
       s_counts: number[];
       filtered_trace: number[] | null;
