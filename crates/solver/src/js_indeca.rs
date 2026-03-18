@@ -29,6 +29,7 @@ pub fn indeca_solve_trace(
     lp_enabled: bool,
     warm_counts: &[f32],
     lambda: f64,
+    spike_shift: f64,
 ) -> JsValue {
     let warm = if warm_counts.is_empty() {
         None
@@ -47,6 +48,7 @@ pub fn indeca_solve_trace(
         hp_enabled,
         lp_enabled,
         lambda,
+        spike_shift,
     );
     serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
 }
