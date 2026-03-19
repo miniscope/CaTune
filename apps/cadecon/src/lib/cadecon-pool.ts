@@ -4,7 +4,12 @@ import {
   type MessageRouter,
   type WorkerPool,
 } from '@calab/compute';
-import type { CaDeconWorkerOutbound, TraceResult, KernelResult } from '../workers/cadecon-types.ts';
+import type {
+  CaDeconWorkerOutbound,
+  TraceResult,
+  KernelResult,
+  SeedTraceResult,
+} from '../workers/cadecon-types.ts';
 
 // --- Pool Job Types ---
 
@@ -42,7 +47,14 @@ interface KernelJobFields {
   onComplete(result: KernelResult): void;
 }
 
-export type CaDeconPoolJob = BaseJob & (TraceJobFields | KernelJobFields);
+interface SeedTraceJobFields {
+  kind: 'seed-trace';
+  trace: Float32Array;
+  fs: number;
+  onComplete(result: SeedTraceResult): void;
+}
+
+export type CaDeconPoolJob = BaseJob & (TraceJobFields | KernelJobFields | SeedTraceJobFields);
 
 // --- Message Router ---
 
@@ -66,6 +78,10 @@ const caDeconRouter: MessageRouter<CaDeconPoolJob, CaDeconWorkerOutbound> = {
         finish();
         if (job.kind === 'kernel') job.onComplete(msg.result);
         break;
+      case 'seed-trace-complete':
+        finish();
+        if (job.kind === 'seed-trace') job.onComplete(msg.result);
+        break;
       case 'cancelled':
         finish();
         job.onCancelled();
@@ -78,7 +94,13 @@ const caDeconRouter: MessageRouter<CaDeconPoolJob, CaDeconWorkerOutbound> = {
   },
 
   buildDispatch(job) {
-    if (job.kind === 'trace') {
+    if (job.kind === 'seed-trace') {
+      const traceCopy = new Float32Array(job.trace);
+      return [
+        { type: 'seed-trace-job', jobId: job.jobId, trace: traceCopy, fs: job.fs },
+        [traceCopy.buffer],
+      ];
+    } else if (job.kind === 'trace') {
       const traceCopy = new Float32Array(job.trace);
       const warmCopy = job.warmCounts ? new Float32Array(job.warmCounts) : undefined;
       const transfers: ArrayBuffer[] = [traceCopy.buffer];

@@ -9,7 +9,7 @@
 
 import type { WorkerPool } from '@calab/compute';
 import { createCaDeconWorkerPool, type CaDeconPoolJob } from './cadecon-pool.ts';
-import type { TraceResult, KernelResult } from '../workers/cadecon-types.ts';
+import type { TraceResult, KernelResult, SeedTraceResult } from '../workers/cadecon-types.ts';
 import {
   runState,
   setRunState,
@@ -270,6 +270,78 @@ function dispatchKernelJobs(
   });
 }
 
+// --- Seed trace dispatch (parallel, Rust WASM via worker pool) ---
+
+/**
+ * Dispatch seed-trace jobs for all cells in all subsets.
+ * Each worker runs Rust peak detection (find_seed_spikes) — no kernel needed.
+ * Returns the same shape as dispatchTraceJobs so it feeds directly into dispatchKernelJobs.
+ */
+function dispatchSeedTraceJobs(
+  rects: SubsetRectangle[],
+  data: { data: ArrayLike<number>; shape: number[] },
+  isSwapped: boolean,
+  fs: number,
+): Promise<Array<Map<number, TraceResult>>> {
+  return new Promise((resolve) => {
+    const jobs: { cell: number; rect: SubsetRectangle; subsetIdx: number }[] = [];
+    for (let si = 0; si < rects.length; si++) {
+      const rect = rects[si];
+      for (let c = rect.cellStart; c < rect.cellEnd; c++) {
+        jobs.push({ cell: c, rect, subsetIdx: si });
+      }
+    }
+
+    setTotalSubsetTraceJobs(jobs.length);
+    setCompletedSubsetTraceJobs(0);
+
+    if (jobs.length === 0) {
+      resolve(rects.map(() => new Map()));
+      return;
+    }
+
+    const results: Array<Map<number, TraceResult>> = rects.map(() => new Map());
+    let completed = 0;
+
+    for (const { cell, rect, subsetIdx } of jobs) {
+      const trace = extractCellTrace(cell, rect.tStart, rect.tEnd, data, isSwapped);
+      const jobId = nextJobId++;
+
+      pool!.dispatch({
+        jobId,
+        kind: 'seed-trace',
+        trace,
+        fs,
+        onComplete(result: SeedTraceResult) {
+          // Wrap SeedTraceResult into a TraceResult so it feeds into dispatchKernelJobs
+          results[subsetIdx].set(cell, {
+            sCounts: result.sCounts,
+            alpha: result.alpha,
+            baseline: result.baseline,
+            threshold: 0,
+            pve: 0,
+            iterations: 0,
+            converged: true,
+          });
+          completed++;
+          setCompletedSubsetTraceJobs(completed);
+          if (completed === jobs.length) resolve(results);
+        },
+        onCancelled() {
+          completed++;
+          setCompletedSubsetTraceJobs(completed);
+          if (completed === jobs.length) resolve(results);
+        },
+        onError() {
+          completed++;
+          setCompletedSubsetTraceJobs(completed);
+          if (completed === jobs.length) resolve(results);
+        },
+      });
+    }
+  });
+}
+
 // --- Main Loop ---
 
 export async function startRun(): Promise<void> {
@@ -292,13 +364,48 @@ export async function startRun(): Promise<void> {
   const lpOn = lpFilterEnabled();
   const sparsityLambda = 0.0;
 
-  // Kernel length: 5x tau_decay in samples (matches CaTune's computeKernel convention)
-  const kernelLength = Math.max(10, Math.ceil(5.0 * tauD * fs));
-
   // Create pool
   pool = createCaDeconWorkerPool();
   setRunState('running');
   setCurrentIteration(0);
+
+  // Seed phase: detect peaks in raw traces → kernel estimation → bootstrap taus.
+  // Uses the same subset rectangles and dispatchKernelJobs as the iterative loop,
+  // but replaces FISTA trace inference with Rust peak detection (no kernel needed).
+  setRunPhase('inference');
+  const seedTraceResults = await dispatchSeedTraceJobs(rects, data, isSwap, fs);
+
+  // Use a generous kernel length for the seed phase (~1.5s) since tauD is unknown
+  const seedKernelLength = Math.max(10, Math.min(200, Math.ceil(1.5 * fs)));
+
+  setRunPhase('kernel-update');
+  const seedKernelResults = await dispatchKernelJobs(
+    rects,
+    seedTraceResults,
+    data,
+    isSwap,
+    fs,
+    seedKernelLength,
+  );
+
+  if (seedKernelResults.length > 0) {
+    tauR = median(seedKernelResults.map((r) => r.tauRise));
+    tauD = median(seedKernelResults.map((r) => r.tauDecay));
+    setCurrentTauRise(tauR);
+    setCurrentTauDecay(tauD);
+    console.log(
+      `[CaDecon] Auto-init kernel: τ_rise=${(tauR * 1000).toFixed(1)}ms, τ_decay=${(tauD * 1000).toFixed(1)}ms`,
+    );
+  }
+
+  if (runState() === 'stopping') {
+    setRunPhase('idle');
+    setRunState('complete');
+    return;
+  }
+
+  // Kernel length: 5x tau_decay in samples (matches CaTune's computeKernel convention)
+  let kernelLength = Math.max(10, Math.ceil(5.0 * tauD * fs));
 
   // Warm-start state carried between iterations
   let prevTraceCounts: Map<number, Float32Array> | undefined;

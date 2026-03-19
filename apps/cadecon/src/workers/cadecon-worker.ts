@@ -6,6 +6,7 @@ import {
   indeca_solve_trace,
   indeca_estimate_kernel,
   indeca_fit_biexponential,
+  seed_trace,
 } from '@calab/core';
 import type { CaDeconWorkerInbound, CaDeconWorkerOutbound } from './cadecon-types.ts';
 
@@ -132,6 +133,35 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
   }
 }
 
+function handleSeedTraceJob(req: Extract<CaDeconWorkerInbound, { type: 'seed-trace-job' }>): void {
+  try {
+    cancelled = false;
+
+    const jsResult = seed_trace(req.trace, req.fs) as {
+      s_counts: number[];
+      alpha: number;
+      baseline: number;
+    };
+
+    if (cancelled) {
+      post({ type: 'cancelled', jobId: req.jobId });
+      return;
+    }
+
+    const sCounts = new Float32Array(jsResult.s_counts);
+    post(
+      {
+        type: 'seed-trace-complete',
+        jobId: req.jobId,
+        result: { sCounts, alpha: jsResult.alpha, baseline: jsResult.baseline },
+      },
+      [sCounts.buffer],
+    );
+  } catch (err) {
+    post({ type: 'error', jobId: req.jobId, message: String(err) });
+  }
+}
+
 onmessage = (e: MessageEvent<CaDeconWorkerInbound>) => {
   const msg = e.data;
   switch (msg.type) {
@@ -143,6 +173,9 @@ onmessage = (e: MessageEvent<CaDeconWorkerInbound>) => {
       break;
     case 'kernel-job':
       handleKernelJob(msg);
+      break;
+    case 'seed-trace-job':
+      handleSeedTraceJob(msg);
       break;
   }
 };

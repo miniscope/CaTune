@@ -12,6 +12,13 @@ export interface TraceResult {
   converged: boolean;
 }
 
+/** Results from peak-seeded spike detection on a single trace. */
+export interface SeedTraceResult {
+  sCounts: Float32Array;
+  alpha: number;
+  baseline: number;
+}
+
 /** Results from kernel estimation + bi-exponential fitting. */
 export interface KernelResult {
   hFree: Float32Array;
@@ -60,6 +67,12 @@ export type CaDeconWorkerInbound =
       /** Previous iteration's free kernel for warm-start. */
       warmKernel?: Float32Array;
     }
+  | {
+      type: 'seed-trace-job';
+      jobId: number;
+      trace: Float32Array;
+      fs: number;
+    }
   | { type: 'cancel' };
 
 /** Messages sent FROM a CaDecon worker. */
@@ -67,5 +80,6 @@ export type CaDeconWorkerOutbound =
   | { type: 'ready' }
   | { type: 'trace-complete'; jobId: number; result: TraceResult }
   | { type: 'kernel-complete'; jobId: number; result: KernelResult }
+  | { type: 'seed-trace-complete'; jobId: number; result: SeedTraceResult }
   | { type: 'cancelled'; jobId: number }
   | { type: 'error'; jobId: number; message: string };
