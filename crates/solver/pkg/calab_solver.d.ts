@@ -217,6 +217,25 @@ export function indeca_fit_biexponential(h_free: Float32Array, fs: number, refin
  */
 export function indeca_solve_trace(trace: Float32Array, tau_r: number, tau_d: number, fs: number, upsample_factor: number, max_iters: number, tol: number, hp_enabled: boolean, lp_enabled: boolean, warm_counts: Float32Array, lambda: number): any;
 
+/**
+ * Auto-estimate kernel from raw traces via peak-seeded free kernel estimation.
+ *
+ * Pools prominent peaks from all traces, walks back to onset, builds sparse
+ * spike trains, then runs estimate_free_kernel → fit_biexponential.
+ *
+ * Returns a JsValue containing the serialized SeedKernelResult:
+ * { free_kernel, tau_rise, tau_decay, beta, residual, n_seed_spikes }
+ */
+export function seed_kernel_estimate(traces_flat: Float32Array, trace_lengths: Uint32Array, fs: number): any;
+
+/**
+ * Run peak-seeded spike detection on a single trace.
+ *
+ * Returns a JsValue containing the serialized SeedTraceResult:
+ * { s_counts, alpha, baseline }
+ */
+export function seed_trace(trace: Float32Array, fs: number): any;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -226,6 +245,8 @@ export interface InitOutput {
     readonly indeca_estimate_kernel: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => void;
     readonly indeca_fit_biexponential: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly indeca_solve_trace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => number;
+    readonly seed_kernel_estimate: (a: number, b: number, c: number, d: number, e: number) => number;
+    readonly seed_trace: (a: number, b: number, c: number) => number;
     readonly solver_apply_filter: (a: number) => number;
     readonly solver_converged: (a: number) => number;
     readonly solver_export_state: (a: number, b: number) => void;

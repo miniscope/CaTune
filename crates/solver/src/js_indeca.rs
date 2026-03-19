@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 use crate::biexp_fit;
 use crate::indeca;
 use crate::kernel_est;
+use crate::peak_seed;
 use crate::upsample;
 
 /// Solve a single trace using the InDeCa pipeline.
@@ -105,3 +106,14 @@ pub fn indeca_fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usi
 pub fn indeca_compute_upsample_factor(fs: f64, target_fs: f64) -> usize {
     upsample::compute_upsample_factor(fs, target_fs)
 }
+
+/// Run peak-seeded spike detection on a single trace.
+///
+/// Returns a JsValue containing the serialized SeedTraceResult:
+/// { s_counts, alpha, baseline }
+#[wasm_bindgen]
+pub fn seed_trace(trace: &[f32], fs: f64) -> JsValue {
+    let result = peak_seed::seed_trace(trace, fs);
+    serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
+}
+

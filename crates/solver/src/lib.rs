@@ -10,6 +10,7 @@ pub(crate) mod indeca;
 mod kernel;
 #[allow(dead_code)]
 pub(crate) mod kernel_est;
+pub(crate) mod peak_seed;
 #[allow(dead_code)]
 pub(crate) mod threshold;
 #[allow(dead_code)]

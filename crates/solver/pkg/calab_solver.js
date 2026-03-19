@@ -485,9 +485,51 @@ export function indeca_solve_trace(trace, tau_r, tau_d, fs, upsample_factor, max
     return takeObject(ret);
 }
 
+/**
+ * Auto-estimate kernel from raw traces via peak-seeded free kernel estimation.
+ *
+ * Pools prominent peaks from all traces, walks back to onset, builds sparse
+ * spike trains, then runs estimate_free_kernel → fit_biexponential.
+ *
+ * Returns a JsValue containing the serialized SeedKernelResult:
+ * { free_kernel, tau_rise, tau_decay, beta, residual, n_seed_spikes }
+ * @param {Float32Array} traces_flat
+ * @param {Uint32Array} trace_lengths
+ * @param {number} fs
+ * @returns {any}
+ */
+export function seed_kernel_estimate(traces_flat, trace_lengths, fs) {
+    const ptr0 = passArrayF32ToWasm0(traces_flat, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray32ToWasm0(trace_lengths, wasm.__wbindgen_export2);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.seed_kernel_estimate(ptr0, len0, ptr1, len1, fs);
+    return takeObject(ret);
+}
+
+/**
+ * Run peak-seeded spike detection on a single trace.
+ *
+ * Returns a JsValue containing the serialized SeedTraceResult:
+ * { s_counts, alpha, baseline }
+ * @param {Float32Array} trace
+ * @param {number} fs
+ * @returns {any}
+ */
+export function seed_trace(trace, fs) {
+    const ptr0 = passArrayF32ToWasm0(trace, wasm.__wbindgen_export2);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.seed_trace(ptr0, len0, fs);
+    return takeObject(ret);
+}
+
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg_Error_8c4e43fe74559d73: function(arg0, arg1) {
+            const ret = Error(getStringFromWasm0(arg0, arg1));
+            return addHeapObject(ret);
+        },
         __wbg___wbindgen_throw_be289d5034ed271b: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -535,6 +577,11 @@ function __wbg_get_imports() {
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
+            return addHeapObject(ret);
+        },
+        __wbindgen_cast_0000000000000003: function(arg0) {
+            // Cast intrinsic for `U64 -> Externref`.
+            const ret = BigInt.asUintN(64, arg0);
             return addHeapObject(ret);
         },
         __wbindgen_object_clone_ref: function(arg0) {

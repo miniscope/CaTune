@@ -12,6 +12,7 @@ import init, {
   indeca_estimate_kernel,
   indeca_fit_biexponential,
   indeca_compute_upsample_factor,
+  seed_trace,
 } from '../../../crates/solver/pkg/calab_solver';
 export {
   Solver,
@@ -19,6 +20,7 @@ export {
   indeca_estimate_kernel,
   indeca_fit_biexponential,
   indeca_compute_upsample_factor,
+  seed_trace,
 };
 
 let wasmReady: Promise<void> | null = null;

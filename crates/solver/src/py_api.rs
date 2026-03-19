@@ -327,6 +327,60 @@ fn deconvolve_batch<'py>(
     ))
 }
 
+/// Run peak-seeded spike detection on a single trace.
+///
+/// Returns (s_counts, alpha, baseline).
+#[pyfunction]
+fn py_seed_trace<'py>(
+    py: Python<'py>,
+    trace: PyReadonlyArray1<f64>,
+    fs: f64,
+) -> PyResult<(Bound<'py, PyArray1<f32>>, f64, f64)> {
+    let slice = trace
+        .as_slice()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
+    let trace_f32: Vec<f32> = slice.iter().map(|&v| v as f32).collect();
+    let result = crate::peak_seed::seed_trace(&trace_f32, fs);
+    Ok((
+        PyArray1::from_vec(py, result.s_counts),
+        result.alpha,
+        result.baseline,
+    ))
+}
+
+/// Auto-estimate kernel from raw traces via peak-seeded free kernel estimation.
+///
+/// Takes a 2D array (n_cells x n_timepoints) and returns
+/// (free_kernel, tau_rise, tau_decay, n_seed_spikes).
+#[pyfunction]
+fn seed_kernel_estimate<'py>(
+    py: Python<'py>,
+    traces: PyReadonlyArray2<f64>,
+    fs: f64,
+) -> PyResult<(Bound<'py, PyArray1<f32>>, f64, f64, usize)> {
+    let shape = traces.shape();
+    let n_cells = shape[0];
+    let n_timepoints = shape[1];
+
+    let mut traces_flat: Vec<f32> = Vec::with_capacity(n_cells * n_timepoints);
+    let mut trace_lengths: Vec<usize> = Vec::with_capacity(n_cells);
+
+    let traces_ref = traces.as_array();
+    for cell_idx in 0..n_cells {
+        traces_flat.extend(traces_ref.row(cell_idx).iter().map(|&v| v as f32));
+        trace_lengths.push(n_timepoints);
+    }
+
+    let result = crate::peak_seed::seed_kernel_estimate(&traces_flat, &trace_lengths, fs);
+
+    Ok((
+        PyArray1::from_vec(py, result.free_kernel),
+        result.tau_rise,
+        result.tau_decay,
+        result.n_seed_spikes,
+    ))
+}
+
 /// Register the Python module.
 /// The function name must match the leaf of module-name in pyproject.toml: "calab._solver" → "_solver".
 #[pymodule]
@@ -336,6 +390,8 @@ fn _solver(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_compute_lipschitz, m)?)?;
     m.add_function(wrap_pyfunction!(deconvolve_single, m)?)?;
     m.add_function(wrap_pyfunction!(deconvolve_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(py_seed_trace, m)?)?;
+    m.add_function(wrap_pyfunction!(seed_kernel_estimate, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

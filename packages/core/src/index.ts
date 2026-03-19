@@ -5,6 +5,7 @@ export {
   indeca_estimate_kernel,
   indeca_fit_biexponential,
   indeca_compute_upsample_factor,
+  seed_trace,
 } from './wasm-adapter.ts';
 export { CaTuneExportSchema } from './schemas/export-schema.ts';
 export type { CaTuneExportData } from './schemas/export-schema.ts';

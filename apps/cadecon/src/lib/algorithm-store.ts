@@ -9,10 +9,9 @@ import { samplingRate } from './data-store.ts';
 // kernel never receives an error signal pushing it slower. Starting from
 // conservatively slow values ensures the optimizer passes through the optimum
 // on the way down, where best-residual tracking (iteration-manager.ts) catches it.
-const [tauRiseInit, setTauRiseInit] = createSignal(0.2);
-const [tauDecayInit, setTauDecayInit] = createSignal(1.0);
-const [upsampleTarget, setUpsampleTarget] = createSignal(120);
-const [weightingEnabled, setWeightingEnabled] = createSignal(false);
+const [tauRiseInit] = createSignal(0.2);
+const [tauDecayInit] = createSignal(1.0);
+const [upsampleTarget, setUpsampleTarget] = createSignal(300);
 const [hpFilterEnabled, setHpFilterEnabled] = createSignal(true);
 const [lpFilterEnabled, setLpFilterEnabled] = createSignal(false);
 const [maxIterations, setMaxIterations] = createSignal(20);
@@ -28,13 +27,9 @@ const upsampleFactor = createMemo(() => {
 
 export {
   tauRiseInit,
-  setTauRiseInit,
   tauDecayInit,
-  setTauDecayInit,
   upsampleTarget,
   setUpsampleTarget,
-  weightingEnabled,
-  setWeightingEnabled,
   hpFilterEnabled,
   setHpFilterEnabled,
   lpFilterEnabled,
