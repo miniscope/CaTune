@@ -65,38 +65,36 @@ function groundTruthPlugin(): uPlot.Plugin {
   };
 }
 
+/** Pre-converted subset scatter data to avoid tauToShape calls in the draw hook. */
+interface SubsetScatterPoint {
+  iteration: number;
+  tPeakMs: number;
+  fwhmMs: number;
+}
+
 /** Plugin that draws faint per-subset scatter circles behind the main lines. */
-function subsetScatterPlugin(): uPlot.Plugin {
+function subsetScatterPlugin(points: () => SubsetScatterPoint[]): uPlot.Plugin {
   return {
     hooks: {
       draw(u: uPlot) {
-        const history = convergenceHistory();
-        if (history.length === 0) return;
+        const pts = points();
+        if (pts.length === 0) return;
 
         const ctx = u.ctx;
         const dpr = devicePixelRatio;
 
-        for (const snap of history) {
-          if (!snap.subsets) continue;
-          const xPx = u.valToPos(snap.iteration, 'x', true);
+        for (const pt of pts) {
+          const xPx = u.valToPos(pt.iteration, 'x', true);
 
-          for (const sub of snap.subsets) {
-            const shape = tauToShape(sub.tauRise, sub.tauDecay);
-            const tPeakMs = shape ? shape.tPeak * 1000 : 0;
-            const fwhmMs = shape ? shape.fwhm * 1000 : 0;
+          ctx.fillStyle = TPEAK_FAINT;
+          ctx.beginPath();
+          ctx.arc(xPx, u.valToPos(pt.tPeakMs, 'y', true), 4 * dpr, 0, 2 * Math.PI);
+          ctx.fill();
 
-            // tPeak scatter
-            ctx.fillStyle = TPEAK_FAINT;
-            ctx.beginPath();
-            ctx.arc(xPx, u.valToPos(tPeakMs, 'y', true), 4 * dpr, 0, 2 * Math.PI);
-            ctx.fill();
-
-            // FWHM scatter
-            ctx.fillStyle = FWHM_FAINT;
-            ctx.beginPath();
-            ctx.arc(xPx, u.valToPos(fwhmMs, 'y', true), 4 * dpr, 0, 2 * Math.PI);
-            ctx.fill();
-          }
+          ctx.fillStyle = FWHM_FAINT;
+          ctx.beginPath();
+          ctx.arc(xPx, u.valToPos(pt.fwhmMs, 'y', true), 4 * dpr, 0, 2 * Math.PI);
+          ctx.fill();
         }
       },
     },
@@ -118,18 +116,36 @@ export function KernelConvergence(): JSX.Element {
   const chartData = createMemo((): uPlot.AlignedData => {
     const h = filteredHistory();
     if (h.length === 0) return [[], [], [], []];
-    return [
-      h.map((s) => s.iteration),
-      h.map((s) => {
-        const shape = tauToShape(s.tauRise, s.tauDecay);
-        return shape ? shape.tPeak * 1000 : 0;
-      }),
-      h.map((s) => {
-        const shape = tauToShape(s.tauRise, s.tauDecay);
-        return shape ? shape.fwhm * 1000 : 0;
-      }),
-      h.map((s) => s.residual),
-    ];
+    const iterations: number[] = new Array(h.length);
+    const tPeaks: number[] = new Array(h.length);
+    const fwhms: number[] = new Array(h.length);
+    const residuals: number[] = new Array(h.length);
+    for (let i = 0; i < h.length; i++) {
+      const s = h[i];
+      iterations[i] = s.iteration;
+      const shape = tauToShape(s.tauRise, s.tauDecay);
+      tPeaks[i] = shape ? shape.tPeak * 1000 : 0;
+      fwhms[i] = shape ? shape.fwhm * 1000 : 0;
+      residuals[i] = s.residual;
+    }
+    return [iterations, tPeaks, fwhms, residuals];
+  });
+
+  // Pre-convert subset scatter data so the draw hook does zero tauToShape calls.
+  const scatterPoints = createMemo((): SubsetScatterPoint[] => {
+    const pts: SubsetScatterPoint[] = [];
+    for (const snap of filteredHistory()) {
+      if (!snap.subsets) continue;
+      for (const sub of snap.subsets) {
+        const shape = tauToShape(sub.tauRise, sub.tauDecay);
+        pts.push({
+          iteration: snap.iteration,
+          tPeakMs: shape ? shape.tPeak * 1000 : 0,
+          fwhmMs: shape ? shape.fwhm * 1000 : 0,
+        });
+      }
+    }
+    return pts;
   });
 
   const series: uPlot.Series[] = [
@@ -183,7 +199,7 @@ export function KernelConvergence(): JSX.Element {
   ];
 
   const plugins = [
-    subsetScatterPlugin(),
+    subsetScatterPlugin(scatterPoints),
     groundTruthPlugin(),
     convergenceMarkerPlugin(() => convergedAtIteration()),
     viewedIterationPlugin(() => viewedIteration()),
