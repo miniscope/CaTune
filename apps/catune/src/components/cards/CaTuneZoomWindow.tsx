@@ -82,6 +82,11 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
   let containerRef: HTMLDivElement | undefined;
   const [chartWidth, setChartWidth] = createSignal(600);
 
+  const transientTime = createMemo(() => {
+    const tau = shapeToTau(tPeak(), fwhm());
+    return TRANSIENT_TAU_MULTIPLIER * (tau?.tauDecay ?? 0.6);
+  });
+
   onMount(() => {
     if (!containerRef) return;
     setChartWidth(containerRef.clientWidth || 600);
@@ -266,11 +271,10 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
       props.filteredTrace ? toZScoreFiltered : toZScore,
     );
 
-    const tauForTransient = shapeToTau(tPeak(), fwhm());
-    const transientTime = TRANSIENT_TAU_MULTIPLIER * (tauForTransient?.tauDecay ?? 0.6);
-    if (startSample < transientTime * fs) {
+    const transient = transientTime();
+    if (startSample < transient * fs) {
       for (let i = 0; i < dsReconv.length; i++) {
-        if (dsX[i] < transientTime) {
+        if (dsX[i] < transient) {
           dsReconv[i] = null;
         } else {
           break;
@@ -386,12 +390,7 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
         syncKey={props.syncKey}
         onZoomChange={props.onZoomChange}
         yRange={globalYRange()}
-        plugins={[
-          transientZonePlugin(() => {
-            const tau = shapeToTau(tPeak(), fwhm());
-            return TRANSIENT_TAU_MULTIPLIER * (tau?.tauDecay ?? 0.6);
-          }),
-        ]}
+        plugins={[transientZonePlugin(transientTime)]}
         data-tutorial={props['data-tutorial']}
       />
     </div>

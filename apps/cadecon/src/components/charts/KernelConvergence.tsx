@@ -38,17 +38,14 @@ function drawHLine(ctx: CanvasRenderingContext2D, u: uPlot, yVal: number, color:
 }
 
 /** Plugin that draws horizontal dashed lines at ground truth tPeak (blue) and FWHM (red). */
-function groundTruthPlugin(): uPlot.Plugin {
+function groundTruthPlugin(
+  gtShape: () => { tPeakMs: number; fwhmMs: number } | null,
+): uPlot.Plugin {
   return {
     hooks: {
       draw(u: uPlot) {
-        if (!groundTruthVisible() || !isDemo()) return;
-        const gtTauR = groundTruthTauRise();
-        const gtTauD = groundTruthTauDecay();
-        if (gtTauR == null || gtTauD == null) return;
-
-        const shape = tauToShape(gtTauR, gtTauD);
-        if (shape == null) return;
+        const shape = gtShape();
+        if (!shape) return;
 
         const dpr = devicePixelRatio;
         const ctx = u.ctx;
@@ -56,8 +53,8 @@ function groundTruthPlugin(): uPlot.Plugin {
         ctx.lineWidth = 1.5 * dpr;
         ctx.setLineDash([6 * dpr, 4 * dpr]);
 
-        drawHLine(ctx, u, shape.tPeak * 1000, TPEAK_COLOR);
-        drawHLine(ctx, u, shape.fwhm * 1000, FWHM_COLOR);
+        drawHLine(ctx, u, shape.tPeakMs, TPEAK_COLOR);
+        drawHLine(ctx, u, shape.fwhmMs, FWHM_COLOR);
 
         ctx.restore();
       },
@@ -113,13 +110,32 @@ export function KernelConvergence(): JSX.Element {
 
   const filteredHistory = createMemo(() => convergenceHistory().filter((s) => s.iteration > 0));
 
-  const chartData = createMemo((): uPlot.AlignedData => {
+  // Pre-compute ground truth shape so the draw hook does zero tauToShape calls.
+  const gtShape = createMemo(() => {
+    if (!groundTruthVisible() || !isDemo()) return null;
+    const gtTauR = groundTruthTauRise();
+    const gtTauD = groundTruthTauDecay();
+    if (gtTauR == null || gtTauD == null) return null;
+    const shape = tauToShape(gtTauR, gtTauD);
+    if (!shape) return null;
+    return { tPeakMs: shape.tPeak * 1000, fwhmMs: shape.fwhm * 1000 };
+  });
+
+  // Single pass: build both aligned chart data and subset scatter points.
+  const convergenceData = createMemo(() => {
     const h = filteredHistory();
-    if (h.length === 0) return [[], [], [], []];
+    if (h.length === 0)
+      return {
+        aligned: [[], [], [], []] as uPlot.AlignedData,
+        scatter: [] as SubsetScatterPoint[],
+      };
+
     const iterations: number[] = new Array(h.length);
     const tPeaks: number[] = new Array(h.length);
     const fwhms: number[] = new Array(h.length);
     const residuals: number[] = new Array(h.length);
+    const pts: SubsetScatterPoint[] = [];
+
     for (let i = 0; i < h.length; i++) {
       const s = h[i];
       iterations[i] = s.iteration;
@@ -127,25 +143,23 @@ export function KernelConvergence(): JSX.Element {
       tPeaks[i] = shape ? shape.tPeak * 1000 : 0;
       fwhms[i] = shape ? shape.fwhm * 1000 : 0;
       residuals[i] = s.residual;
-    }
-    return [iterations, tPeaks, fwhms, residuals];
-  });
 
-  // Pre-convert subset scatter data so the draw hook does zero tauToShape calls.
-  const scatterPoints = createMemo((): SubsetScatterPoint[] => {
-    const pts: SubsetScatterPoint[] = [];
-    for (const snap of filteredHistory()) {
-      if (!snap.subsets) continue;
-      for (const sub of snap.subsets) {
-        const shape = tauToShape(sub.tauRise, sub.tauDecay);
-        pts.push({
-          iteration: snap.iteration,
-          tPeakMs: shape ? shape.tPeak * 1000 : 0,
-          fwhmMs: shape ? shape.fwhm * 1000 : 0,
-        });
+      if (s.subsets) {
+        for (const sub of s.subsets) {
+          const subShape = tauToShape(sub.tauRise, sub.tauDecay);
+          pts.push({
+            iteration: s.iteration,
+            tPeakMs: subShape ? subShape.tPeak * 1000 : 0,
+            fwhmMs: subShape ? subShape.fwhm * 1000 : 0,
+          });
+        }
       }
     }
-    return pts;
+
+    return {
+      aligned: [iterations, tPeaks, fwhms, residuals] as uPlot.AlignedData,
+      scatter: pts,
+    };
   });
 
   const series: uPlot.Series[] = [
@@ -199,8 +213,8 @@ export function KernelConvergence(): JSX.Element {
   ];
 
   const plugins = [
-    subsetScatterPlugin(scatterPoints),
-    groundTruthPlugin(),
+    subsetScatterPlugin(() => convergenceData().scatter),
+    groundTruthPlugin(gtShape),
     convergenceMarkerPlugin(() => convergedAtIteration()),
     viewedIterationPlugin(() => viewedIteration()),
     wheelZoomPlugin(),
@@ -212,7 +226,7 @@ export function KernelConvergence(): JSX.Element {
 
   return (
     <Show
-      when={filteredHistory().length > 0}
+      when={convergenceData().aligned[0].length > 0}
       fallback={
         <div class="kernel-chart-wrapper kernel-chart-wrapper--empty">
           <span>Run deconvolution to see kernel convergence.</span>
@@ -221,7 +235,7 @@ export function KernelConvergence(): JSX.Element {
     >
       <div class="kernel-chart-wrapper">
         <SolidUplot
-          data={chartData()}
+          data={convergenceData().aligned}
           series={series}
           scales={scales}
           axes={axes}

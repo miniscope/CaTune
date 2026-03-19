@@ -16,11 +16,13 @@ import type uPlot from 'uplot';
 const KERNEL_SYNC_KEY = 'catune-kernel';
 
 export function KernelDisplay() {
+  const tau = createMemo(() => shapeToTau(tPeak(), fwhm()));
+
   const kernelData = createMemo<[number[], ...(number | null)[][]]>(() => {
     const fs = samplingRate() ?? 30;
-    const tau = shapeToTau(tPeak(), fwhm());
-    if (!tau) return [[0], [0]];
-    const userKernel = computeKernel(tau.tauRise, tau.tauDecay, fs);
+    const t = tau();
+    if (!t) return [[0], [0]];
+    const userKernel = computeKernel(t.tauRise, t.tauDecay, fs);
 
     if (groundTruthVisible() && isDemo() && demoPreset()) {
       const preset = demoPreset()!;
@@ -65,9 +67,9 @@ export function KernelDisplay() {
 
   const annotations = createMemo(() => {
     const fs = samplingRate() ?? 30;
-    const tau = shapeToTau(tPeak(), fwhm());
-    if (!tau) return null;
-    return computeKernelAnnotations(tau.tauRise, tau.tauDecay, fs);
+    const t = tau();
+    if (!t) return null;
+    return computeKernelAnnotations(t.tauRise, t.tauDecay, fs);
   });
 
   const kernelPlugins = createMemo<uPlot.Plugin[]>(() => [

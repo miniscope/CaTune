@@ -60,13 +60,6 @@ export function validateSubmission(params: ValidationParams): SubmissionValidati
         `tau_decay (${tauResult.tauDecay}s) is outside the valid range [${HARD_LIMITS.tauDecay.min}s, ${HARD_LIMITS.tauDecay.max}s]`,
       );
     }
-
-    // tau_rise must be less than tau_decay
-    if (tauResult.tauRise >= tauResult.tauDecay) {
-      issues.push(
-        `tau_rise (${tauResult.tauRise}s) must be less than tau_decay (${tauResult.tauDecay}s)`,
-      );
-    }
   }
 
   // lambda range check

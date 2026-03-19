@@ -6,7 +6,6 @@
 
 import { createEffect, createMemo, on, onCleanup } from 'solid-js';
 import type { CadeconSubmission } from '../../lib/community/index.ts';
-import { tauToShape } from '@calab/compute';
 import { median } from '../../lib/math-utils.ts';
 import 'uplot/dist/uPlot.min.css';
 import '@calab/ui/chart/chart-theme.css';
