@@ -146,8 +146,10 @@ pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usize) -> 
                     }
                 }
             } else {
-                // No valid r range — fit without fast component
-                let (beta_s, residual) = eval_slow_only(h_free, tau_r, tau_d, dt, skip);
+                // No valid r range — fit without fast component (r=0 disables it
+                // via the r_active guard in eval_two_component).
+                let (beta_s, _, residual) =
+                    eval_two_component(h_free, tau_r, tau_d, 0.0, dt, skip);
                 if residual < best.residual {
                     best = BiexpResult {
                         tau_rise: tau_r,
@@ -298,32 +300,6 @@ fn eval_two_component(
     // Active set 4: both zero — already covered by initial best_res = dot_hh
 
     (best_bs, best_bf, best_res)
-}
-
-/// Evaluate slow-only fit at fixed (tau_r, tau_d) with scalar NNLS for beta_s.
-/// Returns (beta_s, residual).
-fn eval_slow_only(h_free: &[f32], tau_r: f64, tau_d: f64, dt: f64, skip: usize) -> (f64, f64) {
-    let n = h_free.len();
-    let mut g_ss = 0.0_f64;
-    let mut rhs_s = 0.0_f64;
-    let mut dot_hh = 0.0_f64;
-
-    for i in skip..n {
-        let t = i as f64 * dt;
-        let ts = (-t / tau_d).exp() - (-t / tau_r).exp();
-        let hi = h_free[i] as f64;
-        g_ss += ts * ts;
-        rhs_s += hi * ts;
-        dot_hh += hi * hi;
-    }
-
-    if g_ss > 1e-30 {
-        let bs = (rhs_s / g_ss).max(0.0);
-        let residual = dot_hh - 2.0 * bs * rhs_s + bs * bs * g_ss;
-        (bs, residual)
-    } else {
-        (0.0, dot_hh)
-    }
 }
 
 /// Golden-section refinement around the best grid point.
