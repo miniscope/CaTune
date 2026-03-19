@@ -5,18 +5,18 @@
  * Based on GCaMP6f/6s typical values from calcium imaging literature.
  */
 export const PARAM_RANGES = {
-  tauRise: {
-    min: 0.001, // 1ms -- fastest possible calcium indicator rise
-    max: 0.5, // 500ms -- very slow indicators (GCaMP6s-like)
-    default: 0.001, // start at minimum
+  tPeak: {
+    min: 0.005, // 5ms -- fastest plausible time-to-peak
+    max: 0.5, // 500ms -- very slow indicators
+    default: 0.008, // ≈ tauToShape(0.001, 3.0).tPeak
     step: 0.001, // 1ms resolution
     unit: 's',
   },
-  tauDecay: {
-    min: 0.05, // 50ms -- fastest decay
+  fwhm: {
+    min: 0.02, // 20ms -- narrowest plausible transient
     max: 3.0, // 3s -- very slow indicators
-    default: 3.0, // start at maximum (longer than any indicator)
-    step: 0.01, // 10ms resolution
+    default: 2.08, // ≈ tauToShape(0.001, 3.0).fwhm
+    step: 0.001, // 1ms resolution
     unit: 's',
   },
   lambda: {

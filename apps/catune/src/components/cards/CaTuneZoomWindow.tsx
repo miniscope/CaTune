@@ -27,8 +27,10 @@ import {
   showResid,
   showGTCalcium,
   showGTSpikes,
-  tauDecay,
+  tPeak,
+  fwhm,
 } from '../../lib/viz-store.ts';
+import { shapeToTau } from '@calab/compute';
 
 export interface CaTuneZoomWindowProps {
   rawTrace: Float64Array;
@@ -264,7 +266,8 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
       props.filteredTrace ? toZScoreFiltered : toZScore,
     );
 
-    const transientTime = TRANSIENT_TAU_MULTIPLIER * tauDecay();
+    const tauForTransient = shapeToTau(tPeak(), fwhm());
+    const transientTime = TRANSIENT_TAU_MULTIPLIER * (tauForTransient?.tauDecay ?? 0.6);
     if (startSample < transientTime * fs) {
       for (let i = 0; i < dsReconv.length; i++) {
         if (dsX[i] < transientTime) {
@@ -383,7 +386,12 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
         syncKey={props.syncKey}
         onZoomChange={props.onZoomChange}
         yRange={globalYRange()}
-        plugins={[transientZonePlugin(() => TRANSIENT_TAU_MULTIPLIER * tauDecay())]}
+        plugins={[
+          transientZonePlugin(() => {
+            const tau = shapeToTau(tPeak(), fwhm());
+            return TRANSIENT_TAU_MULTIPLIER * (tau?.tauDecay ?? 0.6);
+          }),
+        ]}
         data-tutorial={props['data-tutorial']}
       />
     </div>

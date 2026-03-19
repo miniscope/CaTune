@@ -1,5 +1,5 @@
 /**
- * Community scatter plot: tau_rise (x) vs tau_decay (y) with lambda color coding.
+ * Community scatter plot: t_peak (x) vs FWHM (y) with lambda color coding.
  * Uses uPlot mode:2 with a custom paths draw function for per-point coloring.
  * Optionally overlays the user's current parameters as a larger marker.
  */
@@ -13,7 +13,7 @@ import { getThemeColors } from '@calab/ui/chart';
 
 export interface ScatterPlotProps {
   submissions: CatuneSubmission[];
-  userParams?: { tauRise: number; tauDecay: number; lambda: number } | null;
+  userParams?: { tPeak: number; fwhm: number; lambda: number } | null;
   highlightFlags?: boolean[] | null;
 }
 
@@ -56,8 +56,8 @@ export function ScatterPlot(props: ScatterPlotProps) {
     const subs = props.submissions;
     if (subs.length === 0) return null;
     return {
-      x: median(subs.map((s) => s.tau_rise)),
-      y: median(subs.map((s) => s.tau_decay)),
+      x: median(subs.map((s) => s.t_peak * 1000)),
+      y: median(subs.map((s) => s.fwhm * 1000)),
     };
   });
 
@@ -70,8 +70,8 @@ export function ScatterPlot(props: ScatterPlotProps) {
         [[null] as unknown as number[], [null] as unknown as number[]] as unknown as number[],
       ];
     }
-    const xs = subs.map((s) => s.tau_rise);
-    const ys = subs.map((s) => s.tau_decay);
+    const xs = subs.map((s) => s.t_peak * 1000);
+    const ys = subs.map((s) => s.fwhm * 1000);
     // mode:2 data format: [xValues, [xFacetValues, yFacetValues]]
     return [xs, [xs, ys] as unknown as number[]];
   });
@@ -113,13 +113,13 @@ export function ScatterPlot(props: ScatterPlotProps) {
             ctx.lineWidth = 1 * devicePixelRatio;
             ctx.globalAlpha = 0.5;
 
-            // Vertical line at median tau_rise
+            // Vertical line at median t_peak
             ctx.beginPath();
             ctx.moveTo(mcx, yOff);
             ctx.lineTo(mcx, yOff + yDim);
             ctx.stroke();
 
-            // Horizontal line at median tau_decay
+            // Horizontal line at median FWHM
             ctx.beginPath();
             ctx.moveTo(xOff, mcy);
             ctx.lineTo(xOff + xDim, mcy);
@@ -176,8 +176,8 @@ export function ScatterPlot(props: ScatterPlotProps) {
           // Draw user parameter marker on top if provided
           const up = userParams();
           if (up) {
-            const ux = up.tauRise;
-            const uy = up.tauDecay;
+            const ux = up.tPeak * 1000;
+            const uy = up.fwhm * 1000;
             if (
               scaleValid &&
               ux >= scaleX.min! &&
@@ -229,12 +229,12 @@ export function ScatterPlot(props: ScatterPlotProps) {
     );
 
     // Compute padded ranges so points aren't on the edge
-    const xVals = subs.map((s) => s.tau_rise);
-    const yVals = subs.map((s) => s.tau_decay);
+    const xVals = subs.map((s) => s.t_peak * 1000);
+    const yVals = subs.map((s) => s.fwhm * 1000);
     const up = props.userParams;
     if (up) {
-      xVals.push(up.tauRise);
-      yVals.push(up.tauDecay);
+      xVals.push(up.tPeak * 1000);
+      yVals.push(up.fwhm * 1000);
     }
     const xMin = Math.min(...xVals);
     const xMax = Math.max(...xVals);
@@ -262,22 +262,22 @@ export function ScatterPlot(props: ScatterPlotProps) {
       ],
       axes: [
         {
-          label: 'tau_rise (s)',
+          label: 't_peak (ms)',
           stroke: theme.textSecondary,
           grid: { stroke: theme.borderSubtle },
           ticks: { stroke: theme.borderDefault },
           size: 40,
           space: 80,
-          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(4)),
+          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(1)),
         },
         {
-          label: 'tau_decay (s)',
+          label: 'FWHM (ms)',
           stroke: theme.textSecondary,
           grid: { stroke: theme.borderSubtle },
           ticks: { stroke: theme.borderDefault },
           size: 60,
           space: 50,
-          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(3)),
+          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(1)),
         },
       ],
       legend: { show: false },

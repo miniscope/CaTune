@@ -8,6 +8,8 @@ export interface CadeconSubmission extends BaseSubmission {
   // Kernel results
   tau_rise: number;
   tau_decay: number;
+  t_peak: number;
+  fwhm: number;
   beta: number | null;
   ar2_g1: number;
   ar2_g2: number;

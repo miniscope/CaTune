@@ -4,6 +4,7 @@
  */
 
 import { computeAR2 } from '@calab/core';
+import { tauToShape } from '@calab/compute';
 import { computeDatasetHash, trackEvent } from '@calab/community';
 import { submitParameters } from './cadecon-service.ts';
 import type { CadeconSubmissionPayload, CadeconSubmission } from './types.ts';
@@ -101,6 +102,10 @@ export async function submitToSupabase(
     datasetHash = await computeDatasetHash(floatData);
   }
 
+  // Compute derived kernel shape (t_peak, fwhm)
+  const shape = tauToShape(ctx.tauRise, ctx.tauDecay);
+  if (!shape) throw new Error('Invalid tau parameters: cannot compute t_peak/fwhm');
+
   // Compute AR2 coefficients
   const ar2 = computeAR2(ctx.tauRise, ctx.tauDecay, ctx.samplingRate);
 
@@ -119,6 +124,8 @@ export async function submitToSupabase(
     // Kernel results
     tau_rise: ctx.tauRise,
     tau_decay: ctx.tauDecay,
+    t_peak: shape.tPeak,
+    fwhm: shape.fwhm,
     beta: ctx.beta,
     ar2_g1: ar2.g1,
     ar2_g2: ar2.g2,

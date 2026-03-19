@@ -75,4 +75,18 @@ describe('CaTuneExportSchema', () => {
     const result = v.safeParse(CaTuneExportSchema, data);
     expect(result.success).toBe(true);
   });
+
+  it('validates with optional t_peak_s and fwhm_s fields', () => {
+    const data = makeValidExport();
+    (data.parameters as Record<string, unknown>).t_peak_s = 0.05;
+    (data.parameters as Record<string, unknown>).fwhm_s = 0.5;
+    const result = v.safeParse(CaTuneExportSchema, data);
+    expect(result.success).toBe(true);
+  });
+
+  it('validates old-format export without t_peak_s/fwhm_s (backward compat)', () => {
+    // Old exports don't have t_peak_s or fwhm_s — should still parse
+    const result = v.safeParse(CaTuneExportSchema, makeValidExport());
+    expect(result.success).toBe(true);
+  });
 });

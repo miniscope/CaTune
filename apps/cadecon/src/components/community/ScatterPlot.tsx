@@ -1,11 +1,12 @@
 /**
- * CaDecon community scatter plot: tau_rise (x) vs tau_decay (y) with median_pve color coding.
+ * CaDecon community scatter plot: t_peak (x) vs FWHM (y) in ms, with median_pve color coding.
  * Uses uPlot mode:2 with a custom paths draw function for per-point coloring.
  * Optionally overlays the user's current run parameters as a larger marker.
  */
 
 import { createEffect, createMemo, on, onCleanup } from 'solid-js';
 import type { CadeconSubmission } from '../../lib/community/index.ts';
+import { tauToShape } from '@calab/compute';
 import { median } from '../../lib/math-utils.ts';
 import 'uplot/dist/uPlot.min.css';
 import '@calab/ui/chart/chart-theme.css';
@@ -14,7 +15,7 @@ import { getThemeColors } from '@calab/ui/chart';
 
 export interface ScatterPlotProps {
   submissions: CadeconSubmission[];
-  userParams?: { tauRise: number; tauDecay: number } | null;
+  userParams?: { tPeak: number; fwhm: number } | null;
   highlightFlags?: boolean[] | null;
 }
 
@@ -42,8 +43,8 @@ export function ScatterPlot(props: ScatterPlotProps) {
     const subs = props.submissions;
     if (subs.length === 0) return null;
     return {
-      x: median(subs.map((s) => s.tau_rise)),
-      y: median(subs.map((s) => s.tau_decay)),
+      x: median(subs.map((s) => s.t_peak * 1000)),
+      y: median(subs.map((s) => s.fwhm * 1000)),
     };
   });
 
@@ -55,8 +56,8 @@ export function ScatterPlot(props: ScatterPlotProps) {
         [[null] as unknown as number[], [null] as unknown as number[]] as unknown as number[],
       ];
     }
-    const xs = subs.map((s) => s.tau_rise);
-    const ys = subs.map((s) => s.tau_decay);
+    const xs = subs.map((s) => s.t_peak * 1000);
+    const ys = subs.map((s) => s.fwhm * 1000);
     return [xs, [xs, ys] as unknown as number[]];
   });
 
@@ -153,8 +154,8 @@ export function ScatterPlot(props: ScatterPlotProps) {
           // User overlay marker
           const up = userParams();
           if (up) {
-            const ux = up.tauRise;
-            const uy = up.tauDecay;
+            const ux = up.tPeak * 1000;
+            const uy = up.fwhm * 1000;
             if (
               scaleValid &&
               ux >= scaleX.min! &&
@@ -203,19 +204,19 @@ export function ScatterPlot(props: ScatterPlotProps) {
       theme.textSecondary,
     );
 
-    const xVals = subs.map((s) => s.tau_rise);
-    const yVals = subs.map((s) => s.tau_decay);
+    const xVals = subs.map((s) => s.t_peak * 1000);
+    const yVals = subs.map((s) => s.fwhm * 1000);
     const up = props.userParams;
     if (up) {
-      xVals.push(up.tauRise);
-      yVals.push(up.tauDecay);
+      xVals.push(up.tPeak * 1000);
+      yVals.push(up.fwhm * 1000);
     }
     const xMin = Math.min(...xVals);
     const xMax = Math.max(...xVals);
     const yMin = Math.min(...yVals);
     const yMax = Math.max(...yVals);
-    const xPad = (xMax - xMin) * 0.15 || xMin * 0.1;
-    const yPad = (yMax - yMin) * 0.15 || yMin * 0.1;
+    const xPad = (xMax - xMin) * 0.15 || 1;
+    const yPad = (yMax - yMin) * 0.15 || 1;
 
     const opts: uPlot.Options = {
       mode: 2,
@@ -236,22 +237,22 @@ export function ScatterPlot(props: ScatterPlotProps) {
       ],
       axes: [
         {
-          label: 'tau_rise (s)',
+          label: 't_peak (ms)',
           stroke: theme.textSecondary,
           grid: { stroke: theme.borderSubtle },
           ticks: { stroke: theme.borderDefault },
           size: 40,
           space: 80,
-          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(4)),
+          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(1)),
         },
         {
-          label: 'tau_decay (s)',
+          label: 'FWHM (ms)',
           stroke: theme.textSecondary,
           grid: { stroke: theme.borderSubtle },
           ticks: { stroke: theme.borderDefault },
           size: 60,
           space: 50,
-          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(3)),
+          values: (_u: uPlot, vals: number[]) => vals.map((v) => v.toFixed(1)),
         },
       ],
       legend: { show: false },

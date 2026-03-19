@@ -34,8 +34,8 @@ import {
   bridgeExportDone,
 } from './lib/data-store.ts';
 import {
-  tauRise,
-  tauDecay,
+  tPeak,
+  fwhm,
   lambda,
   filterEnabled,
   setSelectedCell,
@@ -174,9 +174,9 @@ const App: Component = () => {
             </button>
             <p class="export-modal__heading text-success">Parameters exported to Python</p>
             <div class="export-modal__params info-summary">
-              <span>rise: {(tauRise() * 1000).toFixed(1)}ms</span>
+              <span>peak: {(tPeak() * 1000).toFixed(1)}ms</span>
               <span class="info-summary__sep">&middot;</span>
-              <span>decay: {(tauDecay() * 1000).toFixed(1)}ms</span>
+              <span>FWHM: {(fwhm() * 1000).toFixed(1)}ms</span>
               <span class="info-summary__sep">&middot;</span>
               <span>lambda: {lambda().toExponential(2)}</span>
               <span class="info-summary__sep">&middot;</span>
@@ -250,8 +250,8 @@ const App: Component = () => {
                     <Show when={pinnedParams()}>
                       {(params) => (
                         <span class="param-strip__pin-info">
-                          {(params().tauRise * 1000).toFixed(0)}ms /{' '}
-                          {(params().tauDecay * 1000).toFixed(0)}ms
+                          {(params().tPeak * 1000).toFixed(0)}ms /{' '}
+                          {(params().fwhm * 1000).toFixed(0)}ms
                         </span>
                       )}
                     </Show>

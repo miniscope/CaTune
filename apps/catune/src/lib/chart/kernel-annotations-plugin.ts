@@ -8,6 +8,8 @@ import type uPlot from 'uplot';
 export interface KernelAnnotations {
   peakTime: number;
   halfDecayTime: number;
+  halfRiseTime: number;
+  fwhm: number;
 }
 
 const PEAK_COLOR = '#ff9800';
@@ -34,10 +36,12 @@ export function kernelAnnotationsPlugin(
 
         // Convert time values to canvas pixel positions
         const peakPx = u.valToPos(ann.peakTime, 'x', true);
-        const halfPx = u.valToPos(ann.halfDecayTime, 'x', true);
+        const halfRisePx = u.valToPos(ann.halfRiseTime, 'x', true);
+        const halfDecayPx = u.valToPos(ann.halfDecayTime, 'x', true);
         const halfYPx = u.valToPos(0.5, 'y', true);
         const topPx = top;
         const bottomPx = top + height;
+        const capHeight = 6 * dpr;
 
         ctx.save();
 
@@ -61,32 +65,36 @@ export function kernelAnnotationsPlugin(
         ctx.textBaseline = 'bottom';
         ctx.fillText(`Peak: ${peakMs}ms`, peakPx, topPx - LABEL_PAD * dpr);
 
-        // --- Dashed vertical line at half-decay time (purple) ---
+        // --- FWHM horizontal line at y=0.5 from halfRiseTime to halfDecayTime ---
         ctx.strokeStyle = HALF_DECAY_COLOR;
         ctx.lineWidth = 1.5 * dpr;
-        ctx.setLineDash([4 * dpr, 3 * dpr]);
-        ctx.beginPath();
-        ctx.moveTo(halfPx, topPx);
-        ctx.lineTo(halfPx, bottomPx);
-        ctx.stroke();
-
-        // Half-decay label — right of the vertical line, vertically centered
-        const halfMs = (ann.halfDecayTime * 1000).toFixed(0);
-        const midY = topPx + height / 2;
         ctx.setLineDash([]);
-        ctx.fillStyle = HALF_DECAY_COLOR;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`t½: ${halfMs}ms`, halfPx + LABEL_PAD * dpr, midY);
 
-        // --- Horizontal dashed line at y=0.5 connecting peak to half-decay ---
-        ctx.strokeStyle = 'rgba(150, 150, 150, 0.5)';
-        ctx.lineWidth = 1 * dpr;
-        ctx.setLineDash([3 * dpr, 3 * dpr]);
+        // Horizontal line
         ctx.beginPath();
-        ctx.moveTo(peakPx, halfYPx);
-        ctx.lineTo(halfPx, halfYPx);
+        ctx.moveTo(halfRisePx, halfYPx);
+        ctx.lineTo(halfDecayPx, halfYPx);
         ctx.stroke();
+
+        // Left end-cap
+        ctx.beginPath();
+        ctx.moveTo(halfRisePx, halfYPx - capHeight);
+        ctx.lineTo(halfRisePx, halfYPx + capHeight);
+        ctx.stroke();
+
+        // Right end-cap
+        ctx.beginPath();
+        ctx.moveTo(halfDecayPx, halfYPx - capHeight);
+        ctx.lineTo(halfDecayPx, halfYPx + capHeight);
+        ctx.stroke();
+
+        // FWHM label — centered on the horizontal line
+        const fwhmMs = (ann.fwhm * 1000).toFixed(0);
+        const fwhmCenterPx = (halfRisePx + halfDecayPx) / 2;
+        ctx.fillStyle = HALF_DECAY_COLOR;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(`FWHM: ${fwhmMs}ms`, fwhmCenterPx, halfYPx - LABEL_PAD * dpr);
 
         ctx.restore();
       },

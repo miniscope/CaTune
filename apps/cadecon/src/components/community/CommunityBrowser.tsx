@@ -9,7 +9,7 @@ import { fetchSubmissions } from '../../lib/community/index.ts';
 import type { CadeconSubmission, CadeconFilterState } from '../../lib/community/index.ts';
 import { currentTauRise, currentTauDecay } from '../../lib/iteration-store.ts';
 import { isDemo, dataSource as appDataSource } from '../../lib/data-store.ts';
-import { getPresetLabels } from '@calab/compute';
+import { getPresetLabels, tauToShape } from '@calab/compute';
 import { ScatterPlot } from './ScatterPlot.tsx';
 import '../../styles/community.css';
 
@@ -32,7 +32,9 @@ export function CommunityBrowser() {
         const tr = currentTauRise();
         const td = currentTauDecay();
         if (tr == null || td == null) return null;
-        return { tauRise: tr, tauDecay: td };
+        const shape = tauToShape(tr, td);
+        if (!shape) return null;
+        return { tPeak: shape.tPeak, fwhm: shape.fwhm };
       }}
       compareLabel={{ active: 'Hide my run', inactive: 'Compare my run' }}
       filterBar={(ctx) => (

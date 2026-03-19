@@ -7,7 +7,7 @@ import { createSignal } from 'solid-js';
 import { CommunityBrowserShell, FilterBar } from '@calab/ui';
 import { fetchSubmissions } from '../../lib/community/index.ts';
 import type { CatuneSubmission, CatuneFilterState } from '../../lib/community/index.ts';
-import { tauRise, tauDecay, lambda } from '../../lib/viz-store.ts';
+import { tPeak, fwhm, lambda } from '../../lib/viz-store.ts';
 import { isDemo, dataSource as appDataSource } from '../../lib/data-store.ts';
 import { getPresetLabels } from '@calab/compute';
 import { ScatterPlot } from './ScatterPlot.tsx';
@@ -29,8 +29,8 @@ export function CommunityBrowser() {
       isDemo={isDemo}
       appDataSource={appDataSource}
       getUserParams={() => ({
-        tauRise: tauRise(),
-        tauDecay: tauDecay(),
+        tPeak: tPeak(),
+        fwhm: fwhm(),
         lambda: lambda(),
       })}
       compareLabel={{ active: 'Hide my params', inactive: 'Compare my params' }}

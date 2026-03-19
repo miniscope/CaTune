@@ -1,5 +1,5 @@
 /**
- * Kernel convergence chart: shows tau_rise and tau_decay evolving over iterations.
+ * Kernel convergence chart: shows tPeak and FWHM evolving over iterations.
  * Uses uPlot with per-subset scatter and convergence marker.
  */
 
@@ -16,15 +16,16 @@ import {
   groundTruthTauRise,
   groundTruthTauDecay,
 } from '../../lib/data-store.ts';
+import { tauToShape } from '@calab/compute';
 import { wheelZoomPlugin, AXIS_TEXT, AXIS_GRID, AXIS_TICK } from '@calab/ui/chart';
 import { convergenceMarkerPlugin } from '../../lib/chart/convergence-marker-plugin.ts';
 import { viewedIterationPlugin } from '../../lib/chart/viewed-iteration-plugin.ts';
 
-const TAU_RISE_COLOR = '#42a5f5';
-const TAU_DECAY_COLOR = '#ef5350';
+const TPEAK_COLOR = '#42a5f5';
+const FWHM_COLOR = '#ef5350';
 const RESIDUAL_COLOR = '#9e9e9e';
-const TAU_RISE_FAINT = 'rgba(66, 165, 245, 0.3)';
-const TAU_DECAY_FAINT = 'rgba(239, 83, 80, 0.3)';
+const TPEAK_FAINT = 'rgba(66, 165, 245, 0.3)';
+const FWHM_FAINT = 'rgba(239, 83, 80, 0.3)';
 
 /** Draw a single horizontal line at `yVal` on scale `'y'`. Caller must save/restore ctx. */
 function drawHLine(ctx: CanvasRenderingContext2D, u: uPlot, yVal: number, color: string): void {
@@ -36,7 +37,7 @@ function drawHLine(ctx: CanvasRenderingContext2D, u: uPlot, yVal: number, color:
   ctx.stroke();
 }
 
-/** Plugin that draws horizontal dashed lines at ground truth tau_rise (blue) and tau_decay (red). */
+/** Plugin that draws horizontal dashed lines at ground truth tPeak (blue) and FWHM (red). */
 function groundTruthPlugin(): uPlot.Plugin {
   return {
     hooks: {
@@ -44,7 +45,10 @@ function groundTruthPlugin(): uPlot.Plugin {
         if (!groundTruthVisible() || !isDemo()) return;
         const gtTauR = groundTruthTauRise();
         const gtTauD = groundTruthTauDecay();
-        if (gtTauR == null && gtTauD == null) return;
+        if (gtTauR == null || gtTauD == null) return;
+
+        const shape = tauToShape(gtTauR, gtTauD);
+        if (shape == null) return;
 
         const dpr = devicePixelRatio;
         const ctx = u.ctx;
@@ -52,8 +56,8 @@ function groundTruthPlugin(): uPlot.Plugin {
         ctx.lineWidth = 1.5 * dpr;
         ctx.setLineDash([6 * dpr, 4 * dpr]);
 
-        if (gtTauR != null) drawHLine(ctx, u, gtTauR * 1000, TAU_RISE_COLOR);
-        if (gtTauD != null) drawHLine(ctx, u, gtTauD * 1000, TAU_DECAY_COLOR);
+        drawHLine(ctx, u, shape.tPeak * 1000, TPEAK_COLOR);
+        drawHLine(ctx, u, shape.fwhm * 1000, FWHM_COLOR);
 
         ctx.restore();
       },
@@ -77,16 +81,20 @@ function subsetScatterPlugin(): uPlot.Plugin {
           const xPx = u.valToPos(snap.iteration, 'x', true);
 
           for (const sub of snap.subsets) {
-            // tau rise scatter
-            ctx.fillStyle = TAU_RISE_FAINT;
+            const shape = tauToShape(sub.tauRise, sub.tauDecay);
+            const tPeakMs = shape ? shape.tPeak * 1000 : 0;
+            const fwhmMs = shape ? shape.fwhm * 1000 : 0;
+
+            // tPeak scatter
+            ctx.fillStyle = TPEAK_FAINT;
             ctx.beginPath();
-            ctx.arc(xPx, u.valToPos(sub.tauRise * 1000, 'y', true), 4 * dpr, 0, 2 * Math.PI);
+            ctx.arc(xPx, u.valToPos(tPeakMs, 'y', true), 4 * dpr, 0, 2 * Math.PI);
             ctx.fill();
 
-            // tau decay scatter
-            ctx.fillStyle = TAU_DECAY_FAINT;
+            // FWHM scatter
+            ctx.fillStyle = FWHM_FAINT;
             ctx.beginPath();
-            ctx.arc(xPx, u.valToPos(sub.tauDecay * 1000, 'y', true), 4 * dpr, 0, 2 * Math.PI);
+            ctx.arc(xPx, u.valToPos(fwhmMs, 'y', true), 4 * dpr, 0, 2 * Math.PI);
             ctx.fill();
           }
         }
@@ -112,16 +120,22 @@ export function KernelConvergence(): JSX.Element {
     if (h.length === 0) return [[], [], [], []];
     return [
       h.map((s) => s.iteration),
-      h.map((s) => s.tauRise * 1000),
-      h.map((s) => s.tauDecay * 1000),
+      h.map((s) => {
+        const shape = tauToShape(s.tauRise, s.tauDecay);
+        return shape ? shape.tPeak * 1000 : 0;
+      }),
+      h.map((s) => {
+        const shape = tauToShape(s.tauRise, s.tauDecay);
+        return shape ? shape.fwhm * 1000 : 0;
+      }),
       h.map((s) => s.residual),
     ];
   });
 
   const series: uPlot.Series[] = [
     {},
-    { label: 'tau rise (ms)', stroke: TAU_RISE_COLOR, width: 2, points: { show: true, size: 6 } },
-    { label: 'tau decay (ms)', stroke: TAU_DECAY_COLOR, width: 2, points: { show: true, size: 6 } },
+    { label: 't_peak (ms)', stroke: TPEAK_COLOR, width: 2, points: { show: true, size: 6 } },
+    { label: 'FWHM (ms)', stroke: FWHM_COLOR, width: 2, points: { show: true, size: 6 } },
     {
       label: 'residual',
       stroke: RESIDUAL_COLOR,

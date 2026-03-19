@@ -51,19 +51,18 @@ export function computeKernel(
  * @param tauRise - Rise time constant in seconds
  * @param tauDecay - Decay time constant in seconds
  * @param fs - Sampling rate in Hz
- * @returns Peak time and half-decay time in seconds, or null if degenerate
+ * @returns Peak time, half-decay time, half-rise time, and FWHM in seconds, or null if degenerate
  */
 export function computeKernelAnnotations(
   tauRise: number,
   tauDecay: number,
   fs: number,
-): { peakTime: number; halfDecayTime: number } | null {
+): { peakTime: number; halfDecayTime: number; halfRiseTime: number; fwhm: number } | null {
   if (tauDecay <= tauRise || tauRise <= 0 || tauDecay <= 0) return null;
 
   // Analytical peak time: t_peak = (τ_r × τ_d) / (τ_d - τ_r) × ln(τ_d / τ_r)
   const peakTime = ((tauRise * tauDecay) / (tauDecay - tauRise)) * Math.log(tauDecay / tauRise);
 
-  // Numerical search for half-decay: first sample after peak where kernel ≤ 0.5
   const dt = 1 / fs;
   const peakSample = Math.round(peakTime * fs);
   const maxSamples = Math.ceil(5 * tauDecay * fs);
@@ -72,13 +71,30 @@ export function computeKernelAnnotations(
   const peakVal = Math.exp(-peakTime / tauDecay) - Math.exp(-peakTime / tauRise);
   if (peakVal <= 0) return null;
 
+  // Rising half-max bisection: search on [0, peakTime] for first sample where kernel >= 0.5
+  let halfRiseTime: number | null = null;
+  for (let i = 0; i <= peakSample; i++) {
+    const t = i * dt;
+    const val = (Math.exp(-t / tauDecay) - Math.exp(-t / tauRise)) / peakVal;
+    if (val >= 0.5) {
+      halfRiseTime = t;
+      break;
+    }
+  }
+  if (halfRiseTime == null) return null;
+
+  // Numerical search for half-decay: first sample after peak where kernel <= 0.5
+  let halfDecayTime: number | null = null;
   for (let i = peakSample + 1; i < maxSamples; i++) {
     const t = i * dt;
     const val = (Math.exp(-t / tauDecay) - Math.exp(-t / tauRise)) / peakVal;
     if (val <= 0.5) {
-      return { peakTime, halfDecayTime: t };
+      halfDecayTime = t;
+      break;
     }
   }
+  if (halfDecayTime == null) return null;
 
-  return null;
+  const fwhm = halfDecayTime - halfRiseTime;
+  return { peakTime, halfDecayTime, halfRiseTime, fwhm };
 }

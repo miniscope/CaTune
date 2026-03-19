@@ -2,6 +2,7 @@
 // Hard limits block submission (validateSubmission).
 
 import type { SubmissionValidationResult } from '@calab/community';
+import { tauToShape } from '@calab/compute';
 
 /** Hard parameter range limits that block submission if violated. */
 const HARD_LIMITS = {
@@ -46,6 +47,14 @@ export function validateSubmission(params: ValidationParams): SubmissionValidati
 
   if (params.tauRise >= params.tauDecay) {
     issues.push(`tau_rise (${params.tauRise}s) must be less than tau_decay (${params.tauDecay}s)`);
+  }
+
+  const shape = tauToShape(params.tauRise, params.tauDecay);
+  if (shape) {
+    if (shape.tPeak <= 0 || shape.tPeak >= 1)
+      issues.push(`t_peak (${shape.tPeak}s) is outside valid range`);
+    if (shape.fwhm <= 0 || shape.fwhm >= 10)
+      issues.push(`fwhm (${shape.fwhm}s) is outside valid range`);
   }
 
   return {

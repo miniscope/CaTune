@@ -7,7 +7,7 @@
  */
 
 import { createSignal, Show } from 'solid-js';
-import { tauRise, tauDecay, lambda, filterEnabled } from '../../lib/viz-store.ts';
+import { tPeak, fwhm, lambda, filterEnabled } from '../../lib/viz-store.ts';
 import {
   samplingRate,
   effectiveShape,
@@ -72,8 +72,8 @@ export function SubmitPanel() {
     const file = rawFile();
 
     return buildExportData(
-      tauRise(),
-      tauDecay(),
+      tPeak(),
+      fwhm(),
       lambda(),
       fs,
       filterEnabled(),
@@ -107,8 +107,8 @@ export function SubmitPanel() {
     const data = parsedData();
 
     const validation = validateSubmission({
-      tauRise: tauRise(),
-      tauDecay: tauDecay(),
+      tPeak: tPeak(),
+      fwhm: fwhm(),
       lambda: lambda(),
       samplingRate: fs,
     });
@@ -136,8 +136,8 @@ export function SubmitPanel() {
           imagingDepth: imagingDepth(),
         },
         {
-          tauRise: tauRise(),
-          tauDecay: tauDecay(),
+          tPeak: tPeak(),
+          fwhm: fwhm(),
           lambda: lambda(),
           samplingRate: fs,
           filterEnabled: filterEnabled(),
@@ -184,8 +184,8 @@ export function SubmitPanel() {
       {/* Parameter summary row */}
       <div class="submit-panel__summary">
         <span>
-          rise: {(tauRise() * 1000).toFixed(1)}ms, decay: {(tauDecay() * 1000).toFixed(1)}ms,
-          lambda: {lambda().toExponential(2)}
+          peak: {(tPeak() * 1000).toFixed(1)}ms, FWHM: {(fwhm() * 1000).toFixed(1)}ms, lambda:{' '}
+          {lambda().toExponential(2)}
         </span>
       </div>
 

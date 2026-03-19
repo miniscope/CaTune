@@ -3,7 +3,7 @@
 // Replaces multi-cell-solver.ts, tuning-orchestrator.ts, and job-scheduler.ts.
 
 import { createEffect, on, onCleanup } from 'solid-js';
-import { tauRise, tauDecay, lambda, selectedCell, filterEnabled } from './viz-store.ts';
+import { tPeak, fwhm, lambda, selectedCell, filterEnabled } from './viz-store.ts';
 import { parsedData, effectiveShape, swapped, samplingRate } from './data-store.ts';
 import {
   selectedCells,
@@ -16,7 +16,7 @@ import {
   hoveredCell,
 } from './multi-cell-store.ts';
 import { extractCellTrace } from '@calab/io';
-import { computePaddedWindow, computeSafeMargin, WarmStartCache } from '@calab/compute';
+import { computePaddedWindow, computeSafeMargin, WarmStartCache, shapeToTau } from '@calab/compute';
 import { createCaTuneWorkerPool, type WorkerPool, type CaTunePoolJob } from '@calab/compute';
 import type { SolverParams } from '@calab/core';
 import type { NpyResult } from '@calab/core';
@@ -57,9 +57,10 @@ function nextJobId(): number {
 }
 
 function getCurrentParams(): SolverParams {
+  const tau = shapeToTau(tPeak(), fwhm());
   return {
-    tauRise: tauRise(),
-    tauDecay: tauDecay(),
+    tauRise: tau?.tauRise ?? 0.1,
+    tauDecay: tau?.tauDecay ?? 0.6,
     lambda: lambda(),
     fs: samplingRate() ?? 30,
     filterEnabled: filterEnabled(),
@@ -284,11 +285,13 @@ function ensureCellState(
     const rawTrace = extractCellTrace(cellIndex, data, shape, isSwapped);
     const fs = samplingRate() ?? 30;
     const duration = rawTrace.length / fs;
+    const tau = shapeToTau(tPeak(), fwhm());
+    const zoomOffset = 2 * (tau?.tauDecay ?? 0.6);
     state = {
       cellIndex,
       rawTrace,
-      zoomStart: Math.min(2 * tauDecay(), duration),
-      zoomEnd: Math.min(2 * tauDecay() + DEFAULT_ZOOM_WINDOW_S, duration),
+      zoomStart: Math.min(zoomOffset, duration),
+      zoomEnd: Math.min(zoomOffset + DEFAULT_ZOOM_WINDOW_S, duration),
       warmStartCache: new WarmStartCache(),
       activeJobId: null,
       debounceTimer: null,
@@ -420,7 +423,7 @@ export function initCellSolveManager(): void {
 
   // Effect 2: Watch global params — mark all cells stale, cancel all, re-dispatch all
   createEffect(
-    on([tauRise, tauDecay, lambda, filterEnabled], () => {
+    on([tPeak, fwhm, lambda, filterEnabled], () => {
       if (cellStates.size === 0) return;
 
       // Cancel everything

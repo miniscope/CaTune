@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { validateSubmission } from '../quality-checks.ts';
 
-/** Helper that returns a valid baseline parameter set. */
+/** Helper that returns a valid baseline parameter set (tPeak/fwhm in seconds). */
 function validParams() {
-  return { tauRise: 0.05, tauDecay: 0.5, lambda: 0.01, samplingRate: 30 };
+  return { tPeak: 0.08, fwhm: 0.5, lambda: 0.01, samplingRate: 30 };
 }
 
 describe('validateSubmission', () => {
@@ -12,29 +12,28 @@ describe('validateSubmission', () => {
     expect(result).toEqual({ valid: true, issues: [] });
   });
 
-  it('accepts tauRise at exact min boundary (0.001)', () => {
-    const result = validateSubmission({ ...validParams(), tauRise: 0.001 });
-    expect(result.valid).toBe(true);
-    expect(result.issues).toHaveLength(0);
-  });
-
-  it('accepts tauRise at exact max boundary (0.5)', () => {
-    // tauDecay must be greater than tauRise, so bump it up
-    const result = validateSubmission({ ...validParams(), tauRise: 0.5, tauDecay: 1.0 });
-    expect(result.valid).toBe(true);
-    expect(result.issues).toHaveLength(0);
-  });
-
-  it('rejects tauRise below min (0.0001)', () => {
-    const result = validateSubmission({ ...validParams(), tauRise: 0.0001 });
+  it('rejects tPeak at or below 0', () => {
+    const result = validateSubmission({ ...validParams(), tPeak: 0 });
     expect(result.valid).toBe(false);
-    expect(result.issues).toEqual(expect.arrayContaining([expect.stringContaining('tau_rise')]));
+    expect(result.issues).toEqual(expect.arrayContaining([expect.stringContaining('t_peak')]));
   });
 
-  it('rejects tauDecay above max (11)', () => {
-    const result = validateSubmission({ ...validParams(), tauDecay: 11 });
+  it('rejects tPeak at or above 1', () => {
+    const result = validateSubmission({ ...validParams(), tPeak: 1 });
     expect(result.valid).toBe(false);
-    expect(result.issues).toEqual(expect.arrayContaining([expect.stringContaining('tau_decay')]));
+    expect(result.issues).toEqual(expect.arrayContaining([expect.stringContaining('t_peak')]));
+  });
+
+  it('rejects fwhm at or below 0', () => {
+    const result = validateSubmission({ ...validParams(), fwhm: 0 });
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual(expect.arrayContaining([expect.stringContaining('fwhm')]));
+  });
+
+  it('rejects fwhm at or above 10', () => {
+    const result = validateSubmission({ ...validParams(), fwhm: 10 });
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual(expect.arrayContaining([expect.stringContaining('fwhm')]));
   });
 
   it('rejects lambda below min (0)', () => {
@@ -51,23 +50,23 @@ describe('validateSubmission', () => {
     );
   });
 
-  it('rejects tauRise >= tauDecay', () => {
-    const result = validateSubmission({ ...validParams(), tauRise: 0.5, tauDecay: 0.5 });
+  it('rejects invalid kernel shape (fwhm <= tPeak)', () => {
+    const result = validateSubmission({ ...validParams(), tPeak: 0.5, fwhm: 0.3 });
     expect(result.valid).toBe(false);
     expect(result.issues).toEqual(
-      expect.arrayContaining([expect.stringContaining('must be less than')]),
+      expect.arrayContaining([expect.stringContaining('Invalid kernel shape')]),
     );
   });
 
   it('collects multiple violations in the issues array', () => {
     const result = validateSubmission({
-      tauRise: 999,
-      tauDecay: 0.001,
+      tPeak: 0,
+      fwhm: 0,
       lambda: 0,
       samplingRate: 9999,
     });
     expect(result.valid).toBe(false);
-    // At least tau_rise, tau_decay, lambda, sampling_rate, and tau_rise >= tau_decay
+    // At least t_peak, fwhm, lambda, sampling_rate, and invalid shape
     expect(result.issues.length).toBeGreaterThanOrEqual(4);
   });
 });

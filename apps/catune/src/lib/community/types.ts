@@ -7,6 +7,8 @@ import type { BaseSubmission, BaseFilterState } from '@calab/community';
 export interface CatuneSubmission extends BaseSubmission {
   tau_rise: number;
   tau_decay: number;
+  t_peak: number;
+  fwhm: number;
   lambda: number;
   sampling_rate: number;
   ar2_g1: number;
