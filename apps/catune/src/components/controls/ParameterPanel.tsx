@@ -17,58 +17,50 @@ import { notifyTutorialAction } from '@calab/tutorials';
 import { isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
 import { PARAM_RANGES } from '@calab/core';
 import { ParameterSlider } from './ParameterSlider.tsx';
-import { DualRangeSlider } from './DualRangeSlider.tsx';
 import '../../styles/controls.css';
 
 export function ParameterPanel() {
-  // Enforce fwhm > tPeak so the kernel shape stays valid.
-  const minGap = PARAM_RANGES.fwhm.step;
+  // Peak must be less than half the FWHM for a valid bi-exponential kernel.
+  const peakMax = () => Math.min(PARAM_RANGES.tPeak.max, fwhm() / 2);
   const clampedSetTPeak = (v: number) => {
-    setTPeak(v);
-    if (fwhm() < v + minGap) setFwhm(v + minGap);
+    setTPeak(Math.min(v, peakMax()));
   };
   const clampedSetFwhm = (v: number) => {
     setFwhm(v);
-    if (tPeak() > v - minGap) setTPeak(v - minGap);
+    if (tPeak() > v / 2) setTPeak(v / 2);
   };
 
-  const truePeak = () => {
+  const trueShape = () => {
     if (!groundTruthVisible() || !isDemo() || !demoPreset()) return undefined;
-    const preset = demoPreset()!;
-    const shape = tauToShape(preset.params.tauRise, preset.params.tauDecay);
-    return shape?.tPeak;
-  };
-
-  const trueFwhm = () => {
-    if (!groundTruthVisible() || !isDemo() || !demoPreset()) return undefined;
-    const preset = demoPreset()!;
-    const shape = tauToShape(preset.params.tauRise, preset.params.tauDecay);
-    return shape?.fwhm;
+    return tauToShape(demoPreset()!.params.tauRise, demoPreset()!.params.tauDecay) ?? undefined;
   };
 
   return (
     <div class="param-panel" data-tutorial="param-panel">
       <div class="param-panel__sliders">
-        <DualRangeSlider
-          label="Kernel Shape"
-          lowLabel="Peak"
-          highLabel="FWHM"
-          lowValue={tPeak}
-          highValue={fwhm}
-          setLowValue={clampedSetTPeak}
-          setHighValue={clampedSetFwhm}
+        <ParameterSlider
+          label="Peak"
+          value={tPeak}
+          setValue={clampedSetTPeak}
           min={PARAM_RANGES.tPeak.min}
-          max={PARAM_RANGES.fwhm.max}
-          lowMin={PARAM_RANGES.tPeak.min}
-          lowMax={PARAM_RANGES.tPeak.max}
-          highMin={PARAM_RANGES.fwhm.min}
-          highMax={PARAM_RANGES.fwhm.max}
+          max={peakMax()}
+          step={PARAM_RANGES.tPeak.step}
           format={(v) => (v * 1000).toFixed(1)}
           unit="ms"
-          data-tutorial-low="slider-peak"
-          data-tutorial-high="slider-fwhm"
-          lowTrueValue={truePeak()}
-          highTrueValue={trueFwhm()}
+          data-tutorial="slider-peak"
+          trueValue={trueShape()?.tPeak}
+        />
+        <ParameterSlider
+          label="FWHM"
+          value={fwhm}
+          setValue={clampedSetFwhm}
+          min={PARAM_RANGES.fwhm.min}
+          max={PARAM_RANGES.fwhm.max}
+          step={PARAM_RANGES.fwhm.step}
+          format={(v) => (v * 1000).toFixed(1)}
+          unit="ms"
+          data-tutorial="slider-fwhm"
+          trueValue={trueShape()?.fwhm}
         />
         <ParameterSlider
           label="Sparsity"
