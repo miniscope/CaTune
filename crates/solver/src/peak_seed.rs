@@ -51,7 +51,7 @@ pub struct SeedKernelResult {
     pub tau_decay: f64,
     pub beta: f64,
     pub residual: f64,
-    pub tau_fast: f64,
+    pub r_fast: f64,
     pub beta_fast: f64,
     pub n_seed_spikes: usize,
 }
@@ -210,7 +210,7 @@ pub fn seed_kernel_estimate(
             tau_decay: 0.4,
             beta: 0.0,
             residual: f64::INFINITY,
-            tau_fast: 0.0,
+            r_fast: 0.0,
             beta_fast: 0.0,
             n_seed_spikes: 0,
         };
@@ -234,9 +234,9 @@ pub fn seed_kernel_estimate(
         tau_decay,
         beta,
         residual,
-        tau_fast,
+        r_fast,
         beta_fast,
-    } = fit_biexponential(&free_kernel, fs, true, 1);
+    } = fit_biexponential(&free_kernel, fs, true, 0);
 
     SeedKernelResult {
         free_kernel,
@@ -244,7 +244,7 @@ pub fn seed_kernel_estimate(
         tau_decay,
         beta,
         residual,
-        tau_fast,
+        r_fast,
         beta_fast,
         n_seed_spikes: total_seed_spikes,
     }

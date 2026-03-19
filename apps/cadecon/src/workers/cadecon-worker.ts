@@ -112,7 +112,7 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
       tau_decay: number;
       beta: number;
       residual: number;
-      tau_fast: number;
+      r_fast: number;
       beta_fast: number;
     };
 
@@ -126,7 +126,7 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
           tauDecay: biexpJs.tau_decay,
           beta: biexpJs.beta,
           residual: biexpJs.residual,
-          tauFast: biexpJs.tau_fast,
+          rFast: biexpJs.r_fast,
           betaFast: biexpJs.beta_fast,
         },
       },

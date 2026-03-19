@@ -63,7 +63,7 @@ export function KernelDisplay(): JSX.Element {
 
   const hasFastComponent = createMemo(() => {
     const snap = snapshot();
-    return snap != null && snap.tauFast > 0 && snap.betaFast > 0;
+    return snap != null && snap.rFast > 0 && snap.betaFast > 0;
   });
 
   const chartData = createMemo((): uPlot.AlignedData => {
@@ -74,7 +74,7 @@ export function KernelDisplay(): JSX.Element {
     const tauR = snap.tauRise;
     const tauD = snap.tauDecay;
     const beta = snap.beta;
-    const tauF = snap.tauFast;
+    const rF = snap.rFast;
     const betaF = snap.betaFast;
 
     // Find the max kernel length across subsets
@@ -98,16 +98,19 @@ export function KernelDisplay(): JSX.Element {
       return arr;
     });
 
-    // Build raw (un-normalized) fit curves
+    // Build raw (un-normalized) fit curves.
+    // Slow = calcium kernel. Fast = compressed biexponential that absorbs the
+    // noise artifact produced by the spike↔kernel feedback loop (same shape as
+    // the slow kernel, time-scaled by compression ratio rF).
     const rawSlow: (number | null)[] = new Array(maxLen);
     const rawFast: (number | null)[] = new Array(maxLen);
     const rawFull: (number | null)[] = new Array(maxLen);
-    const hasFast = tauF > 0 && betaF > 0;
+    const hasFast = rF > 0 && betaF > 0;
 
     for (let i = 0; i < maxLen; i++) {
       const t = i / fs; // time in seconds
       rawSlow[i] = beta * (Math.exp(-t / tauD) - Math.exp(-t / tauR));
-      rawFast[i] = hasFast ? betaF * Math.exp(-t / tauF) : 0;
+      rawFast[i] = hasFast ? betaF * (Math.exp(-t / (tauD * rF)) - Math.exp(-t / (tauR * rF))) : 0;
       rawFull[i] = (rawSlow[i] as number) + (rawFast[i] as number);
     }
 
@@ -123,14 +126,6 @@ export function KernelDisplay(): JSX.Element {
         rawFast[i] = (rawFast[i] as number) / fullPeak;
         rawFull[i] = (rawFull[i] as number) / fullPeak;
       }
-    }
-
-    // Null out index 0 for fast and full curves: the kernel is 0 at lag 0 by
-    // construction, but exp(-0/τ_f) = 1 — the fit uses skip≥1 so bin 0 isn't
-    // part of the objective. Nulling it avoids a misleading visual mismatch.
-    if (hasFast) {
-      rawFast[0] = null;
-      rawFull[0] = null;
     }
 
     // Columns: [subsets..., slow, fast, full] — fast+full only when present

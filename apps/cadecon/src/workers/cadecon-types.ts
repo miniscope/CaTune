@@ -26,7 +26,7 @@ export interface KernelResult {
   tauDecay: number;
   beta: number;
   residual: number;
-  tauFast: number;
+  rFast: number;
   betaFast: number;
 }
 
