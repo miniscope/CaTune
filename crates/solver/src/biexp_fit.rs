@@ -118,6 +118,17 @@ pub fn fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usize) -> 
         }
     }
 
+    // Recompute residual over the FULL kernel (skip=0) so it captures early-bin
+    // divergence between the free kernel and the bi-exponential template. The fit
+    // itself (beta, tau_r, tau_d) was determined using skip..n to avoid noise bias,
+    // but the full-kernel residual is a better overfitting metric: when iterations
+    // start explaining noise rather than calcium, the early bins diverge and this
+    // residual rises — useful as an early-stopping signal.
+    if skip > 0 {
+        let (_, full_residual) = eval_biexp(h_free, best.tau_rise, best.tau_decay, dt, 0);
+        best.residual = full_residual;
+    }
+
     best
 }
 
@@ -339,7 +350,7 @@ mod tests {
         // Without skip: noise biases the fit
         let no_skip = fit_biexponential(&h, fs, true, 0);
 
-        // With skip=3: noise is excluded, fit should be closer to truth
+        // With skip=3: noise is excluded from fitting, tau estimates improve
         let with_skip = fit_biexponential(&h, fs, true, 3);
 
         let err_no_skip = (no_skip.tau_rise - tau_r_true).abs();
@@ -350,6 +361,19 @@ mod tests {
             "skip=3 should improve tau_rise fit: err_skip={:.4} vs err_noskip={:.4}",
             err_with_skip,
             err_no_skip
+        );
+
+        // The residual should be evaluated over the FULL kernel (including
+        // corrupted bins), so it reflects the total mismatch. With corrupted
+        // early bins, the full-kernel residual should be larger than the
+        // residual from a clean kernel.
+        let clean = make_biexp(tau_r_true, tau_d_true, 2.0, fs, n);
+        let clean_result = fit_biexponential(&clean, fs, true, 3);
+        assert!(
+            with_skip.residual > clean_result.residual,
+            "Corrupted kernel should have higher full-kernel residual: {:.6} vs {:.6}",
+            with_skip.residual,
+            clean_result.residual
         );
     }
 
