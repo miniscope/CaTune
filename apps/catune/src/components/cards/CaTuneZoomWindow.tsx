@@ -27,10 +27,8 @@ import {
   showResid,
   showGTCalcium,
   showGTSpikes,
-  tPeak,
-  fwhm,
+  currentTau,
 } from '../../lib/viz-store.ts';
-import { shapeToTau } from '@calab/compute';
 
 export interface CaTuneZoomWindowProps {
   rawTrace: Float64Array;
@@ -83,8 +81,7 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
   const [chartWidth, setChartWidth] = createSignal(600);
 
   const transientTime = createMemo(() => {
-    const tau = shapeToTau(tPeak(), fwhm());
-    return TRANSIENT_TAU_MULTIPLIER * (tau?.tauDecay ?? 0.6);
+    return TRANSIENT_TAU_MULTIPLIER * currentTau().tauDecay;
   });
 
   onMount(() => {

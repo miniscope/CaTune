@@ -2,8 +2,9 @@
 // Signals are wired to the solver via tuning-orchestrator.
 // Parameter changes trigger solver dispatch; results flow back here.
 
-import { createSignal } from 'solid-js';
+import { createSignal, createMemo } from 'solid-js';
 import { trackEvent } from '@calab/community';
+import { shapeToTau } from '@calab/compute';
 import { pinMultiCellResults, unpinMultiCellResults } from './multi-cell-store.ts';
 
 // --- Cell selection ---
@@ -14,6 +15,19 @@ const [selectedCell, setSelectedCell] = createSignal<number>(0);
 
 const [tPeak, setTPeak] = createSignal<number>(0.008); // default from tauToShape(0.001, 3.0)
 const [fwhm, setFwhm] = createSignal<number>(2.08);
+
+// --- Derived tau values (single conversion from tPeak/FWHM) ---
+
+const DEFAULT_TAU_RISE = 0.1;
+const DEFAULT_TAU_DECAY = 0.6;
+
+const currentTau = createMemo(() => {
+  const tau = shapeToTau(tPeak(), fwhm());
+  return {
+    tauRise: tau?.tauRise ?? DEFAULT_TAU_RISE,
+    tauDecay: tau?.tauDecay ?? DEFAULT_TAU_DECAY,
+  };
+});
 
 // --- Lambda (sparsity penalty) ---
 
@@ -75,6 +89,7 @@ export {
   setTPeak,
   fwhm,
   setFwhm,
+  currentTau,
   // Lambda (sparsity)
   lambda,
   setLambda,

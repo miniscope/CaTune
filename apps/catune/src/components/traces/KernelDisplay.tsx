@@ -5,9 +5,9 @@
  */
 
 import { createMemo } from 'solid-js';
-import { computeKernel, computeKernelAnnotations, shapeToTau } from '@calab/compute';
+import { computeKernel, computeKernelAnnotations } from '@calab/compute';
 import { kernelAnnotationsPlugin } from '../../lib/chart/kernel-annotations-plugin.ts';
-import { tPeak, fwhm } from '../../lib/viz-store.ts';
+import { currentTau } from '../../lib/viz-store.ts';
 import { samplingRate, isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
 import { createGroundTruthKernelSeries } from '../../lib/chart/series-config.ts';
 import { TracePanel } from '@calab/ui/chart';
@@ -16,13 +16,10 @@ import type uPlot from 'uplot';
 const KERNEL_SYNC_KEY = 'catune-kernel';
 
 export function KernelDisplay() {
-  const tau = createMemo(() => shapeToTau(tPeak(), fwhm()));
-
   const kernelData = createMemo<[number[], ...(number | null)[][]]>(() => {
     const fs = samplingRate() ?? 30;
-    const t = tau();
-    if (!t) return [[0], [0]];
-    const userKernel = computeKernel(t.tauRise, t.tauDecay, fs);
+    const tau = currentTau();
+    const userKernel = computeKernel(tau.tauRise, tau.tauDecay, fs);
 
     if (groundTruthVisible() && isDemo() && demoPreset()) {
       const preset = demoPreset()!;
@@ -67,9 +64,8 @@ export function KernelDisplay() {
 
   const annotations = createMemo(() => {
     const fs = samplingRate() ?? 30;
-    const t = tau();
-    if (!t) return null;
-    return computeKernelAnnotations(t.tauRise, t.tauDecay, fs);
+    const tau = currentTau();
+    return computeKernelAnnotations(tau.tauRise, tau.tauDecay, fs);
   });
 
   const kernelPlugins = createMemo<uPlot.Plugin[]>(() => [
