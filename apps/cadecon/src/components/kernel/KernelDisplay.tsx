@@ -63,7 +63,7 @@ export function KernelDisplay(): JSX.Element {
 
   const hasFastComponent = createMemo(() => {
     const snap = snapshot();
-    return snap != null && snap.rFast > 0 && snap.betaFast > 0;
+    return snap != null && snap.tauRiseFast > 0 && snap.tauDecayFast > 0 && snap.betaFast > 0;
   });
 
   const chartData = createMemo((): uPlot.AlignedData => {
@@ -74,7 +74,8 @@ export function KernelDisplay(): JSX.Element {
     const tauR = snap.tauRise;
     const tauD = snap.tauDecay;
     const beta = snap.beta;
-    const rF = snap.rFast;
+    const tauRF = snap.tauRiseFast;
+    const tauDF = snap.tauDecayFast;
     const betaF = snap.betaFast;
 
     // Find the max kernel length across subsets
@@ -105,12 +106,12 @@ export function KernelDisplay(): JSX.Element {
     const rawSlow: (number | null)[] = new Array(maxLen);
     const rawFast: (number | null)[] = new Array(maxLen);
     const rawFull: (number | null)[] = new Array(maxLen);
-    const hasFast = rF > 0 && betaF > 0;
+    const hasFast = tauRF > 0 && tauDF > tauRF && betaF > 0;
 
     for (let i = 0; i < maxLen; i++) {
       const t = i / fs; // time in seconds
       rawSlow[i] = beta * (Math.exp(-t / tauD) - Math.exp(-t / tauR));
-      rawFast[i] = hasFast ? betaF * (Math.exp(-t / (tauD * rF)) - Math.exp(-t / (tauR * rF))) : 0;
+      rawFast[i] = hasFast ? betaF * (Math.exp(-t / tauDF) - Math.exp(-t / tauRF)) : 0;
       rawFull[i] = (rawSlow[i] as number) + (rawFast[i] as number);
     }
 
@@ -222,7 +223,10 @@ export function KernelDisplay(): JSX.Element {
             beta: <strong>{snapshot()?.beta.toFixed(3) ?? '--'}</strong>
           </span>
           <span>
-            beta_fast: <strong>{snapshot()?.betaFast.toFixed(3) ?? '--'}</strong>
+            tau_r_fast: <strong>{formatTauMs(snapshot()?.tauRiseFast ?? null)}</strong> ms
+          </span>
+          <span>
+            tau_d_fast: <strong>{formatTauMs(snapshot()?.tauDecayFast ?? null)}</strong> ms
           </span>
           <Show when={showGroundTruth()}>
             <span class="kernel-display__gt-stat">

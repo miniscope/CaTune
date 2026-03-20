@@ -201,10 +201,14 @@ export function indeca_estimate_kernel(traces_flat: Float32Array, spikes_flat: F
 /**
  * Fit a bi-exponential model to a free-form kernel.
  *
+ * Warm-start: pass `use_warm=true` and the previous result's fields to skip
+ * the grid search and refine directly from those parameters. Pass `use_warm=false`
+ * (and any values for warm_* fields) for cold-start.
+ *
  * Returns a JsValue containing the serialized BiexpResult:
- * { tau_rise, tau_decay, beta, residual }
+ * { tau_rise, tau_decay, beta, residual, tau_rise_fast, tau_decay_fast, beta_fast }
  */
-export function indeca_fit_biexponential(h_free: Float32Array, fs: number, refine: boolean, skip: number): any;
+export function indeca_fit_biexponential(h_free: Float32Array, fs: number, refine: boolean, skip: number, warm_tau_rise: number, warm_tau_decay: number, warm_tau_rise_fast: number, warm_tau_decay_fast: number, warm_beta: number, warm_beta_fast: number, warm_residual: number, use_warm: boolean): any;
 
 /**
  * Solve a single trace using the InDeCa pipeline.
@@ -232,7 +236,7 @@ export interface InitOutput {
     readonly __wbg_solver_free: (a: number, b: number) => void;
     readonly indeca_compute_upsample_factor: (a: number, b: number) => number;
     readonly indeca_estimate_kernel: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => void;
-    readonly indeca_fit_biexponential: (a: number, b: number, c: number, d: number, e: number) => number;
+    readonly indeca_fit_biexponential: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => number;
     readonly indeca_solve_trace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => number;
     readonly seed_trace: (a: number, b: number, c: number) => number;
     readonly solver_apply_filter: (a: number) => number;

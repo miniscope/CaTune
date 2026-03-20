@@ -106,13 +106,28 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
 
     const hFreeArr = new Float32Array(hFree);
 
-    // Step 2: Bi-exponential fit
-    const biexpJs = indeca_fit_biexponential(hFreeArr, req.fs, req.refine, req.biexpSkip) as {
+    // Step 2: Bi-exponential fit (with optional warm-start)
+    const w = req.warmBiexp;
+    const biexpJs = indeca_fit_biexponential(
+      hFreeArr,
+      req.fs,
+      req.refine,
+      req.biexpSkip,
+      w?.tauRise ?? 0,
+      w?.tauDecay ?? 0,
+      w?.tauRiseFast ?? 0,
+      w?.tauDecayFast ?? 0,
+      w?.beta ?? 0,
+      w?.betaFast ?? 0,
+      w?.residual ?? 0,
+      w != null,
+    ) as {
       tau_rise: number;
       tau_decay: number;
       beta: number;
       residual: number;
-      r_fast: number;
+      tau_rise_fast: number;
+      tau_decay_fast: number;
       beta_fast: number;
     };
 
@@ -126,7 +141,8 @@ function handleKernelJob(req: Extract<CaDeconWorkerInbound, { type: 'kernel-job'
           tauDecay: biexpJs.tau_decay,
           beta: biexpJs.beta,
           residual: biexpJs.residual,
-          rFast: biexpJs.r_fast,
+          tauRiseFast: biexpJs.tau_rise_fast,
+          tauDecayFast: biexpJs.tau_decay_fast,
           betaFast: biexpJs.beta_fast,
         },
       },

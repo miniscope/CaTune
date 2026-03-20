@@ -93,11 +93,42 @@ pub fn indeca_estimate_kernel(
 
 /// Fit a bi-exponential model to a free-form kernel.
 ///
+/// Warm-start: pass `use_warm=true` and the previous result's fields to skip
+/// the grid search and refine directly from those parameters. Pass `use_warm=false`
+/// (and any values for warm_* fields) for cold-start.
+///
 /// Returns a JsValue containing the serialized BiexpResult:
-/// { tau_rise, tau_decay, beta, residual }
+/// { tau_rise, tau_decay, beta, residual, tau_rise_fast, tau_decay_fast, beta_fast }
 #[wasm_bindgen]
-pub fn indeca_fit_biexponential(h_free: &[f32], fs: f64, refine: bool, skip: usize) -> JsValue {
-    let result = biexp_fit::fit_biexponential(h_free, fs, refine, skip);
+pub fn indeca_fit_biexponential(
+    h_free: &[f32],
+    fs: f64,
+    refine: bool,
+    skip: usize,
+    warm_tau_rise: f64,
+    warm_tau_decay: f64,
+    warm_tau_rise_fast: f64,
+    warm_tau_decay_fast: f64,
+    warm_beta: f64,
+    warm_beta_fast: f64,
+    warm_residual: f64,
+    use_warm: bool,
+) -> JsValue {
+    let warm_start = if use_warm {
+        Some(biexp_fit::BiexpResult {
+            tau_rise: warm_tau_rise,
+            tau_decay: warm_tau_decay,
+            beta: warm_beta,
+            residual: warm_residual,
+            tau_rise_fast: warm_tau_rise_fast,
+            tau_decay_fast: warm_tau_decay_fast,
+            beta_fast: warm_beta_fast,
+        })
+    } else {
+        None
+    };
+    let result =
+        biexp_fit::fit_biexponential(h_free, fs, refine, skip, warm_start.as_ref());
     serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
 }
 
@@ -116,4 +147,3 @@ pub fn seed_trace(trace: &[f32], fs: f64) -> JsValue {
     let result = peak_seed::seed_trace(trace, fs);
     serde_wasm_bindgen::to_value(&result).unwrap_or(JsValue::NULL)
 }
-

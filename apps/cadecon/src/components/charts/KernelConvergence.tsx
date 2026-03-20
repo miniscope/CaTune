@@ -26,7 +26,8 @@ const TAU_RISE_COLOR = '#66bb6a'; // green
 const TAU_DECAY_COLOR = '#ffa726'; // orange
 const TPEAK_COLOR = '#42a5f5'; // blue
 const FWHM_COLOR = '#ef5350'; // red
-const BETA_FAST_COLOR = '#ab47bc'; // purple
+const TAU_RISE_FAST_COLOR = '#ab47bc'; // purple
+const TAU_DECAY_FAST_COLOR = '#78909c'; // blue-grey
 const RESIDUAL_COLOR = '#9e9e9e';
 
 const TAU_RISE_FAINT = 'rgba(102, 187, 106, 0.3)';
@@ -177,7 +178,7 @@ export function KernelConvergence(): JSX.Element {
     const h = filteredHistory();
     if (h.length === 0)
       return {
-        aligned: [[], [], [], [], [], [], []] as uPlot.AlignedData,
+        aligned: [[], [], [], [], [], [], [], []] as uPlot.AlignedData,
         scatter: [] as SubsetScatterPoint[],
       };
 
@@ -187,7 +188,8 @@ export function KernelConvergence(): JSX.Element {
     const tPeaks: number[] = new Array(h.length);
     const fwhms: number[] = new Array(h.length);
     const residuals: number[] = new Array(h.length);
-    const betaFasts: number[] = new Array(h.length);
+    const tauRiseFasts: number[] = new Array(h.length);
+    const tauDecayFasts: number[] = new Array(h.length);
     const pts: SubsetScatterPoint[] = [];
 
     for (let i = 0; i < h.length; i++) {
@@ -199,7 +201,8 @@ export function KernelConvergence(): JSX.Element {
       tPeaks[i] = shape ? shape.tPeak * 1000 : 0;
       fwhms[i] = shape ? shape.fwhm * 1000 : 0;
       residuals[i] = s.residual;
-      betaFasts[i] = s.betaFast;
+      tauRiseFasts[i] = s.tauRiseFast * 1000;
+      tauDecayFasts[i] = s.tauDecayFast * 1000;
 
       if (s.subsets) {
         for (const sub of s.subsets) {
@@ -223,7 +226,8 @@ export function KernelConvergence(): JSX.Element {
         tPeaks,
         fwhms,
         residuals,
-        betaFasts,
+        tauRiseFasts,
+        tauDecayFasts,
       ] as uPlot.AlignedData,
       scatter: pts,
     };
@@ -263,10 +267,16 @@ export function KernelConvergence(): JSX.Element {
       dash: [4, 2],
     },
     {
-      label: 'β_fast',
-      stroke: BETA_FAST_COLOR,
+      label: 'τ_r_fast',
+      stroke: TAU_RISE_FAST_COLOR,
       width: 1,
-      scale: 'res',
+      dash: [4, 2],
+      show: false,
+    },
+    {
+      label: 'τ_d_fast',
+      stroke: TAU_DECAY_FAST_COLOR,
+      width: 1,
       dash: [4, 2],
       show: false,
     },
