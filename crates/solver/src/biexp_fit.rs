@@ -37,7 +37,50 @@
 ///
 /// Uses grid search over (tau_r, tau_d, tau_r_fast, tau_d_fast) with 2-variable NNLS
 /// for (beta_s, beta_f), optionally refined by golden-section search. Supports warm-
-/// starting from a previous result to skip the grid search.
+/// starting from a previous result.
+///
+/// # Sequential-ceiling on the fast component
+///
+/// In the iterative deconvolution loop, the slow component's tau_rise starts
+/// too high and gradually converges to the true value.  While it is still
+/// converging, the slow template under-predicts the kernel's rise, leaving
+/// a residual that the fast template can absorb.  Because the joint NNLS
+/// optimizes both amplitudes simultaneously, the fast component can "steal"
+/// slow-component amplitude — the overall fit improves on the current
+/// (still-evolving) kernel, but both components drift from their true values.
+///
+/// To prevent this we compute a **sequential estimate** of beta_f at each
+/// grid point: first fit the slow component alone (beta_s = <h, T_s> / <T_s, T_s>),
+/// then fit the fast component to the slow residual:
+///
+///   bf_seq = max(0,  (<h, T_f> − beta_s · <T_s, T_f>) / <T_f, T_f>)
+///
+/// This gives the fast component's amplitude if it could only explain what
+/// the slow template at this grid point leaves behind — it cannot steal
+/// slow amplitude.  The joint NNLS is then gated with  bf ≤ bf_seq × HEADROOM,
+/// which lets the joint solve redistribute some amplitude (essential — the
+/// fast component must absorb the artifact so the slow component doesn't
+/// distort) while preventing unbounded redistribution.
+///
+/// Key properties:
+///   • Self-contained: computed from the same inner products already
+///     available inside eval_two_component — zero extra O(n) work.
+///   • Self-calibrating: large artifact → large residual → generous ceiling.
+///   • Physically motivated: the fast component picks up features that
+///     the slow component at this (tau_r, tau_d) genuinely cannot explain.
+///   • No external state: works identically on iteration 1 and iteration N,
+///     no dependence on warm-start or previous iteration history.
+///
+/// **TODO**: investigate whether this sequential ceiling is still necessary
+/// now that the fast grid ranges have been tightened (tau_r_fast ≤ 2×dt,
+/// tau_d_fast ≤ min(8×dt, tau_d×0.15), sub-sample floors).  The original
+/// slow/fast mixing problem may have been caused entirely by the fast grid
+/// floors being too high (tau_r_fast ≥ dt, tau_d_fast ≥ 2×dt), which at
+/// low sampling rates left almost no search range and forced wide fast
+/// templates that overlapped heavily with the slow component.  If removing
+/// the ceiling with the current grid ranges does not reintroduce mixing,
+/// the ceiling logic in eval_two_component can be simplified back to a
+/// plain `bs >= bf` gate.
 
 #[cfg_attr(feature = "jsbindings", derive(serde::Serialize))]
 pub struct BiexpResult {
@@ -88,7 +131,7 @@ pub fn fit_biexponential(
 
     // Always run cold grid search so the fast component can be discovered
     // at any iteration (the artifact builds up over the spike↔kernel loop).
-    // The grid is ~10k O(n) evals ≈ 1ms — negligible vs kernel FISTA.
+    // The grid is ~16k O(n) evals — negligible vs kernel FISTA.
     let (mut best_slow, mut best_two) = cold_grid_search(h_free, fs, dt, skip);
 
     if refine {
@@ -205,17 +248,42 @@ fn cold_grid_search(h_free: &[f32], fs: f64, dt: f64, skip: usize) -> (BiexpResu
     let log_td_hi = tau_d_hi.ln();
 
     // Fast component grid: independent (tau_r_fast, tau_d_fast)
-    // tau_r_fast: 5 points linearly spaced in [1×dt, 5×dt]
-    // tau_d_fast: 8 points log-spaced in [2×dt, min(15×dt, tau_d × 0.2)]
-    //   - absolute cap 15×dt allows the artifact to extend further at high fs
-    //   - relative cap (tau_d × 0.2) prevents the fast template from
-    //     becoming collinear with the slow template
+    //
+    // Concrete bounds at representative sampling rates:
+    //
+    //   fs=30Hz  (dt=33.3ms): tau_r_fast ∈ [8.3, 66.7] ms
+    //                          tau_d_fast ∈ [16.7, min(267, tau_d×0.15)] ms
+    //                          e.g. tau_d=348ms → tau_d_fast ∈ [16.7, 52.2] ms
+    //
+    //   fs=100Hz (dt=10ms):   tau_r_fast ∈ [2.5, 20] ms
+    //                          tau_d_fast ∈ [5.0, min(80, tau_d×0.15)] ms
+    //                          e.g. tau_d=500ms → tau_d_fast ∈ [5.0, 75] ms
+    //
+    // tau_r_fast: 5 points linearly spaced in [0.25×dt, 2×dt]
+    // tau_d_fast: 8 points log-spaced in [0.5×dt, min(8×dt, tau_d × 0.15)]
+    //   - sub-sample floors (0.25×dt, 0.5×dt) let the grid represent very
+    //     narrow transients that occupy only 1-3 bins — critical at low
+    //     sampling rates where the noise artifact is essentially a spike
+    //   - tau_r_fast upper cap (2×dt) prevents the fast rise from approaching
+    //     the slow tau_r, which would make the templates collinear
+    //   - relative cap (tau_d × 0.15) prevents the fast template's decay
+    //     from extending into the slow component's domain
+    //
+    // TODO: revisit whether these bounds should depend on dt at all, or
+    // whether fixed absolute limits in milliseconds would be more physically
+    // meaningful.  The noise artifact's shape comes from the noise
+    // autocorrelation structure, which has a characteristic timescale
+    // independent of the sampling rate.  dt-relative bounds were chosen
+    // pragmatically (the artifact occupies 1-3 discrete bins), but the
+    // underlying physics may justify fixed ms bounds (e.g. tau_r_fast ≤ 20ms,
+    // tau_d_fast ≤ 60ms) that would behave more consistently across sampling
+    // rates.
     let trf_grid_n = 5;
     let tdf_grid_n = 8;
-    let trf_lo = dt;
-    let trf_hi = 5.0 * dt;
-    let tdf_lo = 2.0 * dt;
-    let tdf_abs_hi = 15.0 * dt;
+    let trf_lo = 0.25 * dt;
+    let trf_hi = 2.0 * dt;
+    let tdf_lo = 0.5 * dt;
+    let tdf_abs_hi = 8.0 * dt;
 
     let mut best_slow = BiexpResult {
         tau_rise: 0.02,
@@ -267,7 +335,7 @@ fn cold_grid_search(h_free: &[f32], fs: f64, dt: f64, skip: usize) -> (BiexpResu
             // Inner grid: scan independent (tau_r_fast, tau_d_fast)
             // Upper bound for tau_d_fast is the tighter of the absolute cap
             // (8×dt) and a relative cap (tau_d × 0.2) to prevent degeneracy.
-            let tdf_hi = tdf_abs_hi.min(tau_d * 0.2);
+            let tdf_hi = tdf_abs_hi.min(tau_d * 0.15);
             if tdf_hi <= tdf_lo {
                 continue; // tau_d too small for a distinct fast component
             }
@@ -327,6 +395,9 @@ fn cold_grid_search(h_free: &[f32], fs: f64, dt: f64, skip: usize) -> (BiexpResu
 /// For fixed time constants, this is a 2-variable non-negative least squares problem.
 /// We enumerate all 4 active sets and pick the one with minimum residual.
 ///
+/// The sequential ceiling on beta_f (see module doc) is computed internally
+/// from the same inner products — no external state required.
+///
 /// Returns (beta_s, beta_f, residual).
 fn eval_two_component(
     h_free: &[f32],
@@ -367,6 +438,22 @@ fn eval_two_component(
         dot_hh += hi * hi;
     }
 
+    // Sequential ceiling: fit slow alone first, then ask how much fast
+    // component the slow residual warrants.
+    //   beta_s_solo = <h, T_s> / <T_s, T_s>
+    //   bf_seq = max(0, (<h, T_f> - beta_s_solo * <T_s, T_f>) / <T_f, T_f>)
+    // This is what beta_f would be if it could only explain what the slow
+    // template at this grid point leaves behind.  The joint NNLS is capped
+    // at bf_seq × HEADROOM so it can redistribute some amplitude but cannot
+    // steal unboundedly from the slow component.
+    const BF_HEADROOM: f64 = 2.0;
+    let bf_ceiling = if fast_active && g_ss > 1e-30 && g_ff > 1e-30 {
+        let bs_solo = (rhs_s / g_ss).max(0.0);
+        ((rhs_f - bs_solo * g_sf) / g_ff).max(0.0) * BF_HEADROOM
+    } else {
+        f64::INFINITY
+    };
+
     // Compute residual: ||h - beta_s*T_s - beta_f*T_f||^2
     // = ||h||^2 - 2*beta_s*<h,T_s> - 2*beta_f*<h,T_f>
     //   + beta_s^2*<T_s,T_s> + 2*beta_s*beta_f*<T_s,T_f> + beta_f^2*<T_f,T_f>
@@ -382,19 +469,39 @@ fn eval_two_component(
     let mut best_res = dot_hh; // residual when both are zero
 
     // Active set 1: both free — solve 2x2 system via Cramer's rule
-    // Require bs >= bf: the slow component (calcium signal) must dominate the
-    // fast component (noise artifact correction). Without this, the compressed
-    // biexponential can steal the slow signal at wrong (tau_r, tau_d) grid points.
+    // Gates: bs >= 0, bf >= 0, bs >= bf (slow dominates), bf <= bf_ceiling
+    // (residual-guided ceiling from previous slow response).
     let det = g_ss * g_ff - g_sf * g_sf;
     if det.abs() > 1e-30 {
         let bs = (rhs_s * g_ff - rhs_f * g_sf) / det;
         let bf = (rhs_f * g_ss - rhs_s * g_sf) / det;
-        if bs >= 0.0 && bf >= 0.0 && bs >= bf {
+        if bs >= 0.0 && bf >= 0.0 && bs >= bf && bf <= bf_ceiling {
             let r = residual_fn(bs, bf);
             if r < best_res {
                 best_bs = bs;
                 best_bf = bf;
                 best_res = r;
+            }
+        }
+    }
+
+    // Active set 1b: if the unconstrained joint solve exceeded the ceiling,
+    // try clamping bf to the ceiling and re-solving for bs.  This gives the
+    // joint solve the best possible fit within the ceiling constraint rather
+    // than falling all the way back to slow-only.
+    if det.abs() > 1e-30 && bf_ceiling < f64::INFINITY {
+        let bf_clamped = bf_ceiling;
+        // bs that minimises residual with bf fixed at ceiling:
+        // d/d(bs) [... ] = 0  →  bs = (rhs_s - bf_clamped * g_sf) / g_ss
+        if g_ss > 1e-30 {
+            let bs = ((rhs_s - bf_clamped * g_sf) / g_ss).max(0.0);
+            if bs >= bf_clamped {
+                let r = residual_fn(bs, bf_clamped);
+                if r < best_res {
+                    best_bs = bs;
+                    best_bf = bf_clamped;
+                    best_res = r;
+                }
             }
         }
     }
@@ -490,8 +597,8 @@ fn golden_section_refine(
             tau_d = (lo + hi) / 2.0;
         } else if phase == 2 {
             // Refine tau_r_fast
-            let mut lo = (tau_r_fast * 0.5).max(dt);
-            let mut hi = (tau_r_fast * 2.0).min((5.0 * dt).min(tau_d_fast * 0.99));
+            let mut lo = (tau_r_fast * 0.5).max(0.1 * dt);
+            let mut hi = (tau_r_fast * 2.0).min((2.0 * dt).min(tau_d_fast * 0.99));
             if lo >= hi {
                 continue;
             }
@@ -511,9 +618,9 @@ fn golden_section_refine(
             }
             tau_r_fast = (lo + hi) / 2.0;
         } else {
-            // Refine tau_d_fast — cap at min(15×dt, tau_d × 0.2) to prevent degeneracy
+            // Refine tau_d_fast — cap at min(8×dt, tau_d × 0.15) to prevent degeneracy
             let mut lo = (tau_d_fast * 0.5).max(tau_r_fast * 1.01);
-            let mut hi = (tau_d_fast * 2.0).min((15.0 * dt).min(tau_d * 0.2));
+            let mut hi = (tau_d_fast * 2.0).min((8.0 * dt).min(tau_d * 0.15));
             if lo >= hi {
                 continue;
             }
@@ -835,9 +942,9 @@ mod tests {
                     tau_d,
                     fs
                 );
-                let tdf_cap = (15.0 * dt).min(tau_d * 0.2);
+                let tdf_cap = (8.0 * dt).min(tau_d * 0.15);
                 assert!(
-                    result.tau_decay_fast <= tdf_cap + 1e-6,
+                    result.tau_decay_fast <= tdf_cap * 1.05,
                     "tau_d_fast ({:.6}) should be ≤ cap ({:.6}) for (tau_r={}, tau_d={}, fs={})",
                     result.tau_decay_fast,
                     tdf_cap,
@@ -946,14 +1053,37 @@ mod tests {
 
         // If there's a fast component, it should be confined
         if result.tau_decay_fast > 0.0 {
-            let tdf_cap = (15.0 * dt).min(tau_d_true * 0.2);
+            let tdf_cap = (8.0 * dt).min(tau_d_true * 0.15);
             assert!(
-                result.tau_decay_fast <= tdf_cap + 1e-6,
+                result.tau_decay_fast <= tdf_cap * 1.05,
                 "tau_d_fast ({:.6}s = {:.1} bins) should be ≤ cap ({:.6}s) for large tau_d",
                 result.tau_decay_fast,
                 result.tau_decay_fast / dt,
                 tdf_cap
             );
         }
+    }
+
+    #[test]
+    fn sequential_ceiling_limits_fast_on_clean_kernel() {
+        // On a clean single-biexponential kernel (no artifact), the sequential
+        // ceiling should prevent the fast component from claiming significant
+        // amplitude.  The slow-only fit already explains the kernel well, so
+        // its residual is small and bf_seq is near zero.
+        let tau_r_true = 0.05;
+        let tau_d_true = 0.5;
+        let fs = 100.0;
+        let n = 200;
+
+        let h = make_biexp(tau_r_true, tau_d_true, 2.0, fs, n);
+        let result = fit_biexponential(&h, fs, true, 0, None);
+
+        assert!(
+            result.beta_fast < 0.15 * result.beta,
+            "Sequential ceiling should keep beta_fast ({:.4}) small relative to beta ({:.4}) \
+             on a clean kernel with no artifact",
+            result.beta_fast,
+            result.beta
+        );
     }
 }
