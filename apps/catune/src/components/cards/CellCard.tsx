@@ -11,7 +11,7 @@ import type { CellSolverStatus } from '@calab/core';
 import { computePeakSNR, snrToQuality } from '@calab/core';
 import { Card } from '@calab/ui';
 import { setHoveredCell } from '../../lib/multi-cell-store.ts';
-import { cardHeight, setCardHeight, tauDecay } from '../../lib/viz-store.ts';
+import { cardHeight, setCardHeight, currentTau } from '../../lib/viz-store.ts';
 import { DEFAULT_ZOOM_WINDOW_S } from '../../lib/cell-solve-manager.ts';
 
 export interface CellCardProps {
@@ -49,7 +49,9 @@ export function CellCard(props: CellCardProps) {
   const quality = createMemo(() => snrToQuality(snr()));
 
   // Per-card independent zoom window — skip past the convolution transient at t=0
-  const transientEnd = () => Math.min(2 * tauDecay(), totalDuration());
+  const transientEnd = createMemo(() => {
+    return Math.min(2 * currentTau().tauDecay, totalDuration());
+  });
   const [zoomStart, setZoomStart] = createSignal(transientEnd());
   const [zoomEnd, setZoomEnd] = createSignal(
     Math.min(transientEnd() + DEFAULT_ZOOM_WINDOW_S, totalDuration()),

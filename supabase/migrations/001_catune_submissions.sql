@@ -9,6 +9,8 @@ CREATE TABLE catune_submissions (
   -- CaTune-specific: deconvolution parameters
   tau_rise DOUBLE PRECISION NOT NULL,
   tau_decay DOUBLE PRECISION NOT NULL,
+  t_peak DOUBLE PRECISION NOT NULL,
+  fwhm DOUBLE PRECISION NOT NULL,
   lambda DOUBLE PRECISION NOT NULL,
   sampling_rate DOUBLE PRECISION NOT NULL,
 
@@ -55,6 +57,8 @@ CREATE TABLE catune_submissions (
   -- Constraints
   CONSTRAINT valid_tau_rise CHECK (tau_rise > 0 AND tau_rise < 1),
   CONSTRAINT valid_tau_decay CHECK (tau_decay > 0 AND tau_decay < 10),
+  CONSTRAINT valid_t_peak CHECK (t_peak > 0 AND t_peak < 1),
+  CONSTRAINT valid_fwhm CHECK (fwhm > 0 AND fwhm < 10),
   CONSTRAINT valid_lambda CHECK (lambda >= 0 AND lambda <= 10),
   CONSTRAINT valid_sampling_rate CHECK (sampling_rate > 0 AND sampling_rate <= 1000),
   CONSTRAINT valid_data_source CHECK (data_source IN ('user', 'demo', 'training', 'bridge'))

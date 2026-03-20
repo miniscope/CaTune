@@ -1,6 +1,12 @@
 /**
- * Kernel display: shows per-subset h_free curves and merged bi-exp fit.
- * Replaces the old DebugKernelChart canvas component.
+ * Kernel display: shows per-subset h_free curves, slow/fast fit components,
+ * and the full two-component model overlaid.
+ *
+ * Normalization strategy:
+ * - Free kernels: each peak-normalized independently (different subsets have different scales)
+ * - Fit curves (slow, fast, full): all normalized by a single factor — the peak of the
+ *   full model — so their relative amplitudes are preserved and they add up visually.
+ * - Ground truth: peak-normalized independently (reference shape)
  */
 
 import { createMemo, Show, type JSX } from 'solid-js';
@@ -19,7 +25,9 @@ import {
 } from '../../lib/data-store.ts';
 import { selectedSubsetIdx } from '../../lib/subset-store.ts';
 import {
-  createKernelFitSeries,
+  createKernelFitSlowSeries,
+  createKernelFitFastSeries,
+  createKernelFitFullSeries,
   createGroundTruthKernelSeries,
   peakNormalize,
 } from '../../lib/chart/series-config.ts';
@@ -53,6 +61,11 @@ export function KernelDisplay(): JSX.Element {
     return history[history.length - 1];
   });
 
+  const hasFastComponent = createMemo(() => {
+    const snap = snapshot();
+    return snap != null && snap.rFast > 0 && snap.betaFast > 0;
+  });
+
   const chartData = createMemo((): uPlot.AlignedData => {
     const snap = snapshot();
     if (!snap || snap.subsets.length === 0) return [[]];
@@ -61,6 +74,8 @@ export function KernelDisplay(): JSX.Element {
     const tauR = snap.tauRise;
     const tauD = snap.tauDecay;
     const beta = snap.beta;
+    const rF = snap.rFast;
+    const betaF = snap.betaFast;
 
     // Find the max kernel length across subsets
     const maxLen = Math.max(...snap.subsets.map((s) => s.hFree.length));
@@ -72,7 +87,7 @@ export function KernelDisplay(): JSX.Element {
       xAxis[i] = (i / fs) * 1000;
     }
 
-    // Per-subset h_free arrays (peak-normalized, padded with null)
+    // Per-subset h_free arrays (peak-normalized independently, padded with null)
     const subsetArrays: (number | null)[][] = snap.subsets.map((s) => {
       const raw = s.hFree.slice();
       peakNormalize(raw);
@@ -83,17 +98,43 @@ export function KernelDisplay(): JSX.Element {
       return arr;
     });
 
-    // Fitted bi-exp from merged params (peak-normalized)
-    const fitArray = new Array(maxLen);
+    // Build raw (un-normalized) fit curves.
+    // Slow = calcium kernel. Fast = compressed biexponential that absorbs the
+    // noise artifact produced by the spike↔kernel feedback loop (same shape as
+    // the slow kernel, time-scaled by compression ratio rF).
+    const rawSlow: (number | null)[] = new Array(maxLen);
+    const rawFast: (number | null)[] = new Array(maxLen);
+    const rawFull: (number | null)[] = new Array(maxLen);
+    const hasFast = rF > 0 && betaF > 0;
+
     for (let i = 0; i < maxLen; i++) {
-      const t = i / fs;
-      fitArray[i] = beta * (Math.exp(-t / tauD) - Math.exp(-t / tauR));
+      const t = i / fs; // time in seconds
+      rawSlow[i] = beta * (Math.exp(-t / tauD) - Math.exp(-t / tauR));
+      rawFast[i] = hasFast ? betaF * (Math.exp(-t / (tauD * rF)) - Math.exp(-t / (tauR * rF))) : 0;
+      rawFull[i] = (rawSlow[i] as number) + (rawFast[i] as number);
     }
-    peakNormalize(fitArray);
 
-    const columns: (number | null)[][] = [...subsetArrays, fitArray];
+    // Normalize all fit curves by the same factor: peak of the full model.
+    // This preserves relative amplitudes so slow + fast = full visually.
+    let fullPeak = 0;
+    for (let i = 0; i < maxLen; i++) {
+      if ((rawFull[i] as number) > fullPeak) fullPeak = rawFull[i] as number;
+    }
+    if (fullPeak > 1e-10) {
+      for (let i = 0; i < maxLen; i++) {
+        rawSlow[i] = (rawSlow[i] as number) / fullPeak;
+        rawFast[i] = (rawFast[i] as number) / fullPeak;
+        rawFull[i] = (rawFull[i] as number) / fullPeak;
+      }
+    }
 
-    // Ground truth kernel overlay (peak-normalized to 1.0 to match free/fit kernels)
+    // Columns: [subsets..., slow, fast, full] — fast+full only when present
+    const columns: (number | null)[][] = [...subsetArrays, rawSlow];
+    if (hasFast) {
+      columns.push(rawFast, rawFull);
+    }
+
+    // Ground truth kernel overlay (peak-normalized independently)
     if (showGroundTruth()) {
       const gtTauR = groundTruthTauRise()!;
       const gtTauD = groundTruthTauDecay()!;
@@ -124,7 +165,11 @@ export function KernelDisplay(): JSX.Element {
         width: isSelected ? 2.5 : 1,
       });
     }
-    s.push(createKernelFitSeries());
+    s.push(createKernelFitSlowSeries());
+    if (hasFastComponent()) {
+      s.push(createKernelFitFastSeries());
+      s.push(createKernelFitFullSeries());
+    }
     if (showGroundTruth()) {
       s.push(createGroundTruthKernelSeries());
     }
@@ -175,6 +220,9 @@ export function KernelDisplay(): JSX.Element {
           </span>
           <span>
             beta: <strong>{snapshot()?.beta.toFixed(3) ?? '--'}</strong>
+          </span>
+          <span>
+            beta_fast: <strong>{snapshot()?.betaFast.toFixed(3) ?? '--'}</strong>
           </span>
           <Show when={showGroundTruth()}>
             <span class="kernel-display__gt-stat">

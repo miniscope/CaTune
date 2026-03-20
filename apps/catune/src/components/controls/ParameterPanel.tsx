@@ -1,69 +1,66 @@
-// Parameter control panel grouping three sliders (tau_rise, tau_decay, lambda)
+// Parameter control panel grouping sliders (tPeak, FWHM, lambda)
 // with a convergence indicator. Consumed by the App/tuning view.
 // Lambda and solver status signals live in viz-store (centralized).
 
 import {
-  tauRise,
-  tauDecay,
-  setTauRise,
-  setTauDecay,
+  tPeak,
+  fwhm,
+  setTPeak,
+  setFwhm,
   lambda,
   setLambda,
   filterEnabled,
   setFilterEnabled,
 } from '../../lib/viz-store.ts';
+import { tauToShape } from '@calab/compute';
 import { notifyTutorialAction } from '@calab/tutorials';
 import { isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
 import { PARAM_RANGES } from '@calab/core';
 import { ParameterSlider } from './ParameterSlider.tsx';
-import { DualRangeSlider } from './DualRangeSlider.tsx';
 import '../../styles/controls.css';
 
 export function ParameterPanel() {
-  // Enforce tau_decay > tau_rise so the kernel never goes negative or zero.
-  const minGap = PARAM_RANGES.tauDecay.step;
-  const clampedSetTauRise = (v: number) => {
-    setTauRise(v);
-    if (tauDecay() < v + minGap) setTauDecay(v + minGap);
+  // Peak must be less than half the FWHM for a valid bi-exponential kernel.
+  const peakMax = () => Math.min(PARAM_RANGES.tPeak.max, fwhm() / 2);
+  const clampedSetTPeak = (v: number) => {
+    setTPeak(Math.min(v, peakMax()));
   };
-  const clampedSetTauDecay = (v: number) => {
-    setTauDecay(v);
-    if (tauRise() > v - minGap) setTauRise(v - minGap);
-  };
-
-  const trueRise = () => {
-    if (!groundTruthVisible() || !isDemo() || !demoPreset()) return undefined;
-    return demoPreset()!.params.tauRise;
+  const clampedSetFwhm = (v: number) => {
+    setFwhm(v);
+    if (tPeak() > v / 2) setTPeak(v / 2);
   };
 
-  const trueDecay = () => {
+  const trueShape = () => {
     if (!groundTruthVisible() || !isDemo() || !demoPreset()) return undefined;
-    return demoPreset()!.params.tauDecay;
+    return tauToShape(demoPreset()!.params.tauRise, demoPreset()!.params.tauDecay) ?? undefined;
   };
 
   return (
     <div class="param-panel" data-tutorial="param-panel">
       <div class="param-panel__sliders">
-        <DualRangeSlider
-          label="Time Constants"
-          lowLabel="Rise"
-          highLabel="Decay"
-          lowValue={tauRise}
-          highValue={tauDecay}
-          setLowValue={clampedSetTauRise}
-          setHighValue={clampedSetTauDecay}
-          min={PARAM_RANGES.tauRise.min}
-          max={PARAM_RANGES.tauDecay.max}
-          lowMin={PARAM_RANGES.tauRise.min}
-          lowMax={PARAM_RANGES.tauRise.max}
-          highMin={PARAM_RANGES.tauDecay.min}
-          highMax={PARAM_RANGES.tauDecay.max}
+        <ParameterSlider
+          label="Peak"
+          value={tPeak}
+          setValue={clampedSetTPeak}
+          min={PARAM_RANGES.tPeak.min}
+          max={peakMax()}
+          step={PARAM_RANGES.tPeak.step}
           format={(v) => (v * 1000).toFixed(1)}
           unit="ms"
-          data-tutorial-low="slider-rise"
-          data-tutorial-high="slider-decay"
-          lowTrueValue={trueRise()}
-          highTrueValue={trueDecay()}
+          data-tutorial="slider-peak"
+          trueValue={trueShape()?.tPeak}
+        />
+        <ParameterSlider
+          label="FWHM"
+          value={fwhm}
+          setValue={clampedSetFwhm}
+          min={PARAM_RANGES.fwhm.min}
+          max={PARAM_RANGES.fwhm.max}
+          step={PARAM_RANGES.fwhm.step}
+          format={(v) => (v * 1000).toFixed(1)}
+          unit="ms"
+          data-tutorial="slider-fwhm"
+          trueValue={trueShape()?.fwhm}
         />
         <ParameterSlider
           label="Sparsity"

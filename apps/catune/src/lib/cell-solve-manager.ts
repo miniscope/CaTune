@@ -3,7 +3,7 @@
 // Replaces multi-cell-solver.ts, tuning-orchestrator.ts, and job-scheduler.ts.
 
 import { createEffect, on, onCleanup } from 'solid-js';
-import { tauRise, tauDecay, lambda, selectedCell, filterEnabled } from './viz-store.ts';
+import { currentTau, lambda, selectedCell, filterEnabled } from './viz-store.ts';
 import { parsedData, effectiveShape, swapped, samplingRate } from './data-store.ts';
 import {
   selectedCells,
@@ -57,9 +57,10 @@ function nextJobId(): number {
 }
 
 function getCurrentParams(): SolverParams {
+  const tau = currentTau();
   return {
-    tauRise: tauRise(),
-    tauDecay: tauDecay(),
+    tauRise: tau.tauRise,
+    tauDecay: tau.tauDecay,
     lambda: lambda(),
     fs: samplingRate() ?? 30,
     filterEnabled: filterEnabled(),
@@ -284,11 +285,12 @@ function ensureCellState(
     const rawTrace = extractCellTrace(cellIndex, data, shape, isSwapped);
     const fs = samplingRate() ?? 30;
     const duration = rawTrace.length / fs;
+    const zoomOffset = 2 * currentTau().tauDecay;
     state = {
       cellIndex,
       rawTrace,
-      zoomStart: Math.min(2 * tauDecay(), duration),
-      zoomEnd: Math.min(2 * tauDecay() + DEFAULT_ZOOM_WINDOW_S, duration),
+      zoomStart: Math.min(zoomOffset, duration),
+      zoomEnd: Math.min(zoomOffset + DEFAULT_ZOOM_WINDOW_S, duration),
       warmStartCache: new WarmStartCache(),
       activeJobId: null,
       debounceTimer: null,
@@ -420,7 +422,7 @@ export function initCellSolveManager(): void {
 
   // Effect 2: Watch global params — mark all cells stale, cancel all, re-dispatch all
   createEffect(
-    on([tauRise, tauDecay, lambda, filterEnabled], () => {
+    on([currentTau, lambda, filterEnabled], () => {
       if (cellStates.size === 0) return;
 
       // Cancel everything

@@ -10,6 +10,8 @@ import * as v from 'valibot';
 const ParametersSchema = v.object({
   tau_rise_s: v.number(),
   tau_decay_s: v.number(),
+  t_peak_s: v.optional(v.number()),
+  fwhm_s: v.optional(v.number()),
   lambda: v.number(),
   sampling_rate_hz: v.number(),
   filter_enabled: v.boolean(),

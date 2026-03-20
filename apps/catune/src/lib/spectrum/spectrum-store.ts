@@ -5,7 +5,7 @@
 import { createSignal, createEffect, on } from 'solid-js';
 import { multiCellResults } from '../multi-cell-store.ts';
 import { samplingRate } from '../data-store.ts';
-import { tauRise, tauDecay, selectedCell } from '../viz-store.ts';
+import { currentTau, selectedCell } from '../viz-store.ts';
 import { computePeriodogram } from '@calab/core';
 
 // Margin factors kept in sync with filter.rs
@@ -45,10 +45,11 @@ const psdCache = new Map<number, { traceRef: Float64Array; psd: Float64Array }>(
 export function initSpectrumStore(): void {
   // Effect 1: Cutoff lines — update immediately, no debounce
   createEffect(
-    on([tauRise, tauDecay, samplingRate], () => {
+    on([currentTau, samplingRate], () => {
       const current = spectrumData();
       if (!current) return;
-      const { highPass, lowPass } = computeFilterCutoffs(tauRise(), tauDecay());
+      const tau = currentTau();
+      const { highPass, lowPass } = computeFilterCutoffs(tau.tauRise, tau.tauDecay);
       const fs = samplingRate() ?? 30;
       setSpectrumData({
         ...current,
@@ -143,7 +144,8 @@ function computeSpectrum(): void {
     allPsd = avgPsd;
   }
 
-  const { highPass, lowPass } = computeFilterCutoffs(tauRise(), tauDecay());
+  const tau = currentTau();
+  const { highPass, lowPass } = computeFilterCutoffs(tau.tauRise, tau.tauDecay);
 
   setSpectrumData({
     freqs,

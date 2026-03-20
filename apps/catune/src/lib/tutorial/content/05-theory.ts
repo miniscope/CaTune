@@ -51,7 +51,8 @@ export const theoryTutorial: Tutorial = {
         '<b>\u03C4_decay</b> — return to baseline (how fast calcium clears)<br><br>' +
         'The kernel shape:<br>' +
         '<b>k(t) = e<sup>\u2212t/\u03C4_decay</sup> \u2212 e<sup>\u2212t/\u03C4_rise</sup></b><br><br>' +
-        'This is the <b>template</b> the solver uses to match events in your data. Getting its shape right is the single most critical step in the entire analysis.',
+        'This is the <b>template</b> the solver uses to match events in your data. Getting its shape right is the single most critical step in the entire analysis.' +
+        '<br><br>CaTune presents these as <b>Peak time</b> (time to peak amplitude) and <b>FWHM</b> (full width at half maximum). These map directly to the visible kernel shape — unlike τ values, where many (τ_rise, τ_decay) pairs produce nearly identical kernels. The solver internally converts to τ_rise/τ_decay for computation.',
       onPopoverRender: renderKernelShape,
     },
     // Step 4: The deconvolution problem
@@ -75,11 +76,11 @@ export const theoryTutorial: Tutorial = {
     },
     // Step 6: What decay time really controls
     {
-      title: 'What Decay Time Really Controls',
+      title: 'What Kernel Width (FWHM) Really Controls',
       description:
-        '<b>Decay time (\u03C4_decay)</b> sets how quickly the kernel returns to baseline.<br><br>' +
-        'When \u03C4_decay <b>matches</b> the true indicator dynamics, the solver cleanly separates individual events — each transient is explained by a brief burst of activity at the onset.<br><br>' +
-        'When \u03C4_decay is <b>too short</b>, the kernel decays faster than the real signal. The solver must <b>produce extra activity during the decay phase</b> to explain the lingering fluorescence. This creates artificial activity spread across the tail of each transient.',
+        '<b>Kernel width (FWHM)</b> sets how quickly the kernel returns to baseline.<br><br>' +
+        'When FWHM <b>matches</b> the true indicator dynamics, the solver cleanly separates individual events — each transient is explained by a brief burst of activity at the onset.<br><br>' +
+        'When FWHM is <b>too narrow</b>, the kernel is narrower than the real signal. The solver must <b>produce extra activity during the decay phase</b> to explain the lingering fluorescence. This creates artificial activity spread across the tail of each transient.',
       onPopoverRender: renderDecayComparison,
     },
     // Step 7: The Delta Function Trap (merged: delta function trap + why sparsity doesn't fix it)
@@ -89,7 +90,7 @@ export const theoryTutorial: Tutorial = {
         "A critical insight: making the kernel <b>sharper and faster</b> will almost always <b>improve the solver's fit</b> (lower residuals, higher R\u00B2).<br><br>" +
         'As the kernel approaches a delta function, the deconvolved trace simply <b>mirrors the calcium dynamics</b> — including the full rise and decay tail. The fit looks great, but the result is meaningless.<br><br>' +
         'This is the trap <b>automated parameter optimization</b> falls into: it converges on kernels that are much too fast because the fit metric keeps improving. This is why CaTune does not auto-optimize kernel parameters.<br><br>' +
-        'The instinct is to <b>increase \u03BB</b> (sparsity) to compensate for the dense activity, but this <b>masks the symptom</b> without fixing the cause — the kernel shape is wrong. High \u03BB with a too-fast kernel produces sparse but arbitrarily-placed events. The correct fix is always to <b>adjust the kernel</b> (primarily decay time).',
+        'The instinct is to <b>increase \u03BB</b> (sparsity) to compensate for the dense activity, but this <b>masks the symptom</b> without fixing the cause — the kernel shape is wrong. High \u03BB with a too-fast kernel produces sparse but arbitrarily-placed events. The correct fix is always to <b>adjust the kernel</b> (increase FWHM).',
       onPopoverRender: renderDeltaTrap,
     },
     // Step 8: Reading the signs
@@ -100,7 +101,7 @@ export const theoryTutorial: Tutorial = {
         '<b>1.</b> Deconvolved events (green) appear spread across the <b>entire duration</b> of calcium transients, not concentrated at the rise<br>' +
         '<b>2.</b> Residuals (red) are <b>suspiciously low</b> — near-zero residuals mean the model is fitting noise, not just signal<br>' +
         '<b>3.</b> The deconvolved trace <b>mirrors the shape</b> of the raw fluorescence<br><br>' +
-        'If you see these signs, <b>increase decay time</b>.',
+        'If you see these signs, <b>increase FWHM</b>.',
       onPopoverRender: renderGoodVsBad,
     },
     // Step 9: The role of noise filtering

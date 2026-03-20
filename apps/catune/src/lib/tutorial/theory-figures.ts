@@ -9,7 +9,12 @@
  * rest of CaTune.
  */
 
-import { computeKernel, computeKernelAnnotations, generateSyntheticTrace } from '@calab/compute';
+import {
+  computeKernel,
+  computeKernelAnnotations,
+  generateSyntheticTrace,
+  tauToShape,
+} from '@calab/compute';
 import { initWasm, Solver } from '@calab/core';
 
 /** Run the FISTA solver synchronously on the main thread (fine for small traces). */
@@ -280,16 +285,52 @@ export function renderKernelShape(descriptionEl: HTMLElement): (() => void) | vo
       LABEL_COLOR,
     );
 
-    // Half-decay vertical line
-    const halfPx = area.x + ((annot.halfDecayTime - range.xMin) / xSpan) * area.w;
+    // FWHM horizontal double-arrow at y = 0.5
+    const halfRisePx = area.x + ((annot.halfRiseTime - range.xMin) / xSpan) * area.w;
+    const halfDecayPx = area.x + ((annot.halfDecayTime - range.xMin) / xSpan) * area.w;
     const halfY = area.y + area.h - ((0.5 - range.yMin) / ySpan) * area.h;
-    drawDashedVertical(ctx, halfPx, halfY, area.y + area.h, LABEL_COLOR);
+
+    // Dashed verticals at half-rise and half-decay points
+    drawDashedVertical(ctx, halfRisePx, halfY, area.y + area.h, LABEL_COLOR);
+    drawDashedVertical(ctx, halfDecayPx, halfY, area.y + area.h, LABEL_COLOR);
+
+    // Horizontal line between half-max points
+    ctx.save();
+    ctx.strokeStyle = LABEL_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(halfRisePx, halfY);
+    ctx.lineTo(halfDecayPx, halfY);
+    ctx.stroke();
+
+    // Arrowheads
+    const arrowSize = 4;
+    ctx.fillStyle = LABEL_COLOR;
+    // Left arrow
+    ctx.beginPath();
+    ctx.moveTo(halfRisePx, halfY);
+    ctx.lineTo(halfRisePx + arrowSize, halfY - arrowSize);
+    ctx.lineTo(halfRisePx + arrowSize, halfY + arrowSize);
+    ctx.closePath();
+    ctx.fill();
+    // Right arrow
+    ctx.beginPath();
+    ctx.moveTo(halfDecayPx, halfY);
+    ctx.lineTo(halfDecayPx - arrowSize, halfY - arrowSize);
+    ctx.lineTo(halfDecayPx - arrowSize, halfY + arrowSize);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // FWHM label centered above the arrow
+    const fwhmMs = Math.round(annot.fwhm * 1000);
     drawLabel(
       ctx,
-      `t½: ${Math.round(annot.halfDecayTime * 1000)}ms`,
-      halfPx + 4,
+      `FWHM: ${fwhmMs}ms`,
+      (halfRisePx + halfDecayPx) / 2,
       halfY - 14,
       LABEL_COLOR,
+      'center',
     );
   }
 
@@ -320,11 +361,21 @@ export function renderDecayComparison(descriptionEl: HTMLElement): (() => void) 
   drawPolyline(ctx, correct.x, correct.y, KERNEL_COLOR, 2, area, range);
   drawPolyline(ctx, tooFast.x, tooFast.y, BAD_COLOR, 2, area, range);
 
+  // Compute FWHM values for legend labels
+  const correctShape = tauToShape(0.1, 0.6);
+  const tooFastShape = tauToShape(0.02, 0.08);
+  const correctFwhmLabel = correctShape
+    ? `FWHM: ${Math.round(correctShape.fwhm * 1000)}ms`
+    : 'Correct';
+  const tooFastFwhmLabel = tooFastShape
+    ? `FWHM: ${Math.round(tooFastShape.fwhm * 1000)}ms`
+    : 'Too fast';
+
   // Legend
   let lx = area.x + 4;
   const ly = area.y + 2;
-  lx += drawLegendEntry(ctx, lx, ly, KERNEL_COLOR, 'τ_decay = 0.60s');
-  drawLegendEntry(ctx, lx + 8, ly, BAD_COLOR, 'τ_decay = 0.08s');
+  lx += drawLegendEntry(ctx, lx, ly, KERNEL_COLOR, correctFwhmLabel);
+  drawLegendEntry(ctx, lx + 8, ly, BAD_COLOR, tooFastFwhmLabel);
 
   drawLabel(ctx, 'Time (s)', area.x + area.w, area.y + area.h + 6, LABEL_COLOR, 'right', 'top');
 

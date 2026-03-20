@@ -11,13 +11,14 @@
 import * as v from 'valibot';
 import { computeAR2, CaTuneExportSchema } from '@calab/core';
 import type { CaTuneExportData } from '@calab/core';
+import { shapeToTau } from '@calab/compute';
 
 /** Alias preserving the public API name used by io consumers. */
 export type CaTuneExport = CaTuneExportData;
 
 export function buildExportData(
-  tauRise: number,
-  tauDecay: number,
+  tPeak: number,
+  fwhm: number,
   lambda: number,
   fs: number,
   filterEnabled: boolean,
@@ -28,15 +29,22 @@ export function buildExportData(
   },
   version: string = 'dev',
 ): CaTuneExport {
+  const tau = shapeToTau(tPeak, fwhm);
+  if (!tau) {
+    throw new Error(`Invalid kernel shape: tPeak=${tPeak}, fwhm=${fwhm}`);
+  }
+  const { tauRise, tauDecay } = tau;
   const ar2 = computeAR2(tauRise, tauDecay, fs);
 
   return {
-    schema_version: '1.1.0',
+    schema_version: '1.2.0',
     catune_version: version,
     export_date: new Date().toISOString(),
     parameters: {
       tau_rise_s: tauRise,
       tau_decay_s: tauDecay,
+      t_peak_s: tPeak,
+      fwhm_s: fwhm,
       lambda,
       sampling_rate_hz: fs,
       filter_enabled: filterEnabled,

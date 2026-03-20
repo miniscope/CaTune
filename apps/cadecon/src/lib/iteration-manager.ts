@@ -59,7 +59,7 @@ const KERNEL_FISTA_TOL = 1e-4;
 /** TV-L1 smoothness penalty for free-form kernel estimation. */
 const KERNEL_SMOOTH_LAMBDA = 0;
 /** Number of early free-kernel samples to skip in bi-exponential fitting. */
-const BIEXP_FIT_SKIP = 0;
+export const BIEXP_FIT_SKIP = 0;
 
 let pool: WorkerPool<CaDeconPoolJob> | null = null;
 let nextJobId = 0;
@@ -431,6 +431,8 @@ export async function startRun(): Promise<void> {
     tauDecay: tauD,
     beta: 0,
     residual: 0,
+    rFast: 0,
+    betaFast: 0,
     fs,
     subsets: [],
   });
@@ -632,18 +634,24 @@ export async function startRun(): Promise<void> {
     // Record convergence history with per-subset data
     const medBeta = median(kernelResults.map((r) => r.beta));
     const medResidual = median(kernelResults.map((r) => r.residual));
+    const medRFast = median(kernelResults.map((r) => r.rFast));
+    const medBetaFast = median(kernelResults.map((r) => r.betaFast));
     addConvergenceSnapshot({
       iteration: iter + 1,
       tauRise: tauR,
       tauDecay: tauD,
       beta: medBeta,
       residual: medResidual,
+      rFast: medRFast,
+      betaFast: medBetaFast,
       fs,
       subsets: kernelResults.map((r) => ({
         tauRise: r.tauRise,
         tauDecay: r.tauDecay,
         beta: r.beta,
         residual: r.residual,
+        rFast: r.rFast,
+        betaFast: r.betaFast,
         hFree: r.hFree,
       })),
     });

@@ -6,6 +6,7 @@
  */
 
 import { computeAR2 } from '@calab/core';
+import { shapeToTau } from '@calab/compute';
 import { computeDatasetHash, trackEvent } from '@calab/community';
 import { submitParameters } from './catune-service.ts';
 import type { CatuneSubmissionPayload, CatuneSubmission } from './types.ts';
@@ -29,8 +30,8 @@ export interface FormFields {
 
 /** Tuning/dataset context needed to build the submission payload. */
 export interface SubmissionContext {
-  tauRise: number;
-  tauDecay: number;
+  tPeak: number;
+  fwhm: number;
   lambda: number;
   samplingRate: number;
   filterEnabled: boolean;
@@ -59,8 +60,15 @@ export async function submitToSupabase(
     datasetHash = await computeDatasetHash(floatData);
   }
 
+  // Convert shape params (tPeak, fwhm) to tau params for AR2 and storage
+  const tauResult = shapeToTau(ctx.tPeak, ctx.fwhm);
+  if (!tauResult) {
+    throw new Error('Invalid kernel shape: could not convert tPeak/fwhm to tau values');
+  }
+  const { tauRise, tauDecay } = tauResult;
+
   // Compute AR2 coefficients
-  const ar2 = computeAR2(ctx.tauRise, ctx.tauDecay, ctx.samplingRate);
+  const ar2 = computeAR2(tauRise, tauDecay, ctx.samplingRate);
 
   // Map app-level DataSource to community DataSource for storage
   const isDemo = ctx.dataSource === 'demo';
@@ -69,8 +77,10 @@ export async function submitToSupabase(
 
   // Build payload
   const payload: CatuneSubmissionPayload = {
-    tau_rise: ctx.tauRise,
-    tau_decay: ctx.tauDecay,
+    tau_rise: tauRise,
+    tau_decay: tauDecay,
+    t_peak: ctx.tPeak,
+    fwhm: ctx.fwhm,
     lambda: ctx.lambda,
     sampling_rate: ctx.samplingRate,
     ar2_g1: ar2.g1,

@@ -91,8 +91,8 @@ fn solve_upsampled(
     baseline_subtracted: bool,
     lambda: f64,
 ) -> (Vec<f32>, Option<Vec<f32>>, u32, bool) {
-    solver.set_params(tau_r, tau_d, lambda, fs_up);
     solver.set_conv_mode(ConvMode::BandedAR2);
+    solver.set_params(tau_r, tau_d, lambda, fs_up);
     solver.set_constraint(constraint);
     solver.set_trace(upsampled);
 

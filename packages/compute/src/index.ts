@@ -11,6 +11,7 @@ export {
 } from './warm-start-cache.ts';
 export type { WarmStartEntry } from './warm-start-cache.ts';
 export { computeKernel, computeKernelAnnotations } from './kernel-math.ts';
+export { tauToShape, shapeToTau, computeFWHM, isValidShapePair } from './kernel-shape.ts';
 export { downsampleMinMax } from './downsample.ts';
 export { makeTimeAxis } from './time-axis.ts';
 export { DEMO_PRESETS, DEFAULT_PRESET_ID, getPresetById, getPresetLabels } from './demo-presets.ts';

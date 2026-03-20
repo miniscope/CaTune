@@ -27,7 +27,7 @@ import {
   showResid,
   showGTCalcium,
   showGTSpikes,
-  tauDecay,
+  currentTau,
 } from '../../lib/viz-store.ts';
 
 export interface CaTuneZoomWindowProps {
@@ -79,6 +79,10 @@ function typedArrayMinMax(arr: ArrayLike<number> | undefined): [number, number] 
 export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
   let containerRef: HTMLDivElement | undefined;
   const [chartWidth, setChartWidth] = createSignal(600);
+
+  const transientTime = createMemo(() => {
+    return TRANSIENT_TAU_MULTIPLIER * currentTau().tauDecay;
+  });
 
   onMount(() => {
     if (!containerRef) return;
@@ -264,10 +268,10 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
       props.filteredTrace ? toZScoreFiltered : toZScore,
     );
 
-    const transientTime = TRANSIENT_TAU_MULTIPLIER * tauDecay();
-    if (startSample < transientTime * fs) {
+    const transient = transientTime();
+    if (startSample < transient * fs) {
       for (let i = 0; i < dsReconv.length; i++) {
-        if (dsX[i] < transientTime) {
+        if (dsX[i] < transient) {
           dsReconv[i] = null;
         } else {
           break;
@@ -383,7 +387,7 @@ export function CaTuneZoomWindow(props: CaTuneZoomWindowProps) {
         syncKey={props.syncKey}
         onZoomChange={props.onZoomChange}
         yRange={globalYRange()}
-        plugins={[transientZonePlugin(() => TRANSIENT_TAU_MULTIPLIER * tauDecay())]}
+        plugins={[transientZonePlugin(transientTime)]}
         data-tutorial={props['data-tutorial']}
       />
     </div>
