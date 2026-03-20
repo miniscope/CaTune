@@ -39,10 +39,20 @@ import {
   AXIS_GRID,
   AXIS_TICK,
 } from '@calab/ui/chart';
+import { tauToShape, computeKernelAnnotations } from '@calab/compute';
+import {
+  kernelAnnotationsPlugin,
+  type KernelAnnotationsMs,
+} from '../../lib/chart/kernel-annotations-plugin.ts';
 
-/** Format a tau value in seconds to a display string in ms, or a fallback. */
+/** Format a tau value in seconds to a display string in ms with 1 decimal. */
 function formatTauMs(tau: number | null, fallback: string = '--'): string {
   return tau != null ? (tau * 1000).toFixed(1) : fallback;
+}
+
+/** Format seconds to whole ms string (e.g. "120"). */
+function formatMs(seconds: number): string {
+  return (seconds * 1000).toFixed(0);
 }
 
 export function KernelDisplay(): JSX.Element {
@@ -65,6 +75,49 @@ export function KernelDisplay(): JSX.Element {
     const snap = snapshot();
     return snap != null && snap.tauRiseFast > 0 && snap.tauDecayFast > 0 && snap.betaFast > 0;
   });
+
+  // --- Derived shape metrics ---
+
+  const slowShape = createMemo(() => {
+    const tauR = currentTauRise();
+    const tauD = currentTauDecay();
+    if (tauR == null || tauD == null) return null;
+    return tauToShape(tauR, tauD);
+  });
+
+  const fastRatio = createMemo(() => {
+    const snap = snapshot();
+    if (!snap || !hasFastComponent()) return null;
+    const energySlow = snap.beta * (snap.tauDecay - snap.tauRise);
+    const energyFast = snap.betaFast * (snap.tauDecayFast - snap.tauRiseFast);
+    const total = energySlow + energyFast;
+    if (total <= 0) return null;
+    return (energyFast / total) * 100;
+  });
+
+  const gtShape = createMemo(() => {
+    const tauR = groundTruthTauRise();
+    const tauD = groundTruthTauDecay();
+    if (tauR == null || tauD == null) return null;
+    return tauToShape(tauR, tauD);
+  });
+
+  const annotations = createMemo((): KernelAnnotationsMs | null => {
+    const tauR = currentTauRise();
+    const tauD = currentTauDecay();
+    const fs = samplingRate();
+    if (tauR == null || tauD == null || fs == null) return null;
+    const ann = computeKernelAnnotations(tauR, tauD, fs);
+    if (!ann) return null;
+    return {
+      peakTimeMs: ann.peakTime * 1000,
+      halfRiseTimeMs: ann.halfRiseTime * 1000,
+      halfDecayTimeMs: ann.halfDecayTime * 1000,
+      fwhmMs: ann.fwhm * 1000,
+    };
+  });
+
+  // --- Chart data ---
 
   const chartData = createMemo((): uPlot.AlignedData => {
     const snap = snapshot();
@@ -194,7 +247,10 @@ export function KernelDisplay(): JSX.Element {
   ];
 
   const scales: uPlot.Scales = { x: { time: false } };
-  const plugins = [wheelZoomPlugin()];
+  const plugins = createMemo(() => [
+    wheelZoomPlugin(),
+    kernelAnnotationsPlugin(() => annotations()),
+  ]);
   const cursor: uPlot.Cursor = { sync: { key: 'cadecon-kernel', setSeries: true } };
 
   const tauRMs = () => formatTauMs(currentTauRise());
@@ -212,41 +268,108 @@ export function KernelDisplay(): JSX.Element {
       }
     >
       <div class="kernel-display">
-        <div class="kernel-display__stats">
+        {/* Primary stats — biologically meaningful shape metrics */}
+        <div class="kernel-display__stats--primary">
+          <Show when={slowShape()} keyed>
+            {(shape) => (
+              <>
+                <span>
+                  tPeak: <strong>{formatMs(shape.tPeak)}</strong> ms
+                </span>
+                <span>
+                  FWHM: <strong>{formatMs(shape.fwhm)}</strong> ms
+                </span>
+              </>
+            )}
+          </Show>
+          <Show when={fastRatio()}>
+            <span>
+              Fast: <strong>{fastRatio()!.toFixed(0)}%</strong>
+            </span>
+          </Show>
+          <Show when={showGroundTruth() && gtShape()} keyed>
+            {(shape) => (
+              <>
+                <span class="kernel-display__gt-stat">
+                  true tPeak: <strong>{formatMs(shape.tPeak)}</strong> ms
+                </span>
+                <span class="kernel-display__gt-stat">
+                  true FWHM: <strong>{formatMs(shape.fwhm)}</strong> ms
+                </span>
+              </>
+            )}
+          </Show>
+        </div>
+
+        {/* Secondary stats — raw tau parameters */}
+        <div class="kernel-display__stats--secondary">
           <span>
-            tau_r: <strong>{tauRMs()}</strong> ms
+            τ_r: <strong>{tauRMs()}</strong>
           </span>
           <span>
-            tau_d: <strong>{tauDMs()}</strong> ms
+            τ_d: <strong>{tauDMs()}</strong>
           </span>
-          <span>
-            beta: <strong>{snapshot()?.beta.toFixed(3) ?? '--'}</strong>
-          </span>
-          <span>
-            tau_r_fast: <strong>{formatTauMs(snapshot()?.tauRiseFast ?? null)}</strong> ms
-          </span>
-          <span>
-            tau_d_fast: <strong>{formatTauMs(snapshot()?.tauDecayFast ?? null)}</strong> ms
-          </span>
+          <Show when={hasFastComponent()}>
+            <span>
+              τ_r_f: <strong>{formatTauMs(snapshot()?.tauRiseFast ?? null)}</strong>
+            </span>
+            <span>
+              τ_d_f: <strong>{formatTauMs(snapshot()?.tauDecayFast ?? null)}</strong>
+            </span>
+          </Show>
           <Show when={showGroundTruth()}>
             <span class="kernel-display__gt-stat">
-              true tau_r: <strong>{gtTauRMs()}</strong> ms
+              true τ_r: <strong>{gtTauRMs()}</strong>
             </span>
             <span class="kernel-display__gt-stat">
-              true tau_d: <strong>{gtTauDMs()}</strong> ms
+              true τ_d: <strong>{gtTauDMs()}</strong>
             </span>
           </Show>
         </div>
+
         <SolidUplot
           data={chartData()}
           series={series()}
           scales={scales}
           axes={axes}
-          plugins={plugins}
+          plugins={plugins()}
           cursor={cursor}
           height={200}
           autoResize={true}
         />
+
+        {/* Inline legend */}
+        <div class="kernel-display__legend">
+          <span class="kernel-display__legend-item">
+            <span
+              class="kernel-display__legend-swatch kernel-display__legend-swatch--dashed"
+              style={{ 'border-color': '#9467bd' }}
+            />
+            Slow
+          </span>
+          <Show when={hasFastComponent()}>
+            <span class="kernel-display__legend-item">
+              <span
+                class="kernel-display__legend-swatch kernel-display__legend-swatch--dashed"
+                style={{ 'border-color': '#d62728' }}
+              />
+              Fast
+            </span>
+            <span class="kernel-display__legend-item">
+              <span class="kernel-display__legend-swatch" style={{ background: '#e377c2' }} />
+              Full
+            </span>
+          </Show>
+          <Show when={showGroundTruth()}>
+            <span class="kernel-display__legend-item">
+              <span
+                class="kernel-display__legend-swatch kernel-display__legend-swatch--dashed"
+                style={{ 'border-color': 'rgba(233, 30, 99, 0.8)' }}
+              />
+              True
+            </span>
+          </Show>
+        </div>
       </div>
     </Show>
   );
