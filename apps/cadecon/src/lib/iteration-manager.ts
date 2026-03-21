@@ -9,7 +9,12 @@
 
 import type { WorkerPool } from '@calab/compute';
 import { createCaDeconWorkerPool, type CaDeconPoolJob } from './cadecon-pool.ts';
-import type { TraceResult, KernelResult, SeedTraceResult } from '../workers/cadecon-types.ts';
+import type {
+  TraceResult,
+  KernelResult,
+  SeedTraceResult,
+  WarmBiexp,
+} from '../workers/cadecon-types.ts';
 import {
   runState,
   setRunState,
@@ -190,6 +195,7 @@ function dispatchKernelJobs(
   fs: number,
   kernelLength: number,
   prevKernels?: Float32Array[],
+  prevBiexpResults?: WarmBiexp[],
 ): Promise<KernelResult[]> {
   return new Promise((resolve) => {
     const kernelResults: KernelResult[] = [];
@@ -231,8 +237,9 @@ function dispatchKernelJobs(
       totalKernelJobs++;
       const jobId = nextJobId++;
 
-      // Warm-start: use previous iteration's kernel for this subset
+      // Warm-start: use previous iteration's kernel and biexp result for this subset
       const warmKernel = prevKernels?.[si];
+      const warmBiexp = prevBiexpResults?.[si];
 
       pool!.dispatch({
         jobId,
@@ -250,6 +257,7 @@ function dispatchKernelJobs(
         smoothLambda: KERNEL_SMOOTH_LAMBDA,
         biexpSkip: BIEXP_FIT_SKIP,
         warmKernel,
+        warmBiexp,
         onComplete(result: KernelResult) {
           kernelResults.push(result);
           completed++;
@@ -390,8 +398,14 @@ export async function startRun(): Promise<void> {
   );
 
   if (seedKernelResults.length > 0) {
-    tauR = median(seedKernelResults.map((r) => r.tauRise));
-    tauD = median(seedKernelResults.map((r) => r.tauDecay));
+    const seedTauRises: number[] = new Array(seedKernelResults.length);
+    const seedTauDecays: number[] = new Array(seedKernelResults.length);
+    for (let i = 0; i < seedKernelResults.length; i++) {
+      seedTauRises[i] = seedKernelResults[i].tauRise;
+      seedTauDecays[i] = seedKernelResults[i].tauDecay;
+    }
+    tauR = median(seedTauRises);
+    tauD = median(seedTauDecays);
     setCurrentTauRise(tauR);
     setCurrentTauDecay(tauD);
     console.log(
@@ -411,6 +425,7 @@ export async function startRun(): Promise<void> {
   // Warm-start state carried between iterations
   let prevTraceCounts: Map<number, Float32Array> | undefined;
   let prevKernels: Float32Array[] | undefined;
+  let prevBiexpResults: WarmBiexp[] | undefined;
 
   // Best-residual tracking: remember the kernel parameters from the iteration
   // whose bi-exponential fit residual was lowest. This prevents the rise time
@@ -431,7 +446,8 @@ export async function startRun(): Promise<void> {
     tauDecay: tauD,
     beta: 0,
     residual: 0,
-    rFast: 0,
+    tauRiseFast: 0,
+    tauDecayFast: 0,
     betaFast: 0,
     fs,
     subsets: [],
@@ -599,6 +615,7 @@ export async function startRun(): Promise<void> {
       fs,
       kernelLength,
       prevKernels,
+      prevBiexpResults,
     );
 
     if (runState() === 'stopping') break;
@@ -607,15 +624,19 @@ export async function startRun(): Promise<void> {
       break;
     }
 
-    // Store kernels for warm-starting next iteration.
+    // Store kernels and biexp results for warm-starting next iteration.
     // dispatchKernelJobs skips subsets with no valid traces, so kernelResults
     // may have fewer entries than rects. Map them back by replaying the skip logic.
     prevKernels = new Array(rects.length);
+    prevBiexpResults = new Array(rects.length);
     {
       let ki = 0;
       for (let si = 0; si < rects.length; si++) {
         if (hasValidTraceResults(traceResults[si]) && ki < kernelResults.length) {
-          prevKernels[si] = new Float32Array(kernelResults[ki].hFree);
+          const kr = kernelResults[ki];
+          prevKernels[si] = new Float32Array(kr.hFree);
+          const { hFree: _, ...warmFields } = kr;
+          prevBiexpResults[si] = warmFields;
           ki++;
         }
       }
@@ -625,24 +646,43 @@ export async function startRun(): Promise<void> {
     setRunPhase('merge');
     const prevTauR = tauR;
     const prevTauD = tauD;
-    tauR = median(kernelResults.map((r) => r.tauRise));
-    tauD = median(kernelResults.map((r) => r.tauDecay));
+    // Extract all scalar fields in a single pass for median computation
+    const tauRises: number[] = [];
+    const tauDecays: number[] = [];
+    const betas: number[] = [];
+    const residuals: number[] = [];
+    const tauRiseFasts: number[] = [];
+    const tauDecayFasts: number[] = [];
+    const betaFasts: number[] = [];
+    for (const r of kernelResults) {
+      tauRises.push(r.tauRise);
+      tauDecays.push(r.tauDecay);
+      betas.push(r.beta);
+      residuals.push(r.residual);
+      tauRiseFasts.push(r.tauRiseFast);
+      tauDecayFasts.push(r.tauDecayFast);
+      betaFasts.push(r.betaFast);
+    }
+    tauR = median(tauRises);
+    tauD = median(tauDecays);
 
     setCurrentTauRise(tauR);
     setCurrentTauDecay(tauD);
 
     // Record convergence history with per-subset data
-    const medBeta = median(kernelResults.map((r) => r.beta));
-    const medResidual = median(kernelResults.map((r) => r.residual));
-    const medRFast = median(kernelResults.map((r) => r.rFast));
-    const medBetaFast = median(kernelResults.map((r) => r.betaFast));
+    const medBeta = median(betas);
+    const medResidual = median(residuals);
+    const medTauRiseFast = median(tauRiseFasts);
+    const medTauDecayFast = median(tauDecayFasts);
+    const medBetaFast = median(betaFasts);
     addConvergenceSnapshot({
       iteration: iter + 1,
       tauRise: tauR,
       tauDecay: tauD,
       beta: medBeta,
       residual: medResidual,
-      rFast: medRFast,
+      tauRiseFast: medTauRiseFast,
+      tauDecayFast: medTauDecayFast,
       betaFast: medBetaFast,
       fs,
       subsets: kernelResults.map((r) => ({
@@ -650,7 +690,8 @@ export async function startRun(): Promise<void> {
         tauDecay: r.tauDecay,
         beta: r.beta,
         residual: r.residual,
-        rFast: r.rFast,
+        tauRiseFast: r.tauRiseFast,
+        tauDecayFast: r.tauDecayFast,
         betaFast: r.betaFast,
         hFree: r.hFree,
       })),

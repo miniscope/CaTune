@@ -26,9 +26,13 @@ export interface KernelResult {
   tauDecay: number;
   beta: number;
   residual: number;
-  rFast: number;
+  tauRiseFast: number;
+  tauDecayFast: number;
   betaFast: number;
 }
+
+/** Previous biexponential result for warm-starting the next fit. */
+export type WarmBiexp = Omit<KernelResult, 'hFree'>;
 
 /** Messages sent TO a CaDecon worker. */
 export type CaDeconWorkerInbound =
@@ -68,6 +72,8 @@ export type CaDeconWorkerInbound =
       biexpSkip: number;
       /** Previous iteration's free kernel for warm-start. */
       warmKernel?: Float32Array;
+      /** Previous biexp result for warm-starting the fit. */
+      warmBiexp?: WarmBiexp;
     }
   | {
       type: 'seed-trace-job';

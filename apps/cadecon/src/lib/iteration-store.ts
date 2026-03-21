@@ -10,7 +10,8 @@ export interface SubsetKernelSnapshot {
   tauDecay: number;
   beta: number;
   residual: number;
-  rFast: number;
+  tauRiseFast: number;
+  tauDecayFast: number;
   betaFast: number;
   hFree: Float32Array;
 }
@@ -21,7 +22,8 @@ export interface KernelSnapshot {
   tauDecay: number;
   beta: number;
   residual: number;
-  rFast: number;
+  tauRiseFast: number;
+  tauDecayFast: number;
   betaFast: number;
   fs: number;
   subsets: SubsetKernelSnapshot[];

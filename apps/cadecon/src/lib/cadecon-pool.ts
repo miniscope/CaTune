@@ -9,6 +9,7 @@ import type {
   TraceResult,
   KernelResult,
   SeedTraceResult,
+  WarmBiexp,
 } from '../workers/cadecon-types.ts';
 
 // --- Pool Job Types ---
@@ -44,6 +45,7 @@ interface KernelJobFields {
   smoothLambda: number;
   biexpSkip: number;
   warmKernel?: Float32Array;
+  warmBiexp?: WarmBiexp;
   onComplete(result: KernelResult): void;
 }
 
@@ -154,6 +156,7 @@ const caDeconRouter: MessageRouter<CaDeconPoolJob, CaDeconWorkerOutbound> = {
           smoothLambda: job.smoothLambda,
           biexpSkip: job.biexpSkip,
           warmKernel: warmCopy,
+          warmBiexp: job.warmBiexp,
         },
         transfers,
       ];

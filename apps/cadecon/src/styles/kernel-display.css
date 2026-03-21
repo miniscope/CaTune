@@ -7,25 +7,70 @@
   min-height: 0;
 }
 
-.kernel-display__stats {
+/* Primary stats row — biologically meaningful metrics */
+.kernel-display__stats--primary {
   display: flex;
   gap: var(--space-md, 12px);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  margin-bottom: var(--space-xs, 4px);
+  margin-bottom: 2px;
 }
 
-.kernel-display__stats strong {
+.kernel-display__stats--primary strong {
   color: var(--text-primary);
 }
 
+/* Secondary stats row — raw tau parameters, de-emphasized */
+.kernel-display__stats--secondary {
+  display: flex;
+  gap: var(--space-md, 12px);
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-xs, 4px);
+}
+
+.kernel-display__stats--secondary strong {
+  color: var(--text-secondary);
+}
+
+/* Ground truth stat styling (pink) */
 .kernel-display__gt-stat {
   color: rgba(233, 30, 99, 0.8);
 }
 
 .kernel-display__gt-stat strong {
   color: rgba(233, 30, 99, 1);
+}
+
+/* Inline legend below chart */
+.kernel-display__legend {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.kernel-display__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kernel-display__legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+.kernel-display__legend-swatch--dashed {
+  background: none;
+  border-top: 2px dashed;
+  height: 0;
 }
 
 .kernel-display__empty {

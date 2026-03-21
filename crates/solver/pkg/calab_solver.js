@@ -440,18 +440,31 @@ export function indeca_estimate_kernel(traces_flat, spikes_flat, trace_lengths, 
 /**
  * Fit a bi-exponential model to a free-form kernel.
  *
+ * Warm-start: pass `use_warm=true` and the previous result's fields to add
+ * the previous result as an additional refined candidate alongside the cold
+ * grid search. This gives faster convergence when the kernel evolves smoothly.
+ * Pass `use_warm=false` (and any values for warm_* fields) for cold-start only.
+ *
  * Returns a JsValue containing the serialized BiexpResult:
- * { tau_rise, tau_decay, beta, residual }
+ * { tau_rise, tau_decay, beta, residual, tau_rise_fast, tau_decay_fast, beta_fast }
  * @param {Float32Array} h_free
  * @param {number} fs
  * @param {boolean} refine
  * @param {number} skip
+ * @param {number} warm_tau_rise
+ * @param {number} warm_tau_decay
+ * @param {number} warm_tau_rise_fast
+ * @param {number} warm_tau_decay_fast
+ * @param {number} warm_beta
+ * @param {number} warm_beta_fast
+ * @param {number} warm_residual
+ * @param {boolean} use_warm
  * @returns {any}
  */
-export function indeca_fit_biexponential(h_free, fs, refine, skip) {
+export function indeca_fit_biexponential(h_free, fs, refine, skip, warm_tau_rise, warm_tau_decay, warm_tau_rise_fast, warm_tau_decay_fast, warm_beta, warm_beta_fast, warm_residual, use_warm) {
     const ptr0 = passArrayF32ToWasm0(h_free, wasm.__wbindgen_export2);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.indeca_fit_biexponential(ptr0, len0, fs, refine, skip);
+    const ret = wasm.indeca_fit_biexponential(ptr0, len0, fs, refine, skip, warm_tau_rise, warm_tau_decay, warm_tau_rise_fast, warm_tau_decay_fast, warm_beta, warm_beta_fast, warm_residual, use_warm);
     return takeObject(ret);
 }
 
