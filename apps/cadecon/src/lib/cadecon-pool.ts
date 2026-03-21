@@ -102,15 +102,15 @@ const caDeconRouter: MessageRouter<CaDeconPoolJob, CaDeconWorkerOutbound> = {
         [job.trace.buffer],
       ];
     } else if (job.kind === 'trace') {
-      const traceCopy = new Float32Array(job.trace);
+      // warmCounts may be a .subarray() sharing a parent buffer — must copy to detach
       const warmCopy = job.warmCounts ? new Float32Array(job.warmCounts) : undefined;
-      const transfers: ArrayBuffer[] = [traceCopy.buffer];
+      const transfers: ArrayBuffer[] = [job.trace.buffer as ArrayBuffer];
       if (warmCopy) transfers.push(warmCopy.buffer);
       return [
         {
           type: 'trace-job',
           jobId: job.jobId,
-          trace: traceCopy,
+          trace: job.trace,
           tauRise: job.tauRise,
           tauDecay: job.tauDecay,
           fs: job.fs,
