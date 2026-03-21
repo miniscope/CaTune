@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal, createMemo, batch } from 'solid-js';
 
 // --- Types ---
 
@@ -140,24 +140,13 @@ function resetIterationState(): void {
   setIterationHistory([]);
 }
 
-/** Deep-copy current perTraceResults into the iteration history. */
+/** Snapshot current perTraceResults into the iteration history.
+ *  Safe as a shallow copy: TraceResultEntry objects are replaced wholesale (never mutated),
+ *  so historical snapshots remain stable. Consumers are read-only. */
 function snapshotIteration(iteration: number, tauRise: number, tauDecay: number): void {
   const results = perTraceResults();
-  const copy: Record<string, TraceResultEntry> = {};
-  for (const [key, entry] of Object.entries(results)) {
-    copy[key] = {
-      cellIndex: entry.cellIndex,
-      subsetIdx: entry.subsetIdx,
-      sCounts: new Float32Array(entry.sCounts),
-      filteredTrace: entry.filteredTrace ? new Float32Array(entry.filteredTrace) : undefined,
-      alpha: entry.alpha,
-      baseline: entry.baseline,
-      threshold: entry.threshold,
-      pve: entry.pve,
-    };
-  }
   setIterationHistory((prev) => {
-    const next = [...prev, { iteration, results: copy, tauRise, tauDecay }];
+    const next = [...prev, { iteration, results: { ...results }, tauRise, tauDecay }];
     return next.slice(-MAX_HISTORY_ITERATIONS);
   });
 }
@@ -172,6 +161,11 @@ function addDebugTraceSnapshot(snapshot: DebugTraceSnapshot): void {
 
 function updateTraceResult(key: string, result: TraceResultEntry): void {
   setPerTraceResults((prev) => ({ ...prev, [key]: result }));
+}
+
+/** Merge many entries into perTraceResults in a single spread (one reactive update). */
+function bulkUpdateTraceResults(entries: Record<string, TraceResultEntry>): void {
+  setPerTraceResults((prev) => ({ ...prev, ...entries }));
 }
 
 export {
@@ -204,6 +198,7 @@ export {
   addConvergenceSnapshot,
   addDebugTraceSnapshot,
   updateTraceResult,
+  bulkUpdateTraceResults,
   snapshotIteration,
   cellSubsetKey,
 };

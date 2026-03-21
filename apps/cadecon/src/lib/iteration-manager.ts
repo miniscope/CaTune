@@ -7,6 +7,7 @@
 //   4. Convergence check
 //   5. On convergence/max iters: finalization pass on ALL cells
 
+import { batch } from 'solid-js';
 import type { WorkerPool } from '@calab/compute';
 import { createCaDeconWorkerPool, type CaDeconPoolJob } from './cadecon-pool.ts';
 import type {
@@ -28,6 +29,7 @@ import {
   addConvergenceSnapshot,
   addDebugTraceSnapshot,
   updateTraceResult,
+  bulkUpdateTraceResults,
   resetIterationState,
   snapshotIteration,
   cellSubsetKey,
@@ -206,11 +208,15 @@ function dispatchKernelJobs(
       const rect = rects[si];
       const subsetResults = perSubsetResults[si];
 
-      const tracesFlat: number[] = [];
-      const spikesFlat: number[] = [];
-      const traceLengths: number[] = [];
-      const alphas: number[] = [];
-      const baselines: number[] = [];
+      // Two-pass: first identify valid cells and count total length, then allocate and fill
+      type ValidCell = {
+        trace: Float32Array;
+        sCounts: Float32Array;
+        alpha: number;
+        baseline: number;
+      };
+      const validCells: ValidCell[] = [];
+      let totalSamples = 0;
 
       for (let c = rect.cellStart; c < rect.cellEnd; c++) {
         const r = subsetResults.get(c);
@@ -223,15 +229,29 @@ function dispatchKernelJobs(
         const trace = r.filteredTrace
           ? r.filteredTrace
           : extractCellTrace(c, rect.tStart, rect.tEnd, data, isSwapped);
-        tracesFlat.push(...trace);
-        spikesFlat.push(...r.sCounts);
-        traceLengths.push(trace.length);
-        alphas.push(r.alpha);
-        baselines.push(r.baseline);
+        validCells.push({ trace, sCounts: r.sCounts, alpha: r.alpha, baseline: r.baseline });
+        totalSamples += trace.length;
       }
 
-      if (traceLengths.length === 0) {
+      if (validCells.length === 0) {
         continue;
+      }
+
+      const tracesFlat = new Float32Array(totalSamples);
+      const spikesFlat = new Float32Array(totalSamples);
+      const traceLengths = new Uint32Array(validCells.length);
+      const alphas = new Float64Array(validCells.length);
+      const baselines = new Float64Array(validCells.length);
+
+      let offset = 0;
+      for (let i = 0; i < validCells.length; i++) {
+        const vc = validCells[i];
+        tracesFlat.set(vc.trace, offset);
+        spikesFlat.set(vc.sCounts, offset);
+        traceLengths[i] = vc.trace.length;
+        alphas[i] = vc.alpha;
+        baselines[i] = vc.baseline;
+        offset += vc.trace.length;
       }
 
       totalKernelJobs++;
@@ -244,11 +264,11 @@ function dispatchKernelJobs(
       pool!.dispatch({
         jobId,
         kind: 'kernel',
-        tracesFlat: new Float32Array(tracesFlat),
-        spikesFlat: new Float32Array(spikesFlat),
-        traceLengths: new Uint32Array(traceLengths),
-        alphas: new Float64Array(alphas),
-        baselines: new Float64Array(baselines),
+        tracesFlat,
+        spikesFlat,
+        traceLengths,
+        alphas,
+        baselines,
         kernelLength,
         fs,
         maxIters: KERNEL_FISTA_MAX_ITERS,
@@ -440,33 +460,37 @@ export async function startRun(): Promise<void> {
   let residualIncreaseCount = 0;
 
   // Iteration 0: record initial kernel state and alpha=1 baseline
-  addConvergenceSnapshot({
-    iteration: 0,
-    tauRise: tauR,
-    tauDecay: tauD,
-    beta: 0,
-    residual: 0,
-    tauRiseFast: 0,
-    tauDecayFast: 0,
-    betaFast: 0,
-    fs,
-    subsets: [],
-  });
-  for (let si = 0; si < rects.length; si++) {
-    const rect = rects[si];
-    for (let c = rect.cellStart; c < rect.cellEnd; c++) {
-      updateTraceResult(cellSubsetKey(c, si), {
-        cellIndex: c,
-        subsetIdx: si,
-        sCounts: new Float32Array(0),
-        alpha: 1,
-        baseline: 0,
-        threshold: 0,
-        pve: 0,
-      });
+  batch(() => {
+    addConvergenceSnapshot({
+      iteration: 0,
+      tauRise: tauR,
+      tauDecay: tauD,
+      beta: 0,
+      residual: 0,
+      tauRiseFast: 0,
+      tauDecayFast: 0,
+      betaFast: 0,
+      fs,
+      subsets: [],
+    });
+    const initEntries: Record<string, import('./iteration-store.ts').TraceResultEntry> = {};
+    for (let si = 0; si < rects.length; si++) {
+      const rect = rects[si];
+      for (let c = rect.cellStart; c < rect.cellEnd; c++) {
+        initEntries[cellSubsetKey(c, si)] = {
+          cellIndex: c,
+          subsetIdx: si,
+          sCounts: new Float32Array(0),
+          alpha: 1,
+          baseline: 0,
+          threshold: 0,
+          pve: 0,
+        };
+      }
     }
-  }
-  snapshotIteration(0, tauR, tauD);
+    bulkUpdateTraceResults(initEntries);
+    snapshotIteration(0, tauR, tauD);
+  });
 
   for (let iter = 0; iter < maxIter; iter++) {
     // Check for stop/pause
@@ -500,7 +524,7 @@ export async function startRun(): Promise<void> {
 
     if (runState() === 'stopping') break;
 
-    // Collect s_counts for warm-starting next iteration.
+    // Collect s_counts for warm-starting next iteration and accumulate batch entries.
     // Subset traces only cover a time window, so we store the subset-windowed s_counts
     // keyed by cell and reconstruct full-trace s_counts where available.
     prevTraceCounts = new Map();
@@ -511,6 +535,7 @@ export async function startRun(): Promise<void> {
     >();
     // Map cell → full-length filtered trace (stitched from subset windows)
     const cellFiltered = new Map<number, Float32Array>();
+    const batchEntries: Record<string, import('./iteration-store.ts').TraceResultEntry> = {};
     for (let si = 0; si < rects.length; si++) {
       const rect = rects[si];
       for (const [cell, result] of traceResults[si]) {
@@ -537,8 +562,8 @@ export async function startRun(): Promise<void> {
           pve: result.pve,
         });
 
-        // Publish per cell×subset result for alpha/threshold trends tracking
-        updateTraceResult(cellSubsetKey(cell, si), {
+        // Accumulate per cell×subset result for alpha/threshold trends tracking
+        batchEntries[cellSubsetKey(cell, si)] = {
           cellIndex: cell,
           subsetIdx: si,
           sCounts: result.sCounts,
@@ -547,16 +572,16 @@ export async function startRun(): Promise<void> {
           baseline: result.baseline,
           threshold: result.threshold,
           pve: result.pve,
-        });
+        };
       }
     }
 
-    // Publish stitched full-length results so trace viewer and distributions update correctly.
+    // Accumulate stitched full-length results so trace viewer and distributions update correctly.
     // These use subsetIdx=-1, which cellResultLookup prefers over per-subset entries.
     for (const [cell, fullCounts] of prevTraceCounts) {
       const scalars = cellScalars.get(cell)!;
       const filteredTrace = cellFiltered.get(cell);
-      updateTraceResult(cellSubsetKey(cell, -1), {
+      batchEntries[cellSubsetKey(cell, -1)] = {
         cellIndex: cell,
         subsetIdx: -1,
         sCounts: fullCounts,
@@ -565,11 +590,14 @@ export async function startRun(): Promise<void> {
         baseline: scalars.baseline,
         threshold: scalars.threshold,
         pve: scalars.pve,
-      });
+      };
     }
 
-    // Snapshot iteration history for the scrubber
-    snapshotIteration(iter + 1, tauR, tauD);
+    // Single batched reactive update: all trace results + snapshot in one traversal
+    batch(() => {
+      bulkUpdateTraceResults(batchEntries);
+      snapshotIteration(iter + 1, tauR, tauD);
+    });
 
     // Capture debug trace snapshot: cell 0 from first subset that has it
     if (rects.length > 0 && traceResults[0].size > 0) {
@@ -666,35 +694,36 @@ export async function startRun(): Promise<void> {
     tauR = median(tauRises);
     tauD = median(tauDecays);
 
-    setCurrentTauRise(tauR);
-    setCurrentTauDecay(tauD);
-
     // Record convergence history with per-subset data
     const medBeta = median(betas);
     const medResidual = median(residuals);
     const medTauRiseFast = median(tauRiseFasts);
     const medTauDecayFast = median(tauDecayFasts);
     const medBetaFast = median(betaFasts);
-    addConvergenceSnapshot({
-      iteration: iter + 1,
-      tauRise: tauR,
-      tauDecay: tauD,
-      beta: medBeta,
-      residual: medResidual,
-      tauRiseFast: medTauRiseFast,
-      tauDecayFast: medTauDecayFast,
-      betaFast: medBetaFast,
-      fs,
-      subsets: kernelResults.map((r) => ({
-        tauRise: r.tauRise,
-        tauDecay: r.tauDecay,
-        beta: r.beta,
-        residual: r.residual,
-        tauRiseFast: r.tauRiseFast,
-        tauDecayFast: r.tauDecayFast,
-        betaFast: r.betaFast,
-        hFree: r.hFree,
-      })),
+    batch(() => {
+      setCurrentTauRise(tauR);
+      setCurrentTauDecay(tauD);
+      addConvergenceSnapshot({
+        iteration: iter + 1,
+        tauRise: tauR,
+        tauDecay: tauD,
+        beta: medBeta,
+        residual: medResidual,
+        tauRiseFast: medTauRiseFast,
+        tauDecayFast: medTauDecayFast,
+        betaFast: medBetaFast,
+        fs,
+        subsets: kernelResults.map((r) => ({
+          tauRise: r.tauRise,
+          tauDecay: r.tauDecay,
+          beta: r.beta,
+          residual: r.residual,
+          tauRiseFast: r.tauRiseFast,
+          tauDecayFast: r.tauDecayFast,
+          betaFast: r.betaFast,
+          hFree: r.hFree,
+        })),
+      });
     });
 
     // Step 4: Best-residual tracking & early stop (DISABLED)
@@ -777,18 +806,20 @@ export async function startRun(): Promise<void> {
           lambda: sparsityLambda,
           warmCounts,
           onComplete(result: TraceResult) {
-            updateTraceResult(cellSubsetKey(c, -1), {
-              cellIndex: c,
-              subsetIdx: -1,
-              sCounts: result.sCounts,
-              filteredTrace: result.filteredTrace,
-              alpha: result.alpha,
-              baseline: result.baseline,
-              threshold: result.threshold,
-              pve: result.pve,
+            batch(() => {
+              updateTraceResult(cellSubsetKey(c, -1), {
+                cellIndex: c,
+                subsetIdx: -1,
+                sCounts: result.sCounts,
+                filteredTrace: result.filteredTrace,
+                alpha: result.alpha,
+                baseline: result.baseline,
+                threshold: result.threshold,
+                pve: result.pve,
+              });
+              finCompleted++;
+              setCompletedSubsetTraceJobs(finCompleted);
             });
-            finCompleted++;
-            setCompletedSubsetTraceJobs(finCompleted);
             if (finCompleted === nCells) resolve();
           },
           onCancelled() {

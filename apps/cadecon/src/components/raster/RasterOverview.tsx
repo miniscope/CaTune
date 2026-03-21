@@ -1,6 +1,5 @@
 import { onMount, onCleanup, createEffect, createMemo, on, type JSX } from 'solid-js';
 import { parsedData, effectiveShape, swapped } from '../../lib/data-store.ts';
-import { dataIndex } from '../../lib/data-utils.ts';
 import {
   subsetRectangles,
   selectedSubsetIdx,
@@ -132,14 +131,16 @@ export function RasterOverview(): JSX.Element {
 
     for (let py = 0; py < physH; py++) {
       const cell = Math.floor((py / physH) * N);
+      const rowBase = isSwapped ? cell : cell * rawCols;
+      const rowPixelBase = py * physW;
       for (let px = 0; px < physW; px++) {
         const t = Math.floor((px / physW) * T);
-        const v = typedData[dataIndex(cell, t, rawCols, isSwapped)];
+        const v = typedData[isSwapped ? t * rawCols + rowBase : rowBase + t];
         const normalized = Number.isFinite(v)
           ? Math.max(0, Math.min(255, Math.round(((v - p1) / range) * 255)))
           : 0;
 
-        const offset = (py * physW + px) * 4;
+        const offset = (rowPixelBase + px) * 4;
         pixels[offset] = VIRIDIS_LUT[normalized * 3];
         pixels[offset + 1] = VIRIDIS_LUT[normalized * 3 + 1];
         pixels[offset + 2] = VIRIDIS_LUT[normalized * 3 + 2];

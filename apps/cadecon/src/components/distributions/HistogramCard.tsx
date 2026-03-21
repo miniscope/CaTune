@@ -22,8 +22,13 @@ export interface HistogramCardProps {
 function computeBins(values: number[], binCount: number): { centers: number[]; counts: number[] } {
   if (values.length === 0) return { centers: [], counts: [] };
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  let min = values[0];
+  let max = values[0];
+  for (let i = 1; i < values.length; i++) {
+    const v = values[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
   const range = max - min || 1;
   const binWidth = range / binCount;
 
