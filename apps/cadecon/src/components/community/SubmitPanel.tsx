@@ -46,6 +46,8 @@ import {
 import { SubmitForm } from './SubmitForm.tsx';
 import { SubmissionSummary } from './SubmissionSummary.tsx';
 import { GroundTruthControls, GroundTruthNotices, ExportButton } from './GroundTruthControls.tsx';
+import { isBridgeAutorun } from '../../lib/bridge-effects.ts';
+import { bridgeExportDone } from '../../lib/data-store.ts';
 import '../../styles/community.css';
 
 const APP_VERSION: string = import.meta.env.VITE_APP_VERSION || 'dev';
@@ -216,6 +218,10 @@ export function SubmitPanel() {
           </button>
         </Show>
       </div>
+
+      <Show when={isBridgeAutorun() && bridgeExportDone()}>
+        <div class="submit-panel__autoexport-notice">Results auto-exported to Python</div>
+      </Show>
 
       <GroundTruthNotices />
 
