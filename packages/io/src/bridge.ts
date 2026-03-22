@@ -16,6 +16,45 @@ export interface BridgeMetadata {
   num_timepoints: number;
 }
 
+/** Configuration from Python's DeconConfig, sent via GET /api/v1/config. */
+export interface BridgeConfig {
+  autorun: boolean;
+  upsample_target?: number;
+  hp_filter_enabled?: boolean;
+  lp_filter_enabled?: boolean;
+  max_iterations?: number;
+  convergence_tol?: number;
+  num_subsets?: number;
+  target_coverage?: number;
+  aspect_ratio?: number;
+  seed?: number;
+}
+
+/** All known keys of BridgeConfig (for cross-language schema tests). */
+export const BRIDGE_CONFIG_KEYS: readonly string[] = [
+  'autorun',
+  'upsample_target',
+  'hp_filter_enabled',
+  'lp_filter_enabled',
+  'max_iterations',
+  'convergence_tol',
+  'num_subsets',
+  'target_coverage',
+  'aspect_ratio',
+  'seed',
+];
+
+/** Progress update POSTed by the browser to the bridge server. */
+export interface BridgeProgress {
+  iteration: number;
+  max_iterations: number;
+  phase: string;
+  phase_progress: number;
+  tau_rise: number | null;
+  tau_decay: number | null;
+  status: string;
+}
+
 /**
  * Read the `?bridge=` URL parameter to get the bridge server base URL.
  * Returns null if not present.
@@ -146,4 +185,28 @@ export async function exportCaDeconToBridge(
   await postActivityToBridge(bridgeUrl, activity, shape);
   await postResultsToBridge(bridgeUrl, results);
   stopBridgeHeartbeat();
+}
+
+/**
+ * Fetch configuration from the Python bridge server.
+ * Returns the parsed BridgeConfig (autorun + optional algorithm overrides).
+ */
+export async function fetchBridgeConfig(bridgeUrl: string): Promise<BridgeConfig> {
+  const resp = await fetch(`${bridgeUrl}/api/v1/config`);
+  if (!resp.ok) {
+    throw new Error(`Bridge: failed to fetch config (${resp.status})`);
+  }
+  return resp.json() as Promise<BridgeConfig>;
+}
+
+/**
+ * POST a progress update to the bridge server (fire-and-forget).
+ * Errors are silently swallowed — progress is informational, not critical.
+ */
+export function postProgressToBridge(bridgeUrl: string, progress: BridgeProgress): void {
+  fetch(`${bridgeUrl}/api/v1/progress`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(progress),
+  }).catch(() => {});
 }

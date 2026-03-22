@@ -60,3 +60,18 @@
   font-style: italic;
   line-height: 1.4;
 }
+
+/* ========================
+   Auto-export notice
+   ======================== */
+
+.submit-panel__autoexport-notice {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: var(--success);
+  background: rgba(46, 125, 50, 0.08);
+  border: 1px solid var(--success);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-sm);
+}

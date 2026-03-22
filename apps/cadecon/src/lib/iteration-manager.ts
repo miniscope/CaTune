@@ -35,8 +35,6 @@ import {
   cellSubsetKey,
 } from './iteration-store.ts';
 import {
-  tauRiseInit,
-  tauDecayInit,
   upsampleFactor,
   maxIterations,
   convergenceTol,
@@ -379,9 +377,12 @@ export async function startRun(): Promise<void> {
   const shape = effectiveShape();
   if (!data || !fs || !shape) return;
 
-  // Snapshot parameters
-  let tauR = tauRiseInit();
-  let tauD = tauDecayInit();
+  // Snapshot parameters — tau values are auto-detected by the seed phase below;
+  // these fallbacks are only used if the seed phase yields zero kernel results.
+  const TAU_RISE_FALLBACK = 0.2;
+  const TAU_DECAY_FALLBACK = 1.0;
+  let tauR = TAU_RISE_FALLBACK;
+  let tauD = TAU_DECAY_FALLBACK;
   const upFactor = upsampleFactor();
   const maxIter = maxIterations();
   const convTol = convergenceTol();

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import webbrowser
 
 import numpy as np
 
+from ._models import DeconConfig
 from ._server import BridgeServer
 
 HEARTBEAT_TIMEOUT = 10  # seconds without heartbeat = browser disconnected
@@ -17,6 +19,26 @@ _DEFAULT_CATUNE_URL = "https://miniscope.github.io/CaLab/CaTune/"
 _DEFAULT_CADECON_URL = "https://miniscope.github.io/CaLab/CaDecon/"
 
 
+def _format_progress(progress: dict) -> str:
+    """Format a progress dict into a compact terminal status line."""
+    iteration = progress.get("iteration", "?")
+    max_iter = progress.get("max_iterations", "?")
+    phase = progress.get("phase", "")
+    phase_pct = progress.get("phase_progress", 0)
+    status = progress.get("status", "running")
+    tau_rise = progress.get("tau_rise")
+    tau_decay = progress.get("tau_decay")
+
+    parts = [f"iter {iteration}/{max_iter}"]
+    if phase:
+        parts.append(f"{phase} {phase_pct:.0%}")
+    if tau_rise is not None and tau_decay is not None:
+        parts.append(f"τr={tau_rise:.4f} τd={tau_decay:.4f}")
+    if status != "running":
+        parts.append(f"[{status}]")
+    return "  ".join(parts)
+
+
 def _run_bridge(
     server: BridgeServer,
     event: threading.Event,
@@ -24,6 +46,7 @@ def _run_bridge(
     app_url: str,
     open_browser: bool,
     timeout: float | None,
+    show_progress: bool = False,
 ) -> bool:
     """Start server, open browser, and wait for the bridge event.
 
@@ -44,6 +67,7 @@ def _run_bridge(
 
     received = False
     start_time = time.monotonic()
+    last_progress_id: object = None
     try:
         while True:
             if event.wait(timeout=1.0):
@@ -51,6 +75,16 @@ def _run_bridge(
                 break
 
             now = time.monotonic()
+
+            # Display progress updates in terminal
+            if show_progress and server.latest_progress is not None:
+                prog = server.latest_progress
+                prog_id = (prog.get("iteration"), prog.get("phase_progress"), prog.get("status"))
+                if prog_id != last_progress_id:
+                    last_progress_id = prog_id
+                    line = _format_progress(prog)
+                    sys.stdout.write(f"\r\033[K{line}")
+                    sys.stdout.flush()
 
             if timeout is not None and (now - start_time) >= timeout:
                 break
@@ -62,6 +96,9 @@ def _run_bridge(
     except KeyboardInterrupt:
         print("\nBridge cancelled by user.")
     finally:
+        if show_progress and last_progress_id is not None:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
         server.shutdown()
 
     return received
@@ -130,6 +167,17 @@ def decon(
     port: int | None = None,
     app_url: str | None = None,
     open_browser: bool = True,
+    *,
+    autorun: bool = False,
+    upsample_target: int | None = None,
+    hp_filter_enabled: bool | None = None,
+    lp_filter_enabled: bool | None = None,
+    max_iterations: int | None = None,
+    convergence_tol: float | None = None,
+    num_subsets: int | None = None,
+    target_coverage: float | None = None,
+    aspect_ratio: float | None = None,
+    seed: int | None = None,
 ):
     """Open CaDecon in the browser for automated deconvolution.
 
@@ -151,6 +199,26 @@ def decon(
         Override CaDecon URL (for local dev). Default: GitHub Pages.
     open_browser : bool
         Whether to auto-open the browser. Default: True.
+    autorun : bool
+        If True, the solver starts automatically after loading. Default: False.
+    upsample_target : int, optional
+        Target sampling rate for upsampling. Must be > 0.
+    hp_filter_enabled : bool, optional
+        Enable high-pass filter.
+    lp_filter_enabled : bool, optional
+        Enable low-pass filter.
+    max_iterations : int, optional
+        Maximum solver iterations (1–200).
+    convergence_tol : float, optional
+        Convergence tolerance (0–1 exclusive).
+    num_subsets : int, optional
+        Number of random subsets. Must be > 0.
+    target_coverage : float, optional
+        Target coverage fraction (0–1].
+    aspect_ratio : float, optional
+        Subset aspect ratio. Must be > 0.
+    seed : int, optional
+        Random seed for subset placement.
 
     Returns
     -------
@@ -159,10 +227,26 @@ def decon(
     """
     from .._compute import CaDeconResult, _build_biexp_waveform
 
-    server = BridgeServer(traces, fs, port=port or 0, app="cadecon")
+    # Build and validate config via pydantic
+    config = DeconConfig(
+        autorun=autorun,
+        upsample_target=upsample_target,
+        hp_filter_enabled=hp_filter_enabled,
+        lp_filter_enabled=lp_filter_enabled,
+        max_iterations=max_iterations,
+        convergence_tol=convergence_tol,
+        num_subsets=num_subsets,
+        target_coverage=target_coverage,
+        aspect_ratio=aspect_ratio,
+        seed=seed,
+    )
+    config_dict = config.model_dump(exclude_none=True)
+
+    server = BridgeServer(traces, fs, port=port or 0, app="cadecon", config=config_dict)
     received = _run_bridge(
         server, server.results_event, "CaDecon",
         app_url or _DEFAULT_CADECON_URL, open_browser, timeout,
+        show_progress=autorun,
     )
 
     if not received or server.received_results is None:

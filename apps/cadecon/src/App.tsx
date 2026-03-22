@@ -10,6 +10,7 @@ import {
 } from '@calab/ui';
 import type { SidebarTabConfig } from '@calab/ui';
 import { getBridgeUrl, startBridgeHeartbeat } from '@calab/io';
+import { initBridgeConfig, setupBridgeEffects } from './lib/bridge-effects.ts';
 import { trackEvent } from '@calab/community';
 import { supabaseEnabled, user, authLoading } from './lib/community/index.ts';
 import { CaDeconHeader } from './components/layout/CaDeconHeader.tsx';
@@ -72,9 +73,13 @@ const App: Component = () => {
   const bridgeUrlParam = getBridgeUrl();
   if (bridgeUrlParam) {
     void loadFromBridge(bridgeUrlParam).then(() => {
-      if (bridgeUrl()) startBridgeHeartbeat(bridgeUrlParam);
+      if (bridgeUrl()) {
+        startBridgeHeartbeat(bridgeUrlParam);
+        void initBridgeConfig(bridgeUrlParam);
+      }
     });
   }
+  setupBridgeEffects();
 
   // Right sidebar state for community panel
   const [sidebarOpen, setSidebarOpen] = createSignal(false);

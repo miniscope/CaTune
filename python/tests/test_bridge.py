@@ -14,33 +14,33 @@ import pytest
 from calab._bridge._server import BridgeServer
 
 
-@pytest.fixture
-def bridge_server():
-    """Start a bridge server on a random port, yield it, then shut down."""
+def _make_server(**kwargs) -> BridgeServer:
+    """Create a BridgeServer with default test traces."""
     rng = np.random.default_rng(42)
     traces = rng.standard_normal((3, 200))
-    server = BridgeServer(traces, fs=30.0)
+    return BridgeServer(traces, fs=30.0, **kwargs)
 
+
+def _start_server(server: BridgeServer) -> None:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
-    yield server
 
+@pytest.fixture
+def bridge_server():
+    """Start a bridge server on a random port, yield it, then shut down."""
+    server = _make_server()
+    _start_server(server)
+    yield server
     server.shutdown()
 
 
 @pytest.fixture
 def cadecon_server():
     """Start a bridge server in cadecon mode on a random port."""
-    rng = np.random.default_rng(42)
-    traces = rng.standard_normal((3, 200))
-    server = BridgeServer(traces, fs=30.0, app="cadecon")
-
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
+    server = _make_server(app="cadecon")
+    _start_server(server)
     yield server
-
     server.shutdown()
 
 
@@ -276,3 +276,129 @@ def test_invalid_npy_returns_400(cadecon_server: BridgeServer) -> None:
         cadecon_server, "/api/v1/results/activity", b"not-a-npy-file",
     )
     assert status == 400
+
+
+# --- Config endpoint tests ---
+
+
+@pytest.fixture
+def config_server():
+    """Start a bridge server with config on a random port."""
+    config = {"autorun": True, "max_iterations": 10}
+    server = _make_server(app="cadecon", config=config)
+    _start_server(server)
+    yield server
+    server.shutdown()
+
+
+def test_config_endpoint_empty(cadecon_server: BridgeServer) -> None:
+    """GET /api/v1/config with no config returns default autorun=false."""
+    status, body = _get(cadecon_server, "/api/v1/config")
+    assert status == 200
+    data = json.loads(body)
+    assert data == {"autorun": False}
+
+
+def test_config_endpoint_with_params(config_server: BridgeServer) -> None:
+    """GET /api/v1/config returns the exact config dict."""
+    status, body = _get(config_server, "/api/v1/config")
+    assert status == 200
+    data = json.loads(body)
+    assert data == {"autorun": True, "max_iterations": 10}
+
+
+def test_progress_endpoint(cadecon_server: BridgeServer) -> None:
+    """POST /api/v1/progress stores to latest_progress."""
+    progress = {
+        "iteration": 3,
+        "max_iterations": 20,
+        "phase": "inference",
+        "phase_progress": 0.75,
+        "tau_rise": 0.045,
+        "tau_decay": 0.38,
+        "status": "running",
+    }
+    status, body = _post(cadecon_server, "/api/v1/progress", progress)
+    assert status == 200
+    data = json.loads(body)
+    assert data["status"] == "ok"
+    assert cadecon_server.latest_progress == progress
+
+
+def test_progress_invalid_json(cadecon_server: BridgeServer) -> None:
+    """POST /api/v1/progress with invalid JSON returns 400."""
+    url = f"http://127.0.0.1:{cadecon_server.port}/api/v1/progress"
+    req = urllib.request.Request(url, data=b"not json", method="POST")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        status = e.code
+    assert status == 400
+
+
+# --- DeconConfig model tests ---
+
+
+def test_decon_config_validation() -> None:
+    """Pydantic rejects invalid values."""
+    from calab._bridge._models import DeconConfig
+
+    with pytest.raises(Exception):  # noqa: B017
+        DeconConfig(max_iterations=0)
+
+    with pytest.raises(Exception):  # noqa: B017
+        DeconConfig(max_iterations=201)
+
+    with pytest.raises(Exception):  # noqa: B017
+        DeconConfig(convergence_tol=0)
+
+    with pytest.raises(Exception):  # noqa: B017
+        DeconConfig(convergence_tol=1.0)
+
+    with pytest.raises(Exception):  # noqa: B017
+        DeconConfig(target_coverage=0)
+
+
+def test_decon_config_serialization() -> None:
+    """model_dump(exclude_none=True) omits unset optional fields."""
+    from calab._bridge._models import DeconConfig
+
+    config = DeconConfig(autorun=True, max_iterations=10)
+    dumped = config.model_dump(exclude_none=True)
+    assert dumped == {"autorun": True, "max_iterations": 10}
+    assert "upsample_target" not in dumped
+    assert "seed" not in dumped
+
+
+# --- Cross-language schema consistency tests ---
+
+
+def test_config_schema_matches_fixture() -> None:
+    """DeconConfig round-trips through the shared fixture."""
+    import pathlib
+
+    from calab._bridge._models import DeconConfig
+
+    fixture_path = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "packages" / "io" / "src" / "__fixtures__" / "decon-config-full.json"
+    )
+    fixture = json.loads(fixture_path.read_text())
+    config = DeconConfig(**fixture)
+    assert config.model_dump() == fixture
+
+
+def test_config_field_names_match_fixture() -> None:
+    """DeconConfig field names exactly match the fixture keys."""
+    import pathlib
+
+    from calab._bridge._models import DeconConfig
+
+    fixture_path = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "packages" / "io" / "src" / "__fixtures__" / "decon-config-full.json"
+    )
+    fixture = json.loads(fixture_path.read_text())
+    assert set(DeconConfig.model_fields.keys()) == set(fixture.keys())

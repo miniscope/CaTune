@@ -7,5 +7,6 @@
 from __future__ import annotations
 
 from ._apps import decon, tune
+from ._models import DeconConfig
 
-__all__ = ["decon", "tune"]
+__all__ = ["DeconConfig", "decon", "tune"]
