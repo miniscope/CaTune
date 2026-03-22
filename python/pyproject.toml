@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "calab"
-version = "0.2.1"
+version = "0.0.0"
 description = "CaLab: calcium imaging analysis tools — deconvolution and data preparation"
 readme = "README.md"
 requires-python = ">=3.10"
