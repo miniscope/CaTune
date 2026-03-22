@@ -63,6 +63,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._serve_traces()
         elif self.path == "/api/v1/metadata":
             self._serve_metadata()
+        elif self.path == "/api/v1/config":
+            self._send_json(self.server.config)
         elif self.path == "/api/v1/status":
             self._send_json({"ready": True, "app": self.server.app})
         elif self.path == "/api/v1/health":
@@ -76,6 +78,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/v1/heartbeat":
             self.server.last_heartbeat = time.monotonic()
             self._send_json({"status": "ok"})
+        elif self.path == "/api/v1/progress":
+            self._receive_progress()
         elif self.path == "/api/v1/results/activity":
             self._receive_results_activity()
         elif self.path == "/api/v1/results":
@@ -110,6 +114,20 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
         self.server.received_params = params
         self.server.params_event.set()
+        self._send_json({"status": "ok"})
+
+    def _receive_progress(self) -> None:
+        """Receive a progress update from the browser."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
+
+        try:
+            progress = json.loads(body)
+        except json.JSONDecodeError:
+            self._send_error_cors(400, "Invalid JSON")
+            return
+
+        self.server.latest_progress = progress
         self._send_json({"status": "ok"})
 
     def _receive_results_activity(self) -> None:
@@ -151,10 +169,13 @@ class BridgeServer(HTTPServer):
         fs: float,
         port: int = 0,
         app: str = "catune",
+        config: dict | None = None,
     ) -> None:
         self.traces = np.atleast_2d(np.asarray(traces, dtype=np.float64))
         self.fs = fs
         self.app = app
+        self.config: dict = config if config is not None else {"autorun": False}
+        self.latest_progress: dict | None = None
         self.received_params: dict | None = None
         self.params_event = threading.Event()
         self.last_heartbeat: float | None = None

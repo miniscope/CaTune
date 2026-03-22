@@ -14,6 +14,7 @@ import {
 import { runState } from '../../lib/iteration-store.ts';
 import { exportCaDeconToBridge } from '@calab/io';
 import { buildCaDeconActivityMatrix, buildCaDeconResultsPayload } from '../../lib/export-utils.ts';
+import { isBridgeAutorun } from '../../lib/bridge-effects.ts';
 
 export function GroundTruthControls(): JSX.Element {
   function handleToggle(): void {
@@ -56,7 +57,8 @@ export function ExportButton(): JSX.Element {
 
   const isComplete = () => runState() === 'complete';
   const isBridge = () => !!bridgeUrl();
-  const isDisabled = () => !isComplete() || exporting() || bridgeExportDone();
+  const isAutorun = () => isBridgeAutorun();
+  const isDisabled = () => isAutorun() || !isComplete() || exporting() || bridgeExportDone();
 
   async function handleExport(): Promise<void> {
     const url = bridgeUrl();
@@ -82,23 +84,27 @@ export function ExportButton(): JSX.Element {
         class="btn-secondary btn-small"
         disabled={isDisabled()}
         title={
-          bridgeExportDone()
-            ? 'Exported'
-            : !isComplete()
-              ? 'Run solver first'
-              : isBridge()
-                ? 'Export results to Python'
-                : 'Export coming soon'
+          isAutorun()
+            ? 'Auto-export enabled'
+            : bridgeExportDone()
+              ? 'Exported'
+              : !isComplete()
+                ? 'Run solver first'
+                : isBridge()
+                  ? 'Export results to Python'
+                  : 'Export coming soon'
         }
         onClick={handleExport}
       >
-        {exporting()
-          ? 'Exporting...'
-          : bridgeExportDone()
-            ? 'Exported'
-            : isBridge()
-              ? 'Export to Python'
-              : 'Export Locally'}
+        {isAutorun()
+          ? 'Auto-export enabled'
+          : exporting()
+            ? 'Exporting...'
+            : bridgeExportDone()
+              ? 'Exported'
+              : isBridge()
+                ? 'Export to Python'
+                : 'Export Locally'}
       </button>
       <Show when={error()}>
         <span class="submit-panel__error">{error()}</span>

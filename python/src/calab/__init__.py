@@ -1,6 +1,6 @@
 """CaLab: calcium imaging analysis tools — deconvolution and data preparation."""
 
-from ._bridge import decon, tune
+from ._bridge import DeconConfig, decon, tune
 from ._compute import (
     CaDeconResult,
     DeconvolutionResult,
@@ -17,6 +17,7 @@ from ._loaders import load_caiman, load_minian
 __version__ = "0.2.1"
 __all__ = [
     # Bridge
+    "DeconConfig",
     "decon",
     "tune",
     # Compute
