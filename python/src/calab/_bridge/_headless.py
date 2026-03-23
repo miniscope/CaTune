@@ -45,9 +45,9 @@ class HeadlessBrowser:
                 result = calab.decon(traces, fs, headless=hb, autorun=True)
     """
 
-    def __init__(self, *, headless: bool = True) -> None:
+    def __init__(self, *, visible: bool = False) -> None:
         _check_playwright()
-        self._headless = headless
+        self._headless = not visible
         self._pw: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None

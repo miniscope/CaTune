@@ -158,36 +158,34 @@ class TestHeadlessBrowserMocked:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_headless tests
+# _managed_headless tests
 # ---------------------------------------------------------------------------
 
 
-class TestResolveHeadless:
-    def test_none_returns_none(self):
-        from calab._bridge._apps import _resolve_headless
-        browser, owns = _resolve_headless(None)
-        assert browser is None
-        assert owns is False
+class TestManagedHeadless:
+    def test_none_yields_none(self):
+        from calab._bridge._apps import _managed_headless
+        with _managed_headless(None) as browser:
+            assert browser is None
 
-    def test_false_returns_none(self):
-        from calab._bridge._apps import _resolve_headless
-        browser, owns = _resolve_headless(False)
-        assert browser is None
-        assert owns is False
+    def test_false_yields_none(self):
+        from calab._bridge._apps import _managed_headless
+        with _managed_headless(False) as browser:
+            assert browser is None
 
     def test_instance_passes_through(self):
-        from calab._bridge._apps import _resolve_headless
+        from calab._bridge._apps import _managed_headless
         with patch("calab._bridge._headless._check_playwright"):
             hb = HeadlessBrowser()
-        browser, owns = _resolve_headless(hb)
-        assert browser is hb
-        assert owns is False
+        with _managed_headless(hb) as browser:
+            assert browser is hb
 
-    def test_true_creates_and_starts(self):
-        from calab._bridge._apps import _resolve_headless
+    def test_true_creates_starts_and_closes(self):
+        from calab._bridge._apps import _managed_headless
         with patch("calab._bridge._headless._check_playwright"):
             with patch.object(HeadlessBrowser, "start") as mock_start:
-                browser, owns = _resolve_headless(True)
-                assert isinstance(browser, HeadlessBrowser)
-                assert owns is True
-                mock_start.assert_called_once()
+                with patch.object(HeadlessBrowser, "close") as mock_close:
+                    with _managed_headless(True) as browser:
+                        assert isinstance(browser, HeadlessBrowser)
+                        mock_start.assert_called_once()
+                    mock_close.assert_called_once()

@@ -2,17 +2,24 @@ use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods}
 use pyo3::prelude::*;
 
 use crate::kernel::{build_kernel, compute_lipschitz};
-use crate::{Constraint, ConvMode, Solver};
-
-// InDeCa pipeline imports
-use crate::biexp_fit;
-use crate::indeca;
-use crate::kernel_est;
-use crate::upsample;
+use crate::{biexp_fit, indeca, kernel_est, upsample, Constraint, ConvMode, Solver};
 
 const BATCH_SIZE: u32 = 100;
 const CONTIGUOUS_ERR: &str =
     "array must be C-contiguous; call numpy.ascontiguousarray() before passing";
+
+/// Convert a numpy f64 array to a Vec<f32>, validating contiguity.
+fn to_f32_vec(arr: &PyReadonlyArray1<f64>) -> PyResult<Vec<f32>> {
+    let slice = arr
+        .as_slice()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
+    Ok(slice.iter().map(|&v| v as f32).collect())
+}
+
+/// Convert an optional numpy f64 array to an optional Vec<f32>.
+fn optional_to_f32_vec(opt: Option<PyReadonlyArray1<f64>>) -> PyResult<Option<Vec<f32>>> {
+    opt.map(|w| to_f32_vec(&w)).transpose()
+}
 
 fn parse_conv_mode(s: &str) -> PyResult<ConvMode> {
     match s {
@@ -231,10 +238,7 @@ fn deconvolve_single<'py>(
     solver.set_params(tau_rise, tau_decay, lambda_, fs);
     configure_solver_options(&mut solver, conv_mode, constraint)?;
 
-    let slice = trace
-        .as_slice()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-    let trace_f32: Vec<f32> = slice.iter().map(|&v| v as f32).collect();
+    let trace_f32 = to_f32_vec(&trace)?;
     solver.set_trace(&trace_f32);
 
     if hp_enabled || lp_enabled {
@@ -342,10 +346,7 @@ fn py_seed_trace<'py>(
     trace: PyReadonlyArray1<f64>,
     fs: f64,
 ) -> PyResult<(Bound<'py, PyArray1<f32>>, f64, f64)> {
-    let slice = trace
-        .as_slice()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-    let trace_f32: Vec<f32> = slice.iter().map(|&v| v as f32).collect();
+    let trace_f32 = to_f32_vec(&trace)?;
     let result = crate::peak_seed::seed_trace(&trace_f32, fs);
     Ok((
         PyArray1::from_vec(py, result.s_counts),
@@ -421,18 +422,8 @@ fn py_indeca_solve_trace<'py>(
     u32,                       // iterations
     bool,                      // converged
 )> {
-    let slice = trace
-        .as_slice()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-    let trace_f32: Vec<f32> = slice.iter().map(|&v| v as f32).collect();
-
-    let warm: Option<Vec<f32>> = warm_counts
-        .map(|w| {
-            w.as_slice()
-                .map(|s| s.iter().map(|&v| v as f32).collect())
-        })
-        .transpose()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
+    let trace_f32 = to_f32_vec(&trace)?;
+    let warm = optional_to_f32_vec(warm_counts)?;
 
     let result = indeca::solve_trace(
         &trace_f32,
@@ -477,15 +468,8 @@ fn py_indeca_estimate_kernel<'py>(
     warm_kernel: Option<PyReadonlyArray1<f64>>,
     smooth_lambda: f64,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
-    let traces_slice = traces_flat
-        .as_slice()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-    let traces_f32: Vec<f32> = traces_slice.iter().map(|&v| v as f32).collect();
-
-    let spikes_slice = spikes_flat
-        .as_slice()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-    let spikes_f32: Vec<f32> = spikes_slice.iter().map(|&v| v as f32).collect();
+    let traces_f32 = to_f32_vec(&traces_flat)?;
+    let spikes_f32 = to_f32_vec(&spikes_flat)?;
 
     let lengths_slice = trace_lengths
         .as_slice()
@@ -495,18 +479,11 @@ fn py_indeca_estimate_kernel<'py>(
     let alphas_slice = alphas
         .as_slice()
         .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-
     let baselines_slice = baselines
         .as_slice()
         .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
 
-    let warm: Option<Vec<f32>> = warm_kernel
-        .map(|w| {
-            w.as_slice()
-                .map(|s| s.iter().map(|&v| v as f32).collect())
-        })
-        .transpose()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
+    let warm = optional_to_f32_vec(warm_kernel)?;
 
     let result = kernel_est::estimate_free_kernel(
         &traces_f32,
@@ -543,10 +520,7 @@ fn py_indeca_fit_biexponential(
     warm_residual: f64,
     use_warm: bool,
 ) -> PyResult<(f64, f64, f64, f64, f64, f64, f64)> {
-    let slice = h_free
-        .as_slice()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err(CONTIGUOUS_ERR))?;
-    let h_f32: Vec<f32> = slice.iter().map(|&v| v as f32).collect();
+    let h_f32 = to_f32_vec(&h_free)?;
 
     let warm_start = if use_warm {
         Some(biexp_fit::BiexpResult {
