@@ -69,7 +69,13 @@ class HeadlessBrowser:
         from playwright.sync_api import sync_playwright
 
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self._headless)
+        self._browser = self._pw.chromium.launch(
+            headless=self._headless,
+            # Allow the HTTPS-hosted page to fetch from the localhost bridge
+            # server. Headless Chromium enforces Private Network Access (PNA)
+            # restrictions that block HTTPS→localhost requests by default.
+            args=["--disable-web-security"],
+        )
         self._context = self._browser.new_context()
         self._page = self._context.new_page()
 
