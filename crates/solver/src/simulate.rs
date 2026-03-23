@@ -14,6 +14,7 @@
 //!   8. Add noise (Gaussian + optional Poisson shot noise)
 
 use crate::kernel::build_kernel;
+use crate::upsample::downsample_average;
 
 // ── PRNG ─────────────────────────────────────────────────────────
 
@@ -352,6 +353,11 @@ pub struct SimulationResult {
 // ── Core simulation ──────────────────────────────────────────────
 
 /// Generate synthetic calcium imaging traces with full ground truth.
+///
+/// Spikes are generated and convolved at the high-resolution simulation rate
+/// (spike_sim_hz) where the calcium dynamics physically occur, then the
+/// resulting calcium signal is downsampled to imaging rate (fs_hz) via
+/// bin-averaging (simulating camera exposure integration).
 pub fn simulate(config: &SimulationConfig) -> SimulationResult {
     let n_cells = config.num_cells;
     let n_tp = config.num_timepoints;
@@ -361,20 +367,20 @@ pub fn simulate(config: &SimulationConfig) -> SimulationResult {
     let mut traces = Vec::with_capacity(n_cells * n_tp);
     let mut ground_truth = Vec::with_capacity(n_cells);
 
-    // Cache kernel when all cells share the same tau values
+    let bins_per_frame = (config.spike_sim_hz / config.fs_hz).round() as usize;
+    let num_high_res = n_tp * bins_per_frame;
+
+    // Cache high-res kernel when all cells share the same tau values
     let shared_kernel = if !has_kernel_variation {
-        Some(build_kernel(config.kernel.tau_rise_s, config.kernel.tau_decay_s, config.fs_hz))
+        Some(build_kernel(config.kernel.tau_rise_s, config.kernel.tau_decay_s, config.spike_sim_hz))
     } else {
         None
     };
 
     // Reusable high-res spike buffer (avoids per-cell allocation)
-    let bins_per_frame = (config.spike_sim_hz / config.fs_hz).round() as usize;
-    let num_high_res = n_tp * bins_per_frame;
     let mut high_res_buf = vec![0u8; num_high_res];
 
     for cell_idx in 0..n_cells {
-        // Per-cell seed: prime offset for independence (CaLab convention).
         let cell_seed = config.seed.wrapping_add((cell_idx as u32).wrapping_mul(7919));
         let mut rng = Xorshift32::new(cell_seed);
 
@@ -406,53 +412,52 @@ pub fn simulate(config: &SimulationConfig) -> SimulationResult {
             config.noise.snr
         };
 
-        // 2. Generate spike train (reuses high_res_buf)
-        let spikes = generate_spikes(
-            &config.spike_model, n_tp, config.fs_hz, config.spike_sim_hz,
-            &mut rng, &mut high_res_buf,
+        // 2. Generate high-res spike train + binned counts for ground truth
+        generate_high_res_spikes(
+            &config.spike_model, num_high_res, bins_per_frame,
+            config.spike_sim_hz, &mut rng, &mut high_res_buf,
         );
+        let spikes = bin_to_imaging_rate(&high_res_buf[..num_high_res], n_tp, bins_per_frame);
 
-        // 3. Convolve with kernel
-        let kernel = shared_kernel.as_deref().unwrap_or_else(||
-            // Leak avoided: this branch only runs when has_kernel_variation is true
-            &[]
-        );
+        // 3. Convolve at high-res rate (where calcium dynamics physically occur)
         let per_cell_kernel;
         let kernel_ref = if has_kernel_variation {
-            per_cell_kernel = build_kernel(cell_tau_rise, cell_tau_decay, config.fs_hz);
+            per_cell_kernel = build_kernel(cell_tau_rise, cell_tau_decay, config.spike_sim_hz);
             &per_cell_kernel
         } else {
-            kernel
+            shared_kernel.as_deref().unwrap()
         };
-        let mut clean_calcium = convolve_spikes(&spikes, kernel_ref, n_tp);
 
-        // 4. Scale by alpha
+        let high_res_calcium = convolve_binary_spikes(&high_res_buf[..num_high_res], kernel_ref);
+
+        // 4. Downsample calcium to imaging rate (bin-average simulates camera integration)
+        let mut clean_calcium = downsample_average(&high_res_calcium, bins_per_frame);
+
+        // 5. Scale by alpha
         for v in clean_calcium.iter_mut() {
             *v *= alpha as f32;
         }
 
-        // 5. Apply indicator saturation (optional)
+        // 6. Apply indicator saturation (optional)
         if config.saturation.enabled {
             apply_saturation(&mut clean_calcium, &config.saturation);
         }
 
-        // Find peak of clean signal (needed for noise/drift scaling)
         let signal_max = clean_calcium.iter().cloned().fold(0.0_f32, f32::max) as f64;
 
-        // 6. Build observed trace in f64 (precision for drift/noise calculations)
+        // 7. Build observed trace in f64 for drift/noise precision
         let mut trace: Vec<f64> = clean_calcium.iter().map(|&c| c as f64).collect();
 
         add_drift(&mut trace, &config.drift, signal_max, n_tp, &mut rng);
 
-        // 7. Apply photobleaching (multiplicative)
+        // 8. Apply photobleaching (multiplicative)
         if config.photobleaching.enabled {
             apply_photobleaching(&mut trace, &config.photobleaching, config.fs_hz);
         }
 
-        // 8. Add noise
+        // 9. Add noise
         add_noise(&mut trace, &config.noise, cell_snr, signal_max, &mut rng);
 
-        // Store results
         traces.extend(trace.iter().map(|&v| v as f32));
 
         ground_truth.push(CellGroundTruth {
@@ -470,18 +475,15 @@ pub fn simulate(config: &SimulationConfig) -> SimulationResult {
 
 // ── Spike generation ─────────────────────────────────────────────
 
-fn generate_spikes(
+/// Fill the high-res buffer with binary spikes (Markov or Poisson).
+fn generate_high_res_spikes(
     model: &SpikeModel,
-    num_timepoints: usize,
-    fs_hz: f64,
+    num_high_res: usize,
+    bins_per_frame: usize,
     spike_sim_hz: f64,
     rng: &mut Xorshift32,
     high_res_buf: &mut [u8],
-) -> Vec<f32> {
-    let bins_per_frame = (spike_sim_hz / fs_hz).round() as usize;
-    let num_high_res = num_timepoints * bins_per_frame;
-
-    // Zero the reusable buffer
+) {
     high_res_buf[..num_high_res].fill(0);
     let buf = &mut high_res_buf[..num_high_res];
 
@@ -489,9 +491,6 @@ fn generate_spikes(
         SpikeModel::Markov(cfg) => fill_markov_spikes(cfg, buf, bins_per_frame, rng),
         SpikeModel::Poisson(cfg) => fill_poisson_spikes(cfg, buf, spike_sim_hz, rng),
     }
-
-    // Bin high-res spikes to imaging rate
-    bin_to_imaging_rate(buf, num_timepoints, bins_per_frame)
 }
 
 /// Fill high-res buffer with Markov HMM spikes.
@@ -552,19 +551,24 @@ fn bin_to_imaging_rate(high_res: &[u8], num_timepoints: usize, bins_per_frame: u
 
 // ── Convolution ──────────────────────────────────────────────────
 
-/// Time-domain convolution of spike train with kernel.
-fn convolve_spikes(spikes: &[f32], kernel: &[f32], n: usize) -> Vec<f32> {
+/// Convolve a binary spike train (u8, 0/1) with a kernel at the same rate.
+/// This operates at the high-resolution simulation rate so that sub-frame
+/// spike timing is preserved in the calcium response.
+fn convolve_binary_spikes(spikes: &[u8], kernel: &[f32]) -> Vec<f32> {
+    let n = spikes.len();
     let k_len = kernel.len();
-    let mut clean = vec![0.0_f32; n];
+    let mut out = vec![0.0_f32; n];
     for t in 0..n {
-        let j_max = k_len.min(t + 1);
-        let mut sum = 0.0_f32;
-        for k in 0..j_max {
-            sum += spikes[t - k] * kernel[k];
+        if spikes[t] == 0 {
+            continue; // Skip non-spike timepoints (most are zero)
         }
-        clean[t] = sum;
+        // Add kernel starting at this spike position
+        let end = (t + k_len).min(n);
+        for k in 0..(end - t) {
+            out[t + k] += kernel[k];
+        }
     }
-    clean
+    out
 }
 
 // ── Saturation ───────────────────────────────────────────────────
