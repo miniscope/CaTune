@@ -5,7 +5,9 @@ import { DimensionConfirmation } from '../import/DimensionConfirmation.tsx';
 import { SamplingRateInput } from '../import/SamplingRateInput.tsx';
 import { DataValidationReport } from '../import/DataValidationReport.tsx';
 import { importStep, effectiveShape, samplingRate, npzArrays } from '../../lib/data-store.ts';
-import { DEMO_PRESETS, DEFAULT_PRESET_ID } from '@calab/compute';
+import { DEFAULT_QUALITATIVE_CONFIG } from '@calab/compute';
+import type { QualitativeSimConfig } from '@calab/compute';
+import { SimulationConfigurator } from '@calab/ui';
 import { buildFeedbackUrl, buildFeatureRequestUrl, buildBugReportUrl } from '@calab/community';
 
 const STEP_LABELS: Record<string, { num: number; label: string }> = {
@@ -24,7 +26,7 @@ export interface ImportOverlayProps {
     numCells: number;
     durationMinutes: number;
     fps: number;
-    presetId: string;
+    qualitativeConfig: QualitativeSimConfig;
     seed?: number | 'random';
   }) => void;
 }
@@ -35,7 +37,7 @@ export function ImportOverlay(props: ImportOverlayProps): JSX.Element {
   const [demoCells, setDemoCells] = createSignal(100);
   const [demoDuration, setDemoDuration] = createSignal(15);
   const [demoFps, setDemoFps] = createSignal(30);
-  const [demoPresetId, setDemoPresetId] = createSignal(DEFAULT_PRESET_ID);
+  const [simConfig, setSimConfig] = createSignal<QualitativeSimConfig>(DEFAULT_QUALITATIVE_CONFIG);
   const [useRandomSeed, setUseRandomSeed] = createSignal(false);
 
   return (
@@ -70,85 +72,89 @@ export function ImportOverlay(props: ImportOverlayProps): JSX.Element {
       </Show>
 
       <Show when={importStep() === 'drop'}>
-        <FileDropZone />
-        <Show when={npzArrays()}>
-          <NpzArraySelector />
-        </Show>
-        <div class="demo-data-row">
-          <span class="demo-data-row__divider">or generate synthetic data</span>
-          <select
-            class="demo-data-row__select"
-            value={demoPresetId()}
-            onChange={(e) => setDemoPresetId(e.currentTarget.value)}
-          >
-            {DEMO_PRESETS.map((p) => (
-              <option value={p.id}>{p.label}</option>
-            ))}
-          </select>
-          <div class="demo-data-row__fields">
-            <label class="demo-data-row__field">
-              <span>Cells</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={demoCells()}
-                onInput={(e) => {
-                  const v = parseInt(e.currentTarget.value, 10);
-                  if (!isNaN(v) && v >= 1) setDemoCells(Math.min(v, 200));
-                }}
-              />
-            </label>
-            <label class="demo-data-row__field">
-              <span>Duration (min)</span>
-              <input
-                type="number"
-                min={0.5}
-                max={60}
-                step={0.5}
-                value={demoDuration()}
-                onInput={(e) => {
-                  const v = parseFloat(e.currentTarget.value);
-                  if (!isNaN(v) && v >= 0.5) setDemoDuration(Math.min(v, 60));
-                }}
-              />
-            </label>
-            <label class="demo-data-row__field">
-              <span>FPS</span>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={demoFps()}
-                onInput={(e) => {
-                  const v = parseInt(e.currentTarget.value, 10);
-                  if (!isNaN(v) && v >= 1) setDemoFps(Math.min(v, 120));
-                }}
-              />
-            </label>
+        <div class="import-split">
+          <div class="import-split__panel import-split__panel--file">
+            <div class="import-split__heading">Load Your Data</div>
+            <FileDropZone />
+            <Show when={npzArrays()}>
+              <NpzArraySelector />
+            </Show>
           </div>
-          <label class="demo-data-row__checkbox">
-            <input
-              type="checkbox"
-              checked={useRandomSeed()}
-              onChange={(e) => setUseRandomSeed(e.currentTarget.checked)}
-            />
-            <span>Random seed</span>
-          </label>
-          <button
-            class="btn-secondary"
-            onClick={() =>
-              props.onLoadDemo({
-                numCells: demoCells(),
-                durationMinutes: demoDuration(),
-                fps: demoFps(),
-                presetId: demoPresetId(),
-                seed: useRandomSeed() ? 'random' : undefined,
-              })
-            }
-          >
-            Load Demo Data
-          </button>
+
+          <div class="import-split__divider">
+            <span class="import-split__or">or</span>
+          </div>
+
+          <div class="import-split__panel import-split__panel--sim">
+            <div class="import-split__heading">Generate Synthetic Data</div>
+            <SimulationConfigurator config={simConfig()} onChange={setSimConfig} />
+            <div class="demo-data-row__fields">
+              <label class="demo-data-row__field">
+                <span>Cells</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={demoCells()}
+                  onInput={(e) => {
+                    const v = parseInt(e.currentTarget.value, 10);
+                    if (!isNaN(v) && v >= 1) setDemoCells(Math.min(v, 200));
+                  }}
+                />
+              </label>
+              <label class="demo-data-row__field">
+                <span>Duration (min)</span>
+                <input
+                  type="number"
+                  min={0.5}
+                  max={60}
+                  step={0.5}
+                  value={demoDuration()}
+                  onInput={(e) => {
+                    const v = parseFloat(e.currentTarget.value);
+                    if (!isNaN(v) && v >= 0.5) setDemoDuration(Math.min(v, 60));
+                  }}
+                />
+              </label>
+              <label class="demo-data-row__field">
+                <span>FPS</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={demoFps()}
+                  onInput={(e) => {
+                    const v = parseInt(e.currentTarget.value, 10);
+                    if (!isNaN(v) && v >= 1) setDemoFps(Math.min(v, 120));
+                  }}
+                />
+              </label>
+            </div>
+            <div class="import-split__actions">
+              <label class="demo-data-row__checkbox">
+                <input
+                  type="checkbox"
+                  checked={useRandomSeed()}
+                  onChange={(e) => setUseRandomSeed(e.currentTarget.checked)}
+                />
+                <span>Random seed</span>
+              </label>
+              <button
+                class="btn-primary"
+                onClick={() =>
+                  props.onLoadDemo({
+                    numCells: demoCells(),
+                    durationMinutes: demoDuration(),
+                    fps: demoFps(),
+                    qualitativeConfig: simConfig(),
+                    seed: useRandomSeed() ? 'random' : undefined,
+                  })
+                }
+              >
+                Generate
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
 

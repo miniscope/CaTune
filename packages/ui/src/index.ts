@@ -19,6 +19,8 @@ export { AuthMenuWrapper } from './AuthMenuWrapper.tsx';
 export type { AuthMenuWrapperProps } from './AuthMenuWrapper.tsx';
 export { isAuthCallback } from './auth-utils.ts';
 export { WorkerIndicator } from './WorkerIndicator.tsx';
+export { SimulationConfigurator } from './SimulationConfigurator.tsx';
+export type { SimulationConfiguratorProps } from './SimulationConfigurator.tsx';
 export type { WorkerIndicatorProps } from './WorkerIndicator.tsx';
 
 export { TraceLegend } from './TraceLegend.tsx';

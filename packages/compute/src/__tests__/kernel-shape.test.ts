@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { tauToShape, shapeToTau, computeFWHM, isValidShapePair } from '@calab/compute';
-import { DEMO_PRESETS } from '@calab/compute';
+import { SIMULATION_PRESETS } from '@calab/compute';
 
 describe('tauToShape', () => {
   it('returns null for degenerate inputs (tauDecay <= tauRise)', () => {
@@ -58,8 +58,9 @@ describe('shapeToTau', () => {
 
 describe('round-trip accuracy', () => {
   it('recovers original tau values within 1% for all demo presets', () => {
-    for (const preset of DEMO_PRESETS) {
-      const { tauRise, tauDecay } = preset.params;
+    for (const preset of SIMULATION_PRESETS) {
+      const tauRise = preset.config.kernel.tau_rise_s;
+      const tauDecay = preset.config.kernel.tau_decay_s;
       const shape = tauToShape(tauRise, tauDecay);
       expect(shape).not.toBeNull();
 
@@ -112,8 +113,8 @@ describe('computeFWHM', () => {
 
 describe('isValidShapePair', () => {
   it('returns true for valid pairs from demo presets', () => {
-    for (const preset of DEMO_PRESETS) {
-      const shape = tauToShape(preset.params.tauRise, preset.params.tauDecay)!;
+    for (const preset of SIMULATION_PRESETS) {
+      const shape = tauToShape(preset.config.kernel.tau_rise_s, preset.config.kernel.tau_decay_s)!;
       expect(isValidShapePair(shape.tPeak, shape.fwhm)).toBe(true);
     }
   });
