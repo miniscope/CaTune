@@ -1,89 +1,89 @@
 # Quick Start
 
-## Load and tune traces interactively
+CaLab provides two approaches to calcium trace deconvolution:
 
-The `tune()` function bridges your Python data to CaTune's browser UI, so you can visually explore deconvolution parameters before committing to a batch run.
+- **CaTune** — you choose the deconvolution parameters interactively in the browser, then apply them in batch. Best when you have domain knowledge about your indicator's kinetics or want fine control.
+- **CaDecon** — automatically estimates the calcium kernel and deconvolution parameters from your data. Best when you want a hands-free pipeline or don't know the kinetics in advance.
+
+Both use the same fast Rust FISTA solver under the hood.
+
+## CaTune: interactive parameter tuning
 
 ```python
 import numpy as np
 import calab
 
-# Load your calcium traces (n_cells x n_timepoints)
-traces = np.load("my_traces.npy")
-fs = 30.0  # sampling rate in Hz
+traces = np.load("my_traces.npy")  # (n_cells, n_timepoints)
 
-# Open CaTune in your browser for interactive parameter tuning
-params = calab.tune(traces, fs)
+# Open CaTune in the browser — tune parameters visually, then click Export
+params = calab.tune(traces, fs=30.0)
 ```
 
-This starts a local server, opens CaTune in your browser, and blocks until you click "Export". Returns a dict with keys `tau_rise`, `tau_decay`, `lambda_`, `fs`, and `filter_enabled`, or `None` if you cancel.
+This returns a dict with `tau_rise`, `tau_decay`, `lambda_`, `fs`, and `filter_enabled`, or `None` if you cancel.
 
-## Batch deconvolution
-
-Once you know your deconvolution parameters (from tuning or from the literature), apply them to all your traces in one call.
+Apply those parameters across all your traces:
 
 ```python
-import numpy as np
-import calab
-
-traces = np.load("my_traces.npy")
-
-# Deconvolve with known parameters
 activity = calab.run_deconvolution(
-    traces, fs=30.0, tau_r=0.02, tau_d=0.4, lam=0.5
+    traces, fs=30.0,
+    tau_r=params["tau_rise"],
+    tau_d=params["tau_decay"],
+    lam=params["lambda_"],
 )
 ```
 
-For full diagnostics (baseline, reconvolution, convergence), use `run_deconvolution_full()` instead -- it returns a `DeconvolutionResult` namedtuple.
+If you already know your parameters from the literature, you can skip the browser entirely and call `run_deconvolution()` directly.
 
-## Load from CaImAn or Minian
+See the [CaTune guide](guides/catune.md) for the full workflow.
 
-These loaders save you from manually navigating HDF5/Zarr key hierarchies. Install `calab[loaders]` first (see [Installation](installation.md)).
+## CaDecon: automated deconvolution
 
 ```python
-import calab
+result = calab.decon(traces, fs=30.0, autorun=True)
 
+print(result.activity.shape)    # deconvolved activity
+print(result.kernel_slow.shape) # estimated kernel waveform
+print(result.metadata)          # tau values, convergence info
+```
+
+CaDecon estimates the kernel and deconvolution parameters from your data — no manual tuning needed. For batch processing without a browser window:
+
+```python
+result = calab.decon(traces, fs=30.0, headless=True, autorun=True)
+```
+
+See the [CaDecon guide](guides/cadecon.md) for headless mode, configuration options, and the InDeCa building blocks.
+
+## Loading data
+
+Load traces from CaImAn or Minian outputs (requires `pip install calab[loaders]`):
+
+```python
 # CaImAn HDF5
 traces, meta = calab.load_caiman("caiman_results.hdf5")
 
-# Minian Zarr (Minian does not store the sampling rate, so you must provide it)
+# Minian Zarr (sampling rate must be provided)
 traces, meta = calab.load_minian("minian_output/", fs=30.0)
 
-# Then tune or deconvolve
+# Then use either approach
 params = calab.tune(traces, meta["sampling_rate_hz"])
+# or
+result = calab.decon(traces, meta["sampling_rate_hz"], autorun=True)
 ```
 
-## Re-use exported parameters
+See the [Loaders guide](guides/loaders.md) for details.
 
-After tuning in the browser, CaTune exports a JSON file. Use `deconvolve_from_export()` to apply those exact parameters in batch without re-specifying them manually.
+## Synthetic data
 
-```python
-import numpy as np
-import calab
-
-traces = np.load("my_traces.npy")
-result = calab.deconvolve_from_export(traces, "catune_params.json", return_full=True)
-
-print(result.activity.shape)   # deconvolved activity
-print(result.baseline)         # estimated baseline
-print(result.converged)        # convergence flag
-```
-
-## Generate synthetic data
-
-Simulated traces with known ground truth are useful for benchmarking deconvolution accuracy and testing pipelines before working with real data.
+Generate traces with known ground truth for testing and benchmarking:
 
 ```python
-import calab
-
-# Default GCaMP6f-like simulation
 result = calab.simulate()
 
 print(result.traces.shape)             # (100, 27000) — 100 cells, 15 min at 30 Hz
 print(result.ground_truth[0].spikes)   # spike counts at imaging rate for cell 0
-
-# Use a preset indicator
-result = calab.simulate(calab.presets.jgcamp8f(num_cells=50))
 ```
 
-Available presets: `gcamp6f`, `gcamp6s`, `gcamp6m`, `jgcamp8f`, `ogb1`, and `clean` (minimal noise, for debugging).
+Available presets: `gcamp6f`, `gcamp6s`, `gcamp6m`, `jgcamp8f`, `ogb1`, and `clean`.
+
+See the [Simulation guide](guides/simulation.md) for configuration options.

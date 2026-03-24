@@ -11,6 +11,11 @@ you dial in the parameters on real data, and Python utilities handle the
 rest — loading traces from CaImAn or Minian, batch processing, and
 exporting results.
 
+CaLab provides two deconvolution approaches:
+
+- **CaTune** — interactive parameter tuning in the browser, then batch deconvolution with those parameters
+- **CaDecon** — automated deconvolution that estimates parameters from your data
+
 ```bash
 pip install calab
 ```
@@ -29,10 +34,10 @@ quickstart
 ```{toctree}
 :maxdepth: 2
 
-guides/bridge
+guides/catune
+guides/cadecon
 guides/loaders
 guides/simulation
-guides/batch-deconvolution
 cli
 ```
 
