@@ -14,7 +14,7 @@ import {
 } from '../../lib/viz-store.ts';
 import { tauToShape } from '@calab/compute';
 import { notifyTutorialAction } from '@calab/tutorials';
-import { isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
+import { isDemo, demoConfig, groundTruthVisible } from '../../lib/data-store.ts';
 import { PARAM_RANGES } from '@calab/core';
 import { ParameterSlider } from './ParameterSlider.tsx';
 import '../../styles/controls.css';
@@ -31,10 +31,9 @@ export function ParameterPanel() {
   };
 
   const trueShape = () => {
-    if (!groundTruthVisible() || !isDemo() || !demoPreset()) return undefined;
+    if (!groundTruthVisible() || !isDemo() || !demoConfig()) return undefined;
     return (
-      tauToShape(demoPreset()!.config.kernel.tau_rise_s, demoPreset()!.config.kernel.tau_decay_s) ??
-      undefined
+      tauToShape(demoConfig()!.kernel.tau_rise_s, demoConfig()!.kernel.tau_decay_s) ?? undefined
     );
   };
 

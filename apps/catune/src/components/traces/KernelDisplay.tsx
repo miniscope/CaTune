@@ -7,7 +7,7 @@
 import { createMemo } from 'solid-js';
 import { computeKernel, computeKernelAnnotations } from '@calab/compute';
 import { currentTau } from '../../lib/viz-store.ts';
-import { samplingRate, isDemo, demoPreset, groundTruthVisible } from '../../lib/data-store.ts';
+import { samplingRate, isDemo, demoConfig, groundTruthVisible } from '../../lib/data-store.ts';
 import { createGroundTruthKernelSeries } from '../../lib/chart/series-config.ts';
 import { kernelAnnotationsPlugin, TracePanel } from '@calab/ui/chart';
 import type uPlot from 'uplot';
@@ -20,13 +20,9 @@ export function KernelDisplay() {
     const tau = currentTau();
     const userKernel = computeKernel(tau.tauRise, tau.tauDecay, fs);
 
-    if (groundTruthVisible() && isDemo() && demoPreset()) {
-      const preset = demoPreset()!;
-      const trueKernel = computeKernel(
-        preset.config.kernel.tau_rise_s,
-        preset.config.kernel.tau_decay_s,
-        fs,
-      );
+    if (groundTruthVisible() && isDemo() && demoConfig()) {
+      const cfg = demoConfig()!;
+      const trueKernel = computeKernel(cfg.kernel.tau_rise_s, cfg.kernel.tau_decay_s, fs);
 
       // Align x-axes: use the longer of the two
       const maxLen = Math.max(userKernel.x.length, trueKernel.x.length);
@@ -58,7 +54,7 @@ export function KernelDisplay() {
       },
     ];
 
-    if (groundTruthVisible() && isDemo() && demoPreset()) {
+    if (groundTruthVisible() && isDemo() && demoConfig()) {
       base.push(createGroundTruthKernelSeries());
     }
 

@@ -5,7 +5,9 @@ import { DimensionConfirmation } from '../import/DimensionConfirmation.tsx';
 import { SamplingRateInput } from '../import/SamplingRateInput.tsx';
 import { DataValidationReport } from '../import/DataValidationReport.tsx';
 import { importStep, effectiveShape, samplingRate, npzArrays } from '../../lib/data-store.ts';
-import { SIMULATION_PRESETS, DEFAULT_SIMULATION_PRESET_ID } from '@calab/compute';
+import { DEFAULT_QUALITATIVE_CONFIG } from '@calab/compute';
+import type { QualitativeSimConfig } from '@calab/compute';
+import { SimulationConfigurator } from '@calab/ui';
 import { buildFeedbackUrl, buildFeatureRequestUrl, buildBugReportUrl } from '@calab/community';
 
 const STEP_LABELS: Record<string, { num: number; label: string }> = {
@@ -24,7 +26,7 @@ export interface ImportOverlayProps {
     numCells: number;
     durationMinutes: number;
     fps: number;
-    presetId: string;
+    qualitativeConfig: QualitativeSimConfig;
     seed?: number | 'random';
   }) => void;
 }
@@ -35,7 +37,7 @@ export function ImportOverlay(props: ImportOverlayProps): JSX.Element {
   const [demoCells, setDemoCells] = createSignal(100);
   const [demoDuration, setDemoDuration] = createSignal(15);
   const [demoFps, setDemoFps] = createSignal(30);
-  const [demoPresetId, setDemoPresetId] = createSignal(DEFAULT_SIMULATION_PRESET_ID);
+  const [simConfig, setSimConfig] = createSignal<QualitativeSimConfig>(DEFAULT_QUALITATIVE_CONFIG);
   const [useRandomSeed, setUseRandomSeed] = createSignal(false);
 
   return (
@@ -76,15 +78,7 @@ export function ImportOverlay(props: ImportOverlayProps): JSX.Element {
         </Show>
         <div class="demo-data-row">
           <span class="demo-data-row__divider">or generate synthetic data</span>
-          <select
-            class="demo-data-row__select"
-            value={demoPresetId()}
-            onChange={(e) => setDemoPresetId(e.currentTarget.value)}
-          >
-            {SIMULATION_PRESETS.map((p) => (
-              <option value={p.id}>{p.label}</option>
-            ))}
-          </select>
+          <SimulationConfigurator config={simConfig()} onChange={setSimConfig} />
           <div class="demo-data-row__fields">
             <label class="demo-data-row__field">
               <span>Cells</span>
@@ -142,7 +136,7 @@ export function ImportOverlay(props: ImportOverlayProps): JSX.Element {
                 numCells: demoCells(),
                 durationMinutes: demoDuration(),
                 fps: demoFps(),
-                presetId: demoPresetId(),
+                qualitativeConfig: simConfig(),
                 seed: useRandomSeed() ? 'random' : undefined,
               })
             }

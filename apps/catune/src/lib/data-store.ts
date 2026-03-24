@@ -3,14 +3,11 @@
 
 import { createSignal, createMemo } from 'solid-js';
 import type { NpyResult, NpzResult, ValidationResult, ImportStep } from '@calab/core';
-import {
-  generateSyntheticDataset,
-  getSimulationPresetById,
-  DEFAULT_SIMULATION_PRESET_ID,
-  simulationConfigToLegacyParams,
-} from '@calab/compute';
+import { buildSimulationConfig, DEFAULT_QUALITATIVE_CONFIG } from '@calab/compute';
+import type { QualitativeSimConfig, SimulationConfig } from '@calab/compute';
+import { initWasm, simulate_traces } from '@calab/core';
+import type { SimulationResult } from '@calab/compute';
 import { fetchBridgeData, validateTraceData } from '@calab/io';
-import type { SimulationPreset } from '@calab/compute';
 
 // --- Core Signals ---
 
@@ -23,7 +20,7 @@ const [validationResult, setValidationResult] = createSignal<ValidationResult | 
 const [npzArrays, setNpzArrays] = createSignal<NpzResult | null>(null);
 const [selectedNpzArray, setSelectedNpzArray] = createSignal<string | null>(null);
 const [importError, setImportError] = createSignal<string | null>(null);
-const [demoPreset, setDemoPreset] = createSignal<SimulationPreset | null>(null);
+const [demoConfig, setDemoConfig] = createSignal<SimulationConfig | null>(null);
 const [bridgeUrl, setBridgeUrl] = createSignal<string | null>(null);
 const [bridgeExportDone, setBridgeExportDone] = createSignal(false);
 
@@ -95,40 +92,56 @@ function getGroundTruthForCell(
 
 // --- Demo Data ---
 
-function loadDemoData(opts?: {
+async function loadDemoData(opts?: {
   numCells?: number;
   durationMinutes?: number;
   fps?: number;
-  presetId?: string;
+  qualitativeConfig?: QualitativeSimConfig;
   seed?: number | 'random';
-}): void {
-  const preset = getSimulationPresetById(opts?.presetId ?? DEFAULT_SIMULATION_PRESET_ID);
-  if (!preset) return;
-
-  const cfg = preset.config;
-  const fs = opts?.fps ?? cfg.fs_hz;
-  const cellCount = opts?.numCells ?? cfg.num_cells;
+}): Promise<void> {
+  const q = opts?.qualitativeConfig ?? DEFAULT_QUALITATIVE_CONFIG;
+  const fs = opts?.fps ?? 30;
+  const cellCount = opts?.numCells ?? 100;
   const durationMin = opts?.durationMinutes ?? 15;
   const timepointCount = Math.round(durationMin * 60 * fs);
-
   const resolvedSeed =
-    opts?.seed === 'random' ? Math.floor(Math.random() * 2 ** 31) : (opts?.seed ?? cfg.seed);
+    opts?.seed === 'random' ? Math.floor(Math.random() * 2 ** 31) : (opts?.seed ?? 42);
 
-  const simParams = simulationConfigToLegacyParams(cfg);
-  const {
-    data,
-    shape,
-    groundTruthSpikes: gtSpikes,
-    groundTruthCalcium: gtCalcium,
-  } = generateSyntheticDataset(cellCount, timepointCount, simParams, fs, resolvedSeed);
+  const cfg = buildSimulationConfig(q, {
+    fs_hz: fs,
+    num_timepoints: timepointCount,
+    num_cells: cellCount,
+    seed: resolvedSeed,
+  });
+
+  await initWasm();
+  const result = simulate_traces(cfg) as SimulationResult;
+
+  // Build flat ground truth arrays for existing per-cell accessor
+  const gtSpikes = new Float64Array(cellCount * timepointCount);
+  const gtCalcium = new Float64Array(cellCount * timepointCount);
+  for (let c = 0; c < result.ground_truth.length; c++) {
+    const gt = result.ground_truth[c];
+    const offset = c * timepointCount;
+    for (let t = 0; t < timepointCount; t++) {
+      gtSpikes[offset + t] = gt.spikes[t];
+      gtCalcium[offset + t] = gt.clean_calcium[t];
+    }
+  }
+
+  // Convert f32 traces to f64 for NpyResult compatibility
+  const data = new Float64Array(result.traces.length);
+  for (let i = 0; i < result.traces.length; i++) {
+    data[i] = result.traces[i];
+  }
 
   setGroundTruthSpikes(gtSpikes);
   setGroundTruthCalcium(gtCalcium);
   setGroundTruthVisible(false);
   setGroundTruthLocked(false);
-  setDemoPreset(preset);
+  setDemoConfig(cfg);
   setDataSource('demo');
-  setParsedData({ data, shape, dtype: '<f8', fortranOrder: false });
+  setParsedData({ data, shape: [cellCount, timepointCount], dtype: '<f8', fortranOrder: false });
   setDimensionsConfirmed(true);
   setSwapped(false);
   setSamplingRate(fs);
@@ -185,7 +198,7 @@ function resetImport(): void {
   setNpzArrays(null);
   setSelectedNpzArray(null);
   setImportError(null);
-  setDemoPreset(null);
+  setDemoConfig(null);
   setGroundTruthSpikes(null);
   setGroundTruthCalcium(null);
   setGroundTruthVisible(false);
@@ -222,7 +235,7 @@ export {
   durationSeconds,
   importStep,
   isDemo,
-  demoPreset,
+  demoConfig,
   // Ground Truth
   groundTruthSpikes,
   groundTruthCalcium,

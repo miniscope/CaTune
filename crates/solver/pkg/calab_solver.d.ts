@@ -184,6 +184,13 @@ export class Solver {
 }
 
 /**
+ * Get all built-in simulation preset names and their configs.
+ *
+ * Returns: JsValue containing Vec<(name, SimulationConfig)>.
+ */
+export function get_simulation_presets(): any;
+
+/**
  * Compute the upsample factor for a given sampling rate and target rate.
  */
 export function indeca_compute_upsample_factor(fs: number, target_fs: number): number;
@@ -230,16 +237,26 @@ export function indeca_solve_trace(trace: Float32Array, tau_r: number, tau_d: nu
  */
 export function seed_trace(trace: Float32Array, fs: number): any;
 
+/**
+ * Generate synthetic calcium traces from a config object.
+ *
+ * Accepts: JsValue containing a SimulationConfig-shaped object.
+ * Returns: JsValue containing a SimulationResult-shaped object.
+ */
+export function simulate_traces(config_js: any): any;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_solver_free: (a: number, b: number) => void;
+    readonly get_simulation_presets: () => number;
     readonly indeca_compute_upsample_factor: (a: number, b: number) => number;
     readonly indeca_estimate_kernel: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => void;
     readonly indeca_fit_biexponential: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => number;
     readonly indeca_solve_trace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => number;
     readonly seed_trace: (a: number, b: number, c: number) => number;
+    readonly simulate_traces: (a: number) => number;
     readonly solver_apply_filter: (a: number) => number;
     readonly solver_converged: (a: number) => number;
     readonly solver_export_state: (a: number, b: number) => void;
@@ -266,9 +283,10 @@ export interface InitOutput {
     readonly solver_set_trace: (a: number, b: number, c: number) => void;
     readonly solver_step_batch: (a: number, b: number) => number;
     readonly solver_subtract_baseline: (a: number) => void;
-    readonly __wbindgen_export: (a: number, b: number, c: number) => void;
-    readonly __wbindgen_export2: (a: number, b: number) => number;
-    readonly __wbindgen_export3: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_export: (a: number, b: number) => number;
+    readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_export3: (a: number) => void;
+    readonly __wbindgen_export4: (a: number, b: number, c: number) => void;
     readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
 }
 

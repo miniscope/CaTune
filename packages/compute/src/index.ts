@@ -14,10 +14,8 @@ export { computeKernel, computeKernelAnnotations } from './kernel-math.ts';
 export { tauToShape, shapeToTau, computeFWHM, isValidShapePair } from './kernel-shape.ts';
 export { downsampleMinMax } from './downsample.ts';
 export { makeTimeAxis } from './time-axis.ts';
-export { DEMO_PRESETS, DEFAULT_PRESET_ID, getPresetById, getPresetLabels } from './demo-presets.ts';
-export type { DemoPreset } from './demo-presets.ts';
-export { generateSyntheticTrace, generateSyntheticDataset } from './mock-traces.ts';
-// Simulation types + presets (shared with Rust WASM simulation engine)
+export { generateSyntheticTrace } from './mock-traces.ts';
+// Simulation types
 export type {
   SimulationConfig,
   SimulationResult,
@@ -25,9 +23,7 @@ export type {
   KernelConfig as SimKernelConfig,
   NoiseConfig as SimNoiseConfig,
   MarkovConfig,
-  PoissonConfig,
   SpikeModel,
-  SinusoidalDrift,
   RandomWalkDrift,
   DriftModel,
   PhotobleachingConfig,
@@ -40,11 +36,26 @@ export {
   DEFAULT_SIMULATION_PRESET_ID,
   getSimulationPresetById,
   getSimulationPresetLabels,
-  simulationConfigToLegacyParams,
-  PRESET_GCAMP6F,
-  PRESET_GCAMP6S,
-  PRESET_GCAMP6M,
-  PRESET_JGCAMP8F,
-  PRESET_OGB1,
-  PRESET_CLEAN,
 } from './simulation-presets.ts';
+// Qualitative presets (per-step level selections for UI)
+export type {
+  QualitativeSimConfig,
+  IndicatorId,
+  SpikeActivityLevel,
+  NoiseLevel,
+  DriftLevel,
+  PhotobleachingLevel,
+  SaturationLevel,
+  CellVariationLevel,
+} from './simulation-quality-presets.ts';
+export {
+  buildSimulationConfig,
+  DEFAULT_QUALITATIVE_CONFIG,
+  INDICATOR_OPTIONS,
+  SPIKE_ACTIVITY_LEVELS,
+  NOISE_LEVELS,
+  DRIFT_LEVELS,
+  PHOTOBLEACHING_LEVELS,
+  SATURATION_LEVELS,
+  CELL_VARIATION_LEVELS,
+} from './simulation-quality-presets.ts';
