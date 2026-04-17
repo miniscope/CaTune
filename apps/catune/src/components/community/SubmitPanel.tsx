@@ -20,6 +20,8 @@ import {
   bridgeUrl,
   bridgeExportDone,
   setBridgeExportDone,
+  bridgeExportError,
+  setBridgeExportError,
 } from '../../lib/data-store.ts';
 import { buildExportData, downloadExport, postParamsToBridge } from '@calab/io';
 import type { CaTuneExport } from '@calab/io';
@@ -92,9 +94,12 @@ export function SubmitPanel() {
   function handleBridgeExport(): void {
     const url = bridgeUrl();
     if (!url) return;
+    setBridgeExportError(null);
     postParamsToBridge(url, buildCurrentExport())
       .then(() => setBridgeExportDone(true))
-      .catch(() => {});
+      .catch((err: unknown) => {
+        setBridgeExportError(err instanceof Error ? err.message : 'Bridge export failed');
+      });
   }
 
   async function handleSubmit(): Promise<void> {
@@ -202,6 +207,12 @@ export function SubmitPanel() {
               Export to Python
             </button>
           </Show>
+        </Show>
+
+        <Show when={bridgeExportError()}>
+          <span class="submit-panel__error" role="alert">
+            {bridgeExportError()}
+          </span>
         </Show>
 
         <GroundTruthControls />

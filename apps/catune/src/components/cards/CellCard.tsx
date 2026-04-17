@@ -3,7 +3,7 @@
  * Self-contained visualization for one cell in the card grid.
  */
 
-import { createSignal, createMemo, createEffect, Show } from 'solid-js';
+import { createSignal, createMemo, createEffect, untrack, Show } from 'solid-js';
 import { TraceOverview, ROW_HEIGHT, ROW_DURATION_S } from '@calab/ui/chart';
 import { CaTuneZoomWindow } from './CaTuneZoomWindow.tsx';
 import { QualityBadge } from '../metrics/QualityBadge.tsx';
@@ -52,16 +52,31 @@ export function CellCard(props: CellCardProps) {
   const transientEnd = createMemo(() => {
     return Math.min(2 * currentTau().tauDecay, totalDuration());
   });
-  const [zoomStart, setZoomStart] = createSignal(transientEnd());
+  // Initial zoom snapshot via `untrack` — the signals below aren't derived
+  // from `transientEnd`, they're *seeded* from it. Subsequent tau or trace
+  // changes are handled by the effects that follow.
+  const [zoomStart, setZoomStart] = createSignal(untrack(transientEnd));
   const [zoomEnd, setZoomEnd] = createSignal(
-    Math.min(transientEnd() + CELL_CARD_ZOOM_WINDOW_S, totalDuration()),
+    untrack(() => Math.min(transientEnd() + CELL_CARD_ZOOM_WINDOW_S, totalDuration())),
   );
 
-  // Sync zoom end when trace changes
+  // Clamp zoom to duration when trace length changes.
   createEffect(() => {
     const dur = totalDuration();
     if (zoomEnd() > dur) setZoomEnd(dur);
     if (zoomEnd() <= zoomStart()) setZoomEnd(Math.min(zoomStart() + CELL_CARD_ZOOM_WINDOW_S, dur));
+  });
+
+  // When tau_decay grows, the convolution transient grows with it — push
+  // zoomStart past the new transient so the user isn't staring at a region
+  // dominated by edge effects. Without this the initial snapshot goes stale
+  // on tuning changes.
+  createEffect(() => {
+    const te = transientEnd();
+    if (zoomStart() < te) {
+      setZoomStart(te);
+      if (zoomEnd() <= te) setZoomEnd(Math.min(te + CELL_CARD_ZOOM_WINDOW_S, totalDuration()));
+    }
   });
 
   const handleZoomChange = (start: number, end: number) => {

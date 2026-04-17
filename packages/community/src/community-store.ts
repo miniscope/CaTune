@@ -42,26 +42,35 @@ const [fieldOptions, setFieldOptions] = createSignal<FieldOptions>({
   cellTypes: CELL_TYPE_OPTIONS,
 });
 const [fieldOptionsLoading, setFieldOptionsLoading] = createSignal(false);
-let fieldOptionsLoaded = false;
+// Cached in-flight fetch. Collapsing the "already loading" and "already
+// loaded" gates into a single promise avoids a race where two concurrent
+// callers both see the boolean flags as false and issue duplicate
+// requests. Subsequent calls re-await the cached promise.
+let fieldOptionsPromise: Promise<void> | null = null;
 
 /**
  * Load canonical field options from Supabase.
- * Idempotent — only fetches once. Falls back to hardcoded arrays on failure.
+ * Idempotent — concurrent / repeated callers share a single fetch.
+ * Falls back to hardcoded arrays on failure.
  */
 async function loadFieldOptions(): Promise<void> {
-  if (fieldOptionsLoaded || fieldOptionsLoading()) return;
   if (!supabaseEnabled) return; // Keep fallback arrays
+  if (fieldOptionsPromise) return fieldOptionsPromise;
 
   setFieldOptionsLoading(true);
-  try {
-    const opts = await fetchFieldOptions();
-    setFieldOptions(opts);
-    fieldOptionsLoaded = true;
-  } catch (err) {
-    console.warn('Failed to load field options from DB, using fallback:', err);
-  } finally {
-    setFieldOptionsLoading(false);
-  }
+  fieldOptionsPromise = (async () => {
+    try {
+      const opts = await fetchFieldOptions();
+      setFieldOptions(opts);
+    } catch (err) {
+      console.warn('Failed to load field options from DB, using fallback:', err);
+      // On failure, drop the cached promise so a later call can retry.
+      fieldOptionsPromise = null;
+    } finally {
+      setFieldOptionsLoading(false);
+    }
+  })();
+  return fieldOptionsPromise;
 }
 
 // --- Exports ---

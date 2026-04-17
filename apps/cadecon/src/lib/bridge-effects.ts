@@ -26,7 +26,12 @@ import {
   currentTauDecay,
 } from './iteration-store.ts';
 import { maxIterations } from './algorithm-store.ts';
-import { bridgeUrl, setBridgeExportDone, bridgeExportDone } from './data-store.ts';
+import {
+  bridgeUrl,
+  setBridgeExportDone,
+  bridgeExportDone,
+  setBridgeExportError,
+} from './data-store.ts';
 import { startRun } from './iteration-manager.ts';
 import { buildCaDeconActivityMatrix, buildCaDeconResultsPayload } from './export-utils.ts';
 
@@ -126,7 +131,11 @@ export function setupBridgeEffects(): void {
       const url = bridgeUrl();
       if (!url) return;
 
-      void runBridgeExport(url).catch((err) => console.error('Auto-export failed:', err));
+      void runBridgeExport(url).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Auto-export failed';
+        console.error('Auto-export failed:', err);
+        setBridgeExportError(message);
+      });
     }),
   );
 }

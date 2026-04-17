@@ -23,6 +23,7 @@ const [importError, setImportError] = createSignal<string | null>(null);
 const [demoConfig, setDemoConfig] = createSignal<SimulationConfig | null>(null);
 const [bridgeUrl, setBridgeUrl] = createSignal<string | null>(null);
 const [bridgeExportDone, setBridgeExportDone] = createSignal(false);
+const [bridgeExportError, setBridgeExportError] = createSignal<string | null>(null);
 
 /** Tracks how data was loaded: 'file' (user upload), 'demo' (generated), 'bridge' (Python calab.tune). */
 export type DataSource = 'file' | 'demo' | 'bridge' | null;
@@ -247,6 +248,8 @@ export {
   bridgeUrl,
   bridgeExportDone,
   setBridgeExportDone,
+  bridgeExportError,
+  setBridgeExportError,
   // Data source tracking
   dataSource,
   setDataSource,
