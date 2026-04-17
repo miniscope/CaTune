@@ -17,13 +17,7 @@ vi.mock('../cadecon-pool.ts', () => {
 });
 
 import type { CaDeconPoolJob } from '../cadecon-pool.ts';
-import {
-  pauseRun,
-  resumeRun,
-  stopRun,
-  resetRun,
-  startRun,
-} from '../iteration-manager.ts';
+import { pauseRun, resumeRun, stopRun, resetRun, startRun } from '../iteration-manager.ts';
 import {
   runState,
   setRunState,
@@ -156,14 +150,11 @@ describe('iteration-manager: state transitions', () => {
       expect(runState()).toBe('paused');
     });
 
-    it.each(['idle', 'paused', 'stopping', 'complete'] as const)(
-      'is a no-op from %s',
-      (state) => {
-        setRunState(state);
-        pauseRun();
-        expect(runState()).toBe(state);
-      },
-    );
+    it.each(['idle', 'paused', 'stopping', 'complete'] as const)('is a no-op from %s', (state) => {
+      setRunState(state);
+      pauseRun();
+      expect(runState()).toBe(state);
+    });
   });
 
   describe('resumeRun', () => {
@@ -173,14 +164,11 @@ describe('iteration-manager: state transitions', () => {
       expect(runState()).toBe('running');
     });
 
-    it.each(['idle', 'running', 'stopping', 'complete'] as const)(
-      'is a no-op from %s',
-      (state) => {
-        setRunState(state);
-        resumeRun();
-        expect(runState()).toBe(state);
-      },
-    );
+    it.each(['idle', 'running', 'stopping', 'complete'] as const)('is a no-op from %s', (state) => {
+      setRunState(state);
+      resumeRun();
+      expect(runState()).toBe(state);
+    });
   });
 
   describe('stopRun', () => {
