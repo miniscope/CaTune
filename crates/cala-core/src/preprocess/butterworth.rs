@@ -6,10 +6,9 @@
 //! is the convenience derivation that turns recording metadata +
 //! preprocess config into that cutoff.
 
-use std::sync::Arc;
-
 use rustfft::{num_complex::Complex32, FftPlanner};
 
+use super::fft2d::{fft_cols, fft_rows};
 use crate::assets::{Frame, FrameMut, ShapeError};
 use crate::config::{PreprocessConfig, RecordingMetadata};
 
@@ -62,11 +61,11 @@ pub fn butterworth_highpass(
     let col_ifft = planner.plan_fft_inverse(h);
 
     fft_rows(&mut buf, h, w, &row_fft);
-    fft_columns(&mut buf, h, w, &col_fft);
+    fft_cols(&mut buf, h, w, &col_fft);
 
     apply_highpass_gain(&mut buf, h, w, cutoff_cycles_per_pixel, order);
 
-    fft_columns(&mut buf, h, w, &col_ifft);
+    fft_cols(&mut buf, h, w, &col_ifft);
     fft_rows(&mut buf, h, w, &row_ifft);
 
     let norm = 1.0 / (h * w) as f32;
@@ -76,25 +75,6 @@ pub fn butterworth_highpass(
         }
     }
     Ok(())
-}
-
-fn fft_rows(buf: &mut [Complex32], h: usize, w: usize, fft: &Arc<dyn rustfft::Fft<f32>>) {
-    for y in 0..h {
-        fft.process(&mut buf[y * w..(y + 1) * w]);
-    }
-}
-
-fn fft_columns(buf: &mut [Complex32], h: usize, w: usize, fft: &Arc<dyn rustfft::Fft<f32>>) {
-    let mut col: Vec<Complex32> = vec![Complex32::new(0.0, 0.0); h];
-    for x in 0..w {
-        for y in 0..h {
-            col[y] = buf[y * w + x];
-        }
-        fft.process(&mut col);
-        for y in 0..h {
-            buf[y * w + x] = col[y];
-        }
-    }
 }
 
 fn apply_highpass_gain(buf: &mut [Complex32], h: usize, w: usize, cutoff: f32, order: u32) {

@@ -9,7 +9,7 @@
 
 use calab_cala_core::config::{
     PreprocessConfig, RecordingMetadata, DEFAULT_HIGH_PASS_DIAMETERS, DEFAULT_HIGH_PASS_ORDER,
-    DEFAULT_NEURON_DIAMETER_UM,
+    DEFAULT_MOTION_MAX_SHIFT_PX, DEFAULT_NEURON_DIAMETER_UM,
 };
 use calab_cala_core::preprocess::high_pass_cutoff_cycles_per_pixel;
 
@@ -88,9 +88,33 @@ fn with_high_pass_order_overrides_order() {
 fn builder_methods_chain() {
     let cfg = PreprocessConfig::default()
         .with_high_pass_diameters(2.0)
-        .with_high_pass_order(8);
+        .with_high_pass_order(8)
+        .with_motion_max_shift_px(8);
     assert_close(cfg.high_pass_diameters, 2.0, "K");
     assert_eq!(cfg.high_pass_order, 8, "order");
+    assert_eq!(cfg.motion_max_shift_px, 8, "max shift");
+}
+
+#[test]
+fn default_motion_max_shift_matches_constant() {
+    assert_eq!(DEFAULT_MOTION_MAX_SHIFT_PX, 20);
+    let cfg = PreprocessConfig::default();
+    assert_eq!(cfg.motion_max_shift_px, DEFAULT_MOTION_MAX_SHIFT_PX);
+}
+
+#[test]
+fn with_motion_max_shift_px_overrides_default() {
+    let cfg = PreprocessConfig::default().with_motion_max_shift_px(10);
+    assert_eq!(cfg.motion_max_shift_px, 10);
+    assert_close(
+        cfg.high_pass_diameters,
+        DEFAULT_HIGH_PASS_DIAMETERS,
+        "K untouched",
+    );
+    assert_eq!(
+        cfg.high_pass_order, DEFAULT_HIGH_PASS_ORDER,
+        "order untouched"
+    );
 }
 
 // ----- Cutoff derivation -----
