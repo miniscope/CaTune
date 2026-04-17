@@ -20,9 +20,22 @@ export interface WarmStartEntry {
 /**
  * Compute the overlap-and-discard padded window for artifact-free windowed computation.
  *
- * Adds >= 5 * tauDecay * fs padding samples on each side of the visible region
- * (per research Pattern 3) to prevent edge artifacts from kernel truncation.
- * The padding is clamped to trace bounds.
+ * Adds padding samples on each side of the visible region (per research
+ * Pattern 3) to prevent edge artifacts from kernel truncation. The padding
+ * target is ``max(visibleSamples, tauPadding)`` — wide enough to cover one
+ * full visible window of overlap OR the ``5 * tauDecay * fs`` artifact
+ * horizon, whichever is larger. The result is capped at ``MAX_PADDING_SECONDS``
+ * (5 min) so extreme-duration windows don't inflate solver cost without
+ * bound.
+ *
+ * **Contract: padding can be smaller than the visible window.** When the
+ * visible window is longer than 5 minutes, ``paddingSamples`` = ``maxPadding``
+ * which is less than ``visibleSamples``. Callers that assumed
+ * ``paddingSamples >= visibleSamples`` (e.g. for symmetric overlap) are
+ * wrong. The artifact-safety invariant still holds as long as
+ * ``maxPadding >= tauPadding`` — i.e. for any tauDecay with fs such that
+ * ``5 * tauDecay <= MAX_PADDING_SECONDS`` (60 s at fs=30Hz, up to tauDecay
+ * = 60 s which exceeds any physical indicator).
  *
  * @returns paddedStart/paddedEnd (solver input range), resultOffset (where visible
  *          region starts in solver output), resultLength (how many samples to extract).

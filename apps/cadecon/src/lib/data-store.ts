@@ -26,6 +26,7 @@ const [dataSource, setDataSource] = createSignal<DataSource>(null);
 
 const [demoConfig, setDemoConfig] = createSignal<SimulationConfig | null>(null);
 const [bridgeExportDone, setBridgeExportDone] = createSignal(false);
+const [bridgeExportError, setBridgeExportError] = createSignal<string | null>(null);
 const [groundTruthSpikes, setGroundTruthSpikes] = createSignal<Float64Array | null>(null);
 const [groundTruthCalcium, setGroundTruthCalcium] = createSignal<Float64Array | null>(null);
 const [groundTruthVisible, setGroundTruthVisible] = createSignal(false);
@@ -246,6 +247,8 @@ export {
   demoConfig,
   bridgeExportDone,
   setBridgeExportDone,
+  bridgeExportError,
+  setBridgeExportError,
   groundTruthSpikes,
   groundTruthCalcium,
   groundTruthVisible,

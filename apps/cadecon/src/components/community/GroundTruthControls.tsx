@@ -9,6 +9,8 @@ import {
   toggleGroundTruthVisibility,
   bridgeUrl,
   bridgeExportDone,
+  bridgeExportError,
+  setBridgeExportError,
 } from '../../lib/data-store.ts';
 import { runState } from '../../lib/iteration-store.ts';
 import { isBridgeAutorun, runBridgeExport } from '../../lib/bridge-effects.ts';
@@ -50,7 +52,9 @@ export function GroundTruthNotices(): JSX.Element {
 
 export function ExportButton(): JSX.Element {
   const [exporting, setExporting] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  // Manual-export errors route through the shared bridgeExportError signal
+  // so both manual- and autorun-path failures surface in the same place.
+  const error = bridgeExportError;
 
   const isComplete = () => runState() === 'complete';
   const isBridge = () => !!bridgeUrl();
@@ -61,11 +65,11 @@ export function ExportButton(): JSX.Element {
     if (!url) return;
 
     setExporting(true);
-    setError(null);
+    setBridgeExportError(null);
     try {
       await runBridgeExport(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Export failed');
+      setBridgeExportError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setExporting(false);
     }
