@@ -6,6 +6,12 @@ on:
   push:
     branches: [main]
 
+# Third-party actions pinned to SHAs; first-party actions/* stay on major
+# version tags. SHA pins prevent a compromised or retagged action release
+# from silently landing on CI. When bumping, resolve the new SHA with
+# `gh api repos/<owner>/<repo>/git/refs/tags/<tag>` and update both the
+# pin and the trailing # vX.Y.Z comment.
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -44,27 +50,71 @@ jobs:
       - name: Build
         run: npm run build:apps
 
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/solver
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable (2026-04-15)
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6733eb7d741f0b11ec6a39b58540dab7590f9b7d # v2
+        with:
+          workspaces: 'crates/solver -> target'
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      # `--no-default-features --features jsbindings` skips the pyo3 feature
+      # (which needs Python dev headers) and keeps clippy focused on the WASM
+      # surface the apps actually ship.
+      - name: Clippy
+        run: cargo clippy --no-default-features --features jsbindings -- -D warnings
+
+      - name: Tests
+        run: cargo test --no-default-features --features jsbindings
+
   python:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable (2026-04-15)
 
       - name: Create venv and install deps
         run: |
           python -m venv .venv
-          .venv/bin/pip install maturin[patchelf] numpy pytest h5py zarr
+          .venv/bin/pip install maturin[patchelf] numpy pydantic pytest h5py zarr ruff mypy
         working-directory: python
 
       - name: Build and install (dev)
         run: .venv/bin/maturin develop --features pybindings
         working-directory: python
 
-      - name: Run Python tests
-        run: .venv/bin/pytest
+      - name: Ruff
+        run: .venv/bin/ruff check src/ tests/
+        working-directory: python
+
+      - name: Mypy
+        run: .venv/bin/mypy src/
+        working-directory: python
+
+      # `-m "not integration"` skips tests that require Playwright + a live
+      # browser (see pytest marker in pyproject.toml). Those run outside CI.
+      - name: Pytest
+        run: .venv/bin/pytest -m "not integration"
         working-directory: python

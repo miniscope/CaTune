@@ -7,10 +7,8 @@ DC removal, short trace handling, and invalid cutoff handling.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from calab import bandpass_filter
-
 
 # ---------------------------------------------------------------------------
 # Test 1: Passband preservation

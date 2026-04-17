@@ -200,7 +200,7 @@ def cmd_info(args: argparse.Namespace) -> None:
         print(f"File: {path}")
         if "parameters" in data:
             params = data["parameters"]
-            print(f"  Type: CaTune export")
+            print("  Type: CaTune export")
             if "schema_version" in data:
                 print(f"  Schema: v{data['schema_version']}")
             for key, val in params.items():

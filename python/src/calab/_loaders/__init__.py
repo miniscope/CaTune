@@ -17,7 +17,7 @@ def load_caiman(
     trace_key: str = "estimates/C",
     fs_key: str = "params/data/fr",
     fs: float | None = None,
-) -> tuple["np.ndarray", dict]:
+) -> tuple[np.ndarray, dict]:
     """Load traces from a CaImAn HDF5 results file.
 
     Parameters
@@ -57,7 +57,7 @@ def load_minian(
     path: str,
     trace_key: str = "C",
     fs: float | None = None,
-) -> tuple["np.ndarray", dict]:
+) -> tuple[np.ndarray, dict]:
     """Load traces from a Minian Zarr output directory.
 
     Parameters

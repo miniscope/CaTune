@@ -14,10 +14,8 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from calab import load_tuning_data, save_for_tuning
-from calab._io import load_export_params, deconvolve_from_export
-from calab import build_kernel
-
+from calab import build_kernel, load_tuning_data, save_for_tuning
+from calab._io import deconvolve_from_export, load_export_params
 
 # ---------------------------------------------------------------------------
 # Helpers

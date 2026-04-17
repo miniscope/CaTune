@@ -4,7 +4,7 @@ import solidPlugin from 'vite-plugin-solid';
 export default defineConfig({
   plugins: [solidPlugin()],
   test: {
-    passWithNoTests: true,
+    passWithNoTests: false,
     environmentMatchGlobs: [['src/lib/__tests__/**', 'node']],
   },
 });

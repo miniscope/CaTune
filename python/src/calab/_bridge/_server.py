@@ -26,7 +26,7 @@ import numpy as np
 class BridgeHandler(BaseHTTPRequestHandler):
     """HTTP handler for the bridge server."""
 
-    server: "BridgeServer"
+    server: BridgeServer
 
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress default stderr logging."""

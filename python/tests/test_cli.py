@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 
 def run_cli(*args: str, cwd: str | None = None) -> subprocess.CompletedProcess:
