@@ -7,17 +7,18 @@ name = "calab"
 version = "0.0.0"
 description = "CaLab: calcium imaging analysis tools — deconvolution and data preparation"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Daniel Aharoni" }]
 keywords = ["calcium-imaging", "deconvolution", "neuroscience", "FISTA", "spike-inference"]
+# Minimum 3.11 because the Minian loader uses zarr v3's `create_array` API
+# and zarr v3 dropped support for 3.10. CI covers every claimed version.
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -57,7 +58,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["docs/_build", "docs/autoapi", ".venv"]
 
 [tool.ruff.lint]
@@ -74,7 +75,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 ignore_missing_imports = true
 warn_unused_ignores = true
 # Start loose: this repo has never been type-checked. CI-2 is about getting
