@@ -9,7 +9,7 @@ crates/solver/target/
 test/
 .env
 .env.local
-.claude/settings.local.json
+.claude/
 python/src/calab/*.so
 python/docs/_build/
 python/docs/autoapi/
