@@ -7,4 +7,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod assets;
+pub mod config;
 pub mod preprocess;
