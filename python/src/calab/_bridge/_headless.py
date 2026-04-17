@@ -65,19 +65,30 @@ class HeadlessBrowser:
     # -- lifecycle ----------------------------------------------------------
 
     def start(self) -> None:
-        """Launch the browser. Called automatically by ``__enter__``."""
+        """Launch the browser. Called automatically by ``__enter__``.
+
+        If any initialization step raises after earlier steps succeeded,
+        ``close()`` runs before re-raising. This prevents partial-init
+        failures (e.g. Chromium launch fails after the Playwright driver
+        started) from leaking driver processes and Chromium instances
+        across retries.
+        """
         from playwright.sync_api import sync_playwright
 
-        self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(
-            headless=self._headless,
-            # Allow the HTTPS-hosted page to fetch from the localhost bridge
-            # server. Headless Chromium enforces Private Network Access (PNA)
-            # restrictions that block HTTPS→localhost requests by default.
-            args=["--disable-web-security"],
-        )
-        self._context = self._browser.new_context()
-        self._page = self._context.new_page()
+        try:
+            self._pw = sync_playwright().start()
+            self._browser = self._pw.chromium.launch(
+                headless=self._headless,
+                # Allow the HTTPS-hosted page to fetch from the localhost bridge
+                # server. Headless Chromium enforces Private Network Access (PNA)
+                # restrictions that block HTTPS→localhost requests by default.
+                args=["--disable-web-security"],
+            )
+            self._context = self._browser.new_context()
+            self._page = self._context.new_page()
+        except Exception:
+            self.close()
+            raise
 
     def navigate(self, url: str) -> None:
         """Navigate the managed page to *url*.
@@ -92,15 +103,31 @@ class HeadlessBrowser:
         self._page.goto(url, wait_until="domcontentloaded")
 
     def close(self) -> None:
-        """Shut down page, context, browser, and Playwright."""
+        """Shut down page, context, browser, and Playwright.
+
+        Each teardown runs in its own try/except so a crashed browser
+        (where ``context.close()`` raises) still lets ``browser.close()``
+        and ``pw.stop()`` run. Without this, a single teardown error
+        would leak the remaining resources — most visibly an orphaned
+        Chromium process that lingers until the Python process exits.
+        """
         if self._context is not None:
-            self._context.close()
+            try:
+                self._context.close()
+            except Exception:
+                pass
             self._context = None
         if self._browser is not None:
-            self._browser.close()
+            try:
+                self._browser.close()
+            except Exception:
+                pass
             self._browser = None
         if self._pw is not None:
-            self._pw.stop()
+            try:
+                self._pw.stop()
+            except Exception:
+                pass
             self._pw = None
         self._page = None
 
