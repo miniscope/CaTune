@@ -8,4 +8,5 @@
 
 pub mod assets;
 pub mod config;
+pub mod io;
 pub mod preprocess;

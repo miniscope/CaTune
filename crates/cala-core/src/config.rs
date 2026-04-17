@@ -33,6 +33,23 @@ pub const DEFAULT_MOTION_MAX_SHIFT_PX: u32 = 20;
 /// slow drift. On by default per design §3.
 pub const DEFAULT_MOTION_USE_GLOBAL_ANCHOR: bool = true;
 
+/// How to reduce a multi-channel AVI frame to grayscale. Miniscope
+/// recordings are physically monochrome — 3-channel files usually have
+/// R=G=B or have the real signal only in the green channel — so `Green`
+/// is the pragmatic default. `Luminance` is there for recordings that
+/// carry meaningful information across all three channels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrayscaleMethod {
+    /// Take the green channel as the grayscale value. Single-channel
+    /// (already grayscale) inputs are passed through unchanged.
+    Green,
+    /// Rec. 601 luminance: `0.299·R + 0.587·G + 0.114·B`.
+    Luminance,
+}
+
+/// Default conversion method for multi-channel AVI frames.
+pub const DEFAULT_GRAYSCALE_METHOD: GrayscaleMethod = GrayscaleMethod::Green;
+
 /// Physical properties of a recording.
 ///
 /// Required: `pixel_size_um`. Every other field has a documented default
