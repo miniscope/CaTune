@@ -1,0 +1,10 @@
+//! Per-frame preprocessing stages (design §3 "Preprocess").
+//!
+//! Each stage is a pure function: immutable `Frame` in, `FrameMut` out.
+//! The caller owns the input / output buffers and ping-pongs them between
+//! stages. Preprocess holds no global mutable state; per-stream state
+//! (motion anchors, baseline min-image) is explicit and passed in.
+
+mod hot_pixel;
+
+pub use hot_pixel::hot_pixel_median_3x3;
