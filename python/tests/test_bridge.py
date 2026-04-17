@@ -483,6 +483,74 @@ def test_options_without_pna_request_omits_pna_header(bridge_server: BridgeServe
         assert resp.headers.get("Access-Control-Allow-Private-Network") is None
 
 
+# --- _run_bridge failure-mode tests (TEST-M3) ---
+
+
+def test_run_bridge_timeout_returns_false() -> None:
+    """``_run_bridge`` exits with False when the bridge event never fires."""
+    from calab._bridge._apps import _run_bridge
+
+    server = _make_server()
+    event = threading.Event()
+
+    start = time.monotonic()
+    received = _run_bridge(
+        server,
+        event,
+        app_name="CaTune",
+        app_url="about:blank",  # webbrowser.open on a noop URL
+        open_browser=False,
+        timeout=0.2,
+    )
+    elapsed = time.monotonic() - start
+
+    assert received is False, "timeout path must return False"
+    # 0.2s timeout + server.serve_forever.shutdown handshake; allow headroom
+    # but fail loudly if it exceeds the heartbeat fallback (10s).
+    assert elapsed < 3.0, f"timeout respected (elapsed={elapsed:.2f}s)"
+
+
+def test_run_bridge_detects_browser_crash_via_heartbeat_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dead browser is detected when ``last_heartbeat`` goes stale.
+
+    Simulates a browser that started (sent at least one heartbeat) and then
+    crashed or was killed: ``_run_bridge`` should notice
+    ``now - last_heartbeat > HEARTBEAT_TIMEOUT`` on its next tick and exit
+    False instead of hanging until the outer timeout.
+    """
+    from calab._bridge import _apps
+    from calab._bridge._apps import _run_bridge
+
+    # Shorten HEARTBEAT_TIMEOUT so the loop's 1s tick can reliably fire.
+    monkeypatch.setattr(_apps, "HEARTBEAT_TIMEOUT", 0.1)
+
+    server = _make_server()
+    event = threading.Event()
+    # Prime with a heartbeat that arrived "long ago" from the loop's POV.
+    server.last_heartbeat = time.monotonic() - 5.0
+
+    start = time.monotonic()
+    received = _run_bridge(
+        server,
+        event,
+        app_name="CaDecon",
+        app_url="about:blank",
+        open_browser=False,
+        timeout=10.0,  # larger than real wait so we know heartbeat is what ended it
+    )
+    elapsed = time.monotonic() - start
+
+    assert received is False, "heartbeat timeout path must return False"
+    # Heartbeat check runs inside the wait loop that ticks every 1.0s, so
+    # first detection lands on the next tick. Cap at 3s to guard against
+    # regressions that fall through to the outer `timeout=10`.
+    assert elapsed < 3.0, (
+        f"heartbeat detection too slow: elapsed={elapsed:.2f}s (would hit outer 10s fallback)"
+    )
+
+
 # --- Cross-language schema consistency tests ---
 
 
