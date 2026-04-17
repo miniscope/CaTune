@@ -213,8 +213,7 @@ def deconvolve_from_export(
     np.ndarray or DeconvolutionResult
         Deconvolved activity (or full result if ``return_full=True``).
     """
-    from ._compute import run_deconvolution, run_deconvolution_full
-    from ._compute import bandpass_filter
+    from ._compute import bandpass_filter, run_deconvolution, run_deconvolution_full
 
     params = load_export_params(params_path)
 

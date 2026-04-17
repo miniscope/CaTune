@@ -7,7 +7,6 @@ from pydantic import ValidationError
 import calab
 from calab import (
     KernelConfig,
-    MarkovConfig,
     NoiseConfig,
     PhotobleachingConfig,
     PoissonConfig,
@@ -17,7 +16,6 @@ from calab import (
     SinusoidalDrift,
     simulate,
 )
-
 
 # ── Config validation ────────────────────────────────────────────
 

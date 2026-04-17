@@ -111,6 +111,7 @@ pub struct Solver {
 impl Solver {
     /// Create a new Solver with default parameters.
     #[cfg_attr(feature = "jsbindings", wasm_bindgen(constructor))]
+    #[allow(clippy::new_without_default)] // wasm_bindgen constructor — JS `new Solver()` is the public API
     pub fn new() -> Solver {
         #[cfg(all(feature = "jsbindings", target_arch = "wasm32"))]
         console_error_panic_hook::set_once();

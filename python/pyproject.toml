@@ -7,17 +7,18 @@ name = "calab"
 version = "0.0.0"
 description = "CaLab: calcium imaging analysis tools — deconvolution and data preparation"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Daniel Aharoni" }]
 keywords = ["calcium-imaging", "deconvolution", "neuroscience", "FISTA", "spike-inference"]
+# Minimum 3.11 because the Minian loader uses zarr v3's `create_array` API
+# and zarr v3 dropped support for 3.10. CI covers every claimed version.
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -54,3 +55,39 @@ testpaths = ["tests"]
 markers = [
     "integration: requires Playwright + network access (skip with -m 'not integration')",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["docs/_build", "docs/autoapi", ".venv"]
+
+[tool.ruff.lint]
+# Pyflakes (F), pycodestyle errors (E), warnings (W), pyupgrade (UP),
+# bugbear (B). Intentionally conservative — this repo has never been ruff-checked,
+# so start with the essentials and tighten in a follow-up. Skipping `I` (isort)
+# because the existing import style (single `from X import (a, b as _b, c)`
+# blocks with `as` aliases) triggers the I001 split-per-`as` autofix, which is
+# noisier than it's worth for this PR.
+select = ["E", "F", "W", "UP", "B"]
+ignore = [
+    "E501",  # line length — formatter handles
+    "UP007", # keep `Optional[X]` / `Union[X, Y]` for older pydantic-friendly code
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+# Start loose: this repo has never been type-checked. CI-2 is about getting
+# mypy in the loop so future regressions don't slip through. Tighten later
+# once the two noisy modules (below) are addressed.
+check_untyped_defs = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+# TODO(typing): _simulate.py splats untyped dicts into typed pydantic models;
+# _minian.py hits zarr's Array|Group union without narrowing. Both produce the
+# bulk of the current error surface — worth a dedicated refactor PR, not
+# mixed into CI hardening.
+module = ["calab._simulate", "calab._loaders._minian"]
+ignore_errors = true

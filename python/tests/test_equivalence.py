@@ -16,10 +16,9 @@ from calab import (
     compute_lipschitz,
     load_tuning_data,
     run_deconvolution,
+    run_deconvolution_full,
     save_for_tuning,
 )
-from calab import run_deconvolution_full
-
 
 # ---------------------------------------------------------------------------
 # Test 1: Kernel equivalence across parameter sets

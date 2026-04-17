@@ -16,8 +16,7 @@ import pytest
 h5py = pytest.importorskip("h5py", reason="h5py not installed")
 zarr = pytest.importorskip("zarr", reason="zarr not installed")
 
-from calab import load_caiman, load_minian
-
+from calab import load_caiman, load_minian  # noqa: E402 — imports run after importorskip gates
 
 # ---------------------------------------------------------------------------
 # CaImAn HDF5 tests

@@ -13,8 +13,7 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 
-from calab import build_kernel, run_deconvolution, run_deconvolution_full, DeconvolutionResult
-
+from calab import DeconvolutionResult, build_kernel, run_deconvolution, run_deconvolution_full
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -44,7 +43,7 @@ def make_synthetic_trace(
     if isinstance(amplitudes, (int, float)):
         amplitudes = [amplitudes] * len(event_locs)
     activity = np.zeros(n)
-    for loc, amp in zip(event_locs, amplitudes):
+    for loc, amp in zip(event_locs, amplitudes, strict=True):
         if 0 <= loc < n:
             activity[loc] = amp
     return np.convolve(activity, kernel)[:n]
