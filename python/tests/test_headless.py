@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -163,6 +164,126 @@ class TestHeadlessBrowserMocked:
             assert hb._page is None
         finally:
             headless_mod.HeadlessBrowser.start = original_start
+
+
+class TestHeadlessBrowserResourceSafety:
+    """Regression tests for start()/close() cleanup under failure.
+
+    Exercise the real ``start()`` and ``close()`` methods with the
+    ``playwright.sync_api`` module patched into ``sys.modules``. The
+    existing ``TestHeadlessBrowserMocked`` class replaces ``start()``
+    entirely, so it cannot catch leaks in the real cleanup logic.
+    """
+
+    def _install_fake_playwright(self, mock_sync_playwright: MagicMock) -> dict[str, object]:
+        """Return a sys.modules patch dict that routes the deferred import inside
+        ``start()`` to ``mock_sync_playwright``."""
+        fake_sync_api = MagicMock()
+        fake_sync_api.sync_playwright = mock_sync_playwright
+        fake_playwright = MagicMock()
+        fake_playwright.sync_api = fake_sync_api
+        return {
+            "playwright": fake_playwright,
+            "playwright.sync_api": fake_sync_api,
+        }
+
+    def test_start_cleans_up_when_launch_fails(self):
+        """If chromium.launch() raises, _pw is stopped and all refs are None."""
+        mock_pw = MagicMock()
+        mock_pw.chromium.launch.side_effect = RuntimeError("launch failed")
+
+        mock_entry = MagicMock()
+        mock_entry.start.return_value = mock_pw
+
+        mock_sync_playwright = MagicMock(return_value=mock_entry)
+
+        with patch("calab._bridge._headless._check_playwright"):
+            hb = HeadlessBrowser()
+
+        with patch.dict(sys.modules, self._install_fake_playwright(mock_sync_playwright)):
+            with pytest.raises(RuntimeError, match="launch failed"):
+                hb.start()
+
+        # All resources cleaned up after partial init failure.
+        assert hb._pw is None
+        assert hb._browser is None
+        assert hb._context is None
+        assert hb._page is None
+        # The Playwright driver we DID start must have been stopped, or a
+        # background node/driver process would linger across retries.
+        mock_pw.stop.assert_called_once()
+
+    def test_start_cleans_up_when_new_context_fails(self):
+        """If new_context() raises, both browser.close() and pw.stop() run."""
+        mock_browser = MagicMock()
+        mock_browser.new_context.side_effect = RuntimeError("context failed")
+
+        mock_pw = MagicMock()
+        mock_pw.chromium.launch.return_value = mock_browser
+
+        mock_entry = MagicMock()
+        mock_entry.start.return_value = mock_pw
+
+        mock_sync_playwright = MagicMock(return_value=mock_entry)
+
+        with patch("calab._bridge._headless._check_playwright"):
+            hb = HeadlessBrowser()
+
+        with patch.dict(sys.modules, self._install_fake_playwright(mock_sync_playwright)):
+            with pytest.raises(RuntimeError, match="context failed"):
+                hb.start()
+
+        assert hb._pw is None
+        assert hb._browser is None
+        assert hb._context is None
+        assert hb._page is None
+        mock_browser.close.assert_called_once()
+        mock_pw.stop.assert_called_once()
+
+    def test_close_continues_when_context_close_raises(self):
+        """Crashed context must not block browser.close() or pw.stop()."""
+        with patch("calab._bridge._headless._check_playwright"):
+            hb = HeadlessBrowser()
+
+        # Manually wire up started state with a context that raises on close.
+        mock_pw = MagicMock()
+        mock_browser = MagicMock()
+        mock_context = MagicMock()
+        mock_context.close.side_effect = RuntimeError("context crashed")
+        hb._pw = mock_pw
+        hb._browser = mock_browser
+        hb._context = mock_context
+        hb._page = MagicMock()
+
+        hb.close()  # Must not raise.
+
+        mock_context.close.assert_called_once()
+        mock_browser.close.assert_called_once()
+        mock_pw.stop.assert_called_once()
+        assert hb._context is None
+        assert hb._browser is None
+        assert hb._pw is None
+        assert hb._page is None
+
+    def test_close_continues_when_browser_close_raises(self):
+        """Crashed browser.close() must not block pw.stop()."""
+        with patch("calab._bridge._headless._check_playwright"):
+            hb = HeadlessBrowser()
+
+        mock_pw = MagicMock()
+        mock_browser = MagicMock()
+        mock_browser.close.side_effect = RuntimeError("browser crashed")
+        hb._pw = mock_pw
+        hb._browser = mock_browser
+        hb._context = MagicMock()
+        hb._page = MagicMock()
+
+        hb.close()  # Must not raise.
+
+        mock_browser.close.assert_called_once()
+        mock_pw.stop.assert_called_once()
+        assert hb._browser is None
+        assert hb._pw is None
 
 
 # ---------------------------------------------------------------------------
