@@ -6,5 +6,7 @@
 //! modules; see design §11.
 
 mod avi_uncompressed;
+mod avi_writer;
 
 pub use avi_uncompressed::{AviError, AviUncompressedReader};
+pub use avi_writer::write_uncompressed_avi_8bit;

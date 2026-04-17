@@ -12,10 +12,18 @@ wasm-opt = ["-O", "--enable-bulk-memory", "--enable-nontrapping-float-to-int", "
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "cala-preprocess-avi"
+path = "src/bin/preprocess_avi.rs"
+required-features = ["native-cli"]
+
 [features]
 default = ["jsbindings"]
 jsbindings = ["dep:wasm-bindgen", "dep:console_error_panic_hook", "dep:serde", "dep:serde-wasm-bindgen"]
 pybindings = ["dep:pyo3", "dep:numpy", "dep:serde", "dep:serde_json"]
+# Native-only dev tooling (CLI test harness for Phase 1). Gated so WASM
+# and PyO3 builds don't try to compile the binary.
+native-cli = []
 
 [dependencies]
 realfft = "3"

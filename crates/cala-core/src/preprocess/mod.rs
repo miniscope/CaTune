@@ -11,9 +11,11 @@ mod butterworth;
 mod fft2d;
 mod hot_pixel;
 mod motion;
+mod pipeline;
 
 pub use band::band_subtract;
 pub use baseline::BaselineState;
 pub use butterworth::{butterworth_highpass, high_pass_cutoff_cycles_per_pixel};
 pub use hot_pixel::hot_pixel_median_3x3;
 pub use motion::{MotionShift, MotionState};
+pub use pipeline::PreprocessPipeline;
