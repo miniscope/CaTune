@@ -72,6 +72,20 @@ export type WorkerOutbound =
       requestId: number;
       events: PipelineEvent[];
       metrics: Record<string, number>;
+    }
+  // W1 preview frame for the dashboard viewer (design §12 frame panel,
+  // Phase 5 exit). Strided like `frame-processed` so the post rate is
+  // bounded even when W1 outruns the main-thread canvas; `pixels` is
+  // an 8-bit grayscale projection of the preprocessed f32 frame
+  // (post-autoscale) so the main thread can `putImageData` without
+  // touching the SAB slot the fit worker is still reading.
+  | {
+      kind: 'frame-preview';
+      role: WorkerRole;
+      index: number;
+      width: number;
+      height: number;
+      pixels: Uint8ClampedArray;
     };
 
 /**

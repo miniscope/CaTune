@@ -1,3 +1,4 @@
+import { createSignal, type Accessor } from 'solid-js';
 import { openAviUncompressed } from '@calab/io';
 import type { FrameSource, FrameSourceMeta } from '@calab/io';
 import {
@@ -7,9 +8,17 @@ import {
   type RuntimeState,
   type WorkerFactory,
   type WorkerLike,
+  type WorkerOutbound,
   type WorkerRole,
 } from '@calab/cala-runtime';
 import { state, setRunState, setErrorMsg } from './data-store.ts';
+import { recordFrameProcessed } from './dashboard-store.ts';
+import {
+  createDecodePreprocessWorker,
+  createFitWorker,
+  createExtendWorker,
+  createArchiveWorker,
+} from '../workers/index.ts';
 
 // Ring / queue sizing defaults (design §7.1, §7.3, §13).
 // Kept in one place so future tuning passes have a single knob per
@@ -29,29 +38,37 @@ const DEFAULT_STARTUP_TIMEOUT_MS = 5000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5000;
 // f32 grayscale → 4 bytes per pixel.
 const BYTES_PER_F32_PIXEL = 4;
+// W1 preview cadence (design §12 frame panel). Strided so the canvas
+// updates a few times per second even on a fast pipeline, without the
+// main thread paying postMessage cost on every decode.
+const DEFAULT_FRAME_PREVIEW_STRIDE = 2;
 
 export type WorkerFactories = Record<WorkerRole, WorkerFactory>;
 
-function noopWorker(): WorkerLike {
-  // Stub worker for tests and for wiring in the UI before the real
-  // workers land (tasks 21-23). Never signals ready, never signals
-  // done — the real factories override this at call-site.
+function defaultWorkerFactories(): WorkerFactories {
+  // Real worker factories now that tasks 21-23 landed. Tests still
+  // override this by passing an explicit `factories` to `startRun`.
   return {
-    postMessage: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    terminate: () => {},
+    decodePreprocess: createDecodePreprocessWorker,
+    fit: createFitWorker,
+    extend: createExtendWorker,
+    archive: createArchiveWorker,
   };
 }
 
-function defaultWorkerFactories(): WorkerFactories {
-  return {
-    decodePreprocess: noopWorker,
-    fit: noopWorker,
-    extend: noopWorker,
-    archive: noopWorker,
-  };
+export interface LatestFramePreview {
+  index: number;
+  width: number;
+  height: number;
+  pixels: Uint8ClampedArray;
 }
+
+// Signal (not store) because the preview updates every few frames and
+// fine-grained store reactivity is wasted overhead — the viewer
+// re-renders the whole canvas per update regardless.
+const [latestFrameSignal, setLatestFrameSignal] = createSignal<LatestFramePreview | null>(null);
+
+export const latestFrame: Accessor<LatestFramePreview | null> = latestFrameSignal;
 
 function buildConfig(meta: FrameSourceMeta, factories: WorkerFactories): RuntimeConfig {
   const frameBytes = meta.width * meta.height * BYTES_PER_F32_PIXEL;
@@ -81,6 +98,15 @@ function buildConfig(meta: FrameSourceMeta, factories: WorkerFactories): Runtime
     },
     startupTimeoutMs: DEFAULT_STARTUP_TIMEOUT_MS,
     shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+    workerConfigs: {
+      decodePreprocess: {
+        framePreviewStride: DEFAULT_FRAME_PREVIEW_STRIDE,
+      },
+      fit: {
+        height: meta.height,
+        width: meta.width,
+      },
+    },
   };
 }
 
@@ -93,9 +119,59 @@ const frameSourceFactory: FrameSourceFactory = openAviUncompressed;
 
 let currentRuntime: RuntimeController | null = null;
 let currentUnsubscribe: (() => void) | null = null;
+// Captured per-run so the main thread can construct an ArchiveClient
+// against the archive worker and so we can read W1's frame-preview
+// posts. Cleared on run end.
+let currentArchiveWorker: WorkerLike | null = null;
+let currentPreviewDetach: (() => void) | null = null;
 
 export interface StartOptions {
   factories?: WorkerFactories;
+}
+
+export function currentArchiveWorkerForClient(): WorkerLike | null {
+  return currentArchiveWorker;
+}
+
+function wrapFactories(base: WorkerFactories): WorkerFactories {
+  const wrap =
+    (role: WorkerRole, inner: WorkerFactory): WorkerFactory =>
+    () => {
+      const worker = inner();
+      if (role === 'archive') {
+        currentArchiveWorker = worker;
+      }
+      if (role === 'decodePreprocess') {
+        // Main-thread listener for W1 preview posts + heartbeat frame
+        // indexing. Runs alongside the orchestrator's own listener —
+        // neither interferes with the other.
+        const listener = (ev: { data: WorkerOutbound }): void => {
+          const msg = ev.data;
+          if (msg.kind === 'frame-preview') {
+            setLatestFrameSignal({
+              index: msg.index,
+              width: msg.width,
+              height: msg.height,
+              pixels: msg.pixels,
+            });
+            return;
+          }
+          if (msg.kind === 'frame-processed') {
+            recordFrameProcessed(msg.index, msg.epoch);
+            return;
+          }
+        };
+        worker.addEventListener('message', listener);
+        currentPreviewDetach = () => worker.removeEventListener('message', listener);
+      }
+      return worker;
+    };
+  return {
+    decodePreprocess: wrap('decodePreprocess', base.decodePreprocess),
+    fit: wrap('fit', base.fit),
+    extend: wrap('extend', base.extend),
+    archive: wrap('archive', base.archive),
+  };
 }
 
 export async function startRun(opts: StartOptions = {}): Promise<void> {
@@ -111,7 +187,8 @@ export async function startRun(opts: StartOptions = {}): Promise<void> {
   setErrorMsg(null);
   setRunState('starting');
 
-  const factories = opts.factories ?? defaultWorkerFactories();
+  const baseFactories = opts.factories ?? defaultWorkerFactories();
+  const factories = wrapFactories(baseFactories);
   const cfg = buildConfig(meta, factories);
   const rt = createRuntime(cfg);
   currentRuntime = rt;
@@ -137,6 +214,9 @@ export async function startRun(opts: StartOptions = {}): Promise<void> {
     currentUnsubscribe?.();
     currentUnsubscribe = null;
     currentRuntime = null;
+    currentPreviewDetach?.();
+    currentPreviewDetach = null;
+    currentArchiveWorker = null;
   }
 }
 

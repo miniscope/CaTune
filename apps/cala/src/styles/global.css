@@ -19,3 +19,111 @@
 .info-summary__sep {
   color: var(--text-tertiary);
 }
+
+/* ─── Single-frame viewer (Phase 5 task 24) ────────────────────────── */
+
+.frame-viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  align-items: start;
+}
+
+.frame-viewer__canvas-wrap {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+.frame-viewer__canvas {
+  image-rendering: pixelated;
+  max-width: 100%;
+  height: auto;
+  background: var(--bg-inset);
+  display: block;
+}
+
+.frame-viewer__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.frame-viewer__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.frame-viewer__stat {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.frame-viewer__stat--frame {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.frame-viewer__events-heading {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.frame-viewer__events-empty {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.frame-viewer__events-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.frame-viewer__events-item {
+  display: flex;
+  gap: var(--space-xs);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.frame-viewer__events-item:last-child {
+  border-bottom: none;
+}
+
+.frame-viewer__events-kind {
+  color: var(--accent);
+  min-width: 72px;
+  flex-shrink: 0;
+}
+
+.frame-viewer__events-detail {
+  color: var(--text-secondary);
+  word-break: break-word;
+}

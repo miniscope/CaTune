@@ -8,12 +8,18 @@ import {
   type WorkerOutbound,
   type ChannelConfig,
 } from '@calab/cala-runtime';
+import { quantizeToU8 } from '../lib/frame-preview.ts';
 
 // Heartbeat cadence: post a `frame-processed` beat every N frames so
 // the orchestrator can update status without being spammed every frame.
 // Overridable via `workerConfig.heartbeatStride` (design §7.1, no magic
 // numbers rule: every tuning knob lives in config or in a named const).
 const DEFAULT_HEARTBEAT_STRIDE = 8;
+// Preview cadence for the dashboard's SingleFrameViewer (design §12,
+// Phase 5). The preview is a u8 grayscale snapshot of the processed
+// frame — cheap to post, cheap to render with putImageData. Disabled
+// (stride ≤ 0) unless the app explicitly opts in through workerConfig.
+const DEFAULT_FRAME_PREVIEW_STRIDE = 0;
 const DEFAULT_GRAYSCALE_METHOD: GrayscaleMethod = 'Green';
 const DEFAULT_METADATA_JSON = '{}';
 const DEFAULT_PREPROCESS_CONFIG_JSON = '{}';
@@ -33,6 +39,7 @@ interface WorkerGlobalScope {
 interface DecodePreprocessWorkerConfig {
   source: { kind: 'file'; file: File };
   heartbeatStride?: number;
+  framePreviewStride?: number;
   metadataJson?: string;
   preprocessConfigJson?: string;
   grayscaleMethod?: GrayscaleMethod;
@@ -53,8 +60,11 @@ interface RuntimeHandles {
   preprocessor: Preprocessor;
   frameChannel: SabRingChannel;
   heartbeatStride: number;
+  framePreviewStride: number;
   grayscaleMethod: GrayscaleMethod;
   frameCount: number;
+  width: number;
+  height: number;
 }
 
 let handles: RuntimeHandles | null = null;
@@ -85,8 +95,9 @@ function parseConfig(raw: unknown): DecodePreprocessWorkerConfig {
   }
   return {
     source: { kind: 'file', file },
-    heartbeatStride:
-      typeof cfg.heartbeatStride === 'number' ? cfg.heartbeatStride : undefined,
+    heartbeatStride: typeof cfg.heartbeatStride === 'number' ? cfg.heartbeatStride : undefined,
+    framePreviewStride:
+      typeof cfg.framePreviewStride === 'number' ? cfg.framePreviewStride : undefined,
     metadataJson: typeof cfg.metadataJson === 'string' ? cfg.metadataJson : undefined,
     preprocessConfigJson:
       typeof cfg.preprocessConfigJson === 'string' ? cfg.preprocessConfigJson : undefined,
@@ -99,9 +110,7 @@ function parseConfig(raw: unknown): DecodePreprocessWorkerConfig {
     frameChannelSlotCount:
       typeof cfg.frameChannelSlotCount === 'number' ? cfg.frameChannelSlotCount : undefined,
     frameChannelWaitTimeoutMs:
-      typeof cfg.frameChannelWaitTimeoutMs === 'number'
-        ? cfg.frameChannelWaitTimeoutMs
-        : undefined,
+      typeof cfg.frameChannelWaitTimeoutMs === 'number' ? cfg.frameChannelWaitTimeoutMs : undefined,
     frameChannelPollIntervalMs:
       typeof cfg.frameChannelPollIntervalMs === 'number'
         ? cfg.frameChannelPollIntervalMs
@@ -139,8 +148,11 @@ async function handleInit(payload: WorkerInitPayload): Promise<void> {
     preprocessor,
     frameChannel,
     heartbeatStride: cfg.heartbeatStride ?? DEFAULT_HEARTBEAT_STRIDE,
+    framePreviewStride: cfg.framePreviewStride ?? DEFAULT_FRAME_PREVIEW_STRIDE,
     grayscaleMethod: cfg.grayscaleMethod ?? DEFAULT_GRAYSCALE_METHOD,
     frameCount: meta.frameCount,
+    width: meta.width,
+    height: meta.height,
   };
 
   post({ kind: 'ready', role: ROLE });
@@ -158,6 +170,16 @@ async function decodeLoop(h: RuntimeHandles): Promise<void> {
     h.frameChannel.writeSlot(processed, 0n);
     if ((i + 1) % h.heartbeatStride === 0) {
       post({ kind: 'frame-processed', role: ROLE, index: i, epoch: 0n });
+    }
+    if (h.framePreviewStride > 0 && (i + 1) % h.framePreviewStride === 0) {
+      post({
+        kind: 'frame-preview',
+        role: ROLE,
+        index: i,
+        width: h.width,
+        height: h.height,
+        pixels: quantizeToU8(processed),
+      });
     }
   }
 }
