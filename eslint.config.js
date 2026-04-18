@@ -57,9 +57,9 @@ export default tseslint.config(
     },
   },
 
-  // Node globals for build scripts
+  // Node globals for build scripts (root-level + per-app).
   {
-    files: ['scripts/**/*.{js,mjs,cjs,ts}'],
+    files: ['scripts/**/*.{js,mjs,cjs,ts}', 'apps/*/scripts/**/*.{js,mjs,cjs,ts}'],
     languageOptions: {
       globals: {
         ...globals.node,
