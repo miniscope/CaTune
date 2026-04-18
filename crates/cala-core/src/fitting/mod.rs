@@ -10,3 +10,7 @@
 //! `trace_bcd` → Algorithm 7, `suff_stats` → Eq. 3.25, `footprints`
 //! → Algorithm 8, `residual` → Eq. 3.24, `throttle` → underfit
 //! correction discussion following Eq. 3.24.
+
+mod trace_bcd;
+
+pub use trace_bcd::evaluate_traces;
