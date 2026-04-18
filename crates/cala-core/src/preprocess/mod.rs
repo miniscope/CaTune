@@ -3,19 +3,21 @@
 //! Each stage is a pure function: immutable `Frame` in, `FrameMut` out.
 //! The caller owns the input / output buffers and ping-pongs them between
 //! stages. Preprocess holds no global mutable state; per-stream state
-//! (motion anchors, baseline min-image) is explicit and passed in.
+//! (motion anchors) is explicit and passed in.
 
 mod band;
-mod baseline;
 mod butterworth;
 mod fft2d;
+mod gaussian;
 mod hot_pixel;
+mod median;
 mod motion;
 mod pipeline;
 
 pub use band::band_subtract;
-pub use baseline::BaselineState;
 pub use butterworth::{butterworth_highpass, high_pass_cutoff_cycles_per_pixel};
+pub use gaussian::{gaussian_blur, GaussianKernel};
 pub use hot_pixel::hot_pixel_median_3x3;
+pub use median::median_filter;
 pub use motion::{MotionShift, MotionState};
 pub use pipeline::PreprocessPipeline;

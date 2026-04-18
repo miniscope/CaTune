@@ -1,18 +1,21 @@
 //! Composite preprocess pipeline: hot-pixel → Butterworth high-pass
-//! → band subtraction → dual-anchor motion correction → running-min
-//! baseline. Owns ping-pong scratch buffers and the two stateful
-//! stages (`MotionState`, `BaselineState`) so callers just push frames
-//! through it one at a time.
+//! → band subtraction → dual-anchor motion correction → post-motion
+//! median denoise. Owns ping-pong scratch buffers and the stateful
+//! motion stage so callers just push frames through it one at a time.
+//!
+//! No baseline stage by design (§3.1): slow spatial baseline /
+//! vignetting / illumination are OMF background components, not
+//! preprocessing's job.
 
 use super::{
     band_subtract, butterworth_highpass, high_pass_cutoff_cycles_per_pixel, hot_pixel_median_3x3,
-    BaselineState, MotionShift, MotionState,
+    median_filter, MotionShift, MotionState,
 };
 use crate::assets::{Frame, FrameMut, ShapeError};
 use crate::config::{PreprocessConfig, RecordingMetadata};
 
 /// Streaming preprocess for a fixed-shape frame sequence. `process_frame`
-/// runs all five preprocess stages and returns the detected motion shift
+/// runs all preprocess stages and returns the detected motion shift
 /// for the frame it just saw.
 pub struct PreprocessPipeline {
     height: usize,
@@ -22,7 +25,6 @@ pub struct PreprocessPipeline {
     buf_a: Vec<f32>,
     buf_b: Vec<f32>,
     motion: MotionState,
-    baseline: BaselineState,
 }
 
 impl PreprocessPipeline {
@@ -41,8 +43,7 @@ impl PreprocessPipeline {
             butterworth_cutoff: cutoff,
             buf_a: vec![0.0; n],
             buf_b: vec![0.0; n],
-            motion: MotionState::new(height, width),
-            baseline: BaselineState::new(height, width),
+            motion: MotionState::with_config(height, width, &cfg),
         }
     }
 
@@ -62,25 +63,25 @@ impl PreprocessPipeline {
         &self.motion
     }
 
-    pub fn baseline_state(&self) -> &BaselineState {
-        &self.baseline
-    }
-
     /// Reset all stateful stages. `process_frame` after this call
-    /// behaves as first-frame (motion anchors empty, baseline +∞).
+    /// behaves as first-frame (motion anchors empty).
     pub fn reset(&mut self) {
         self.motion.reset();
-        self.baseline = BaselineState::new(self.height, self.width);
     }
 
     /// Run the full preprocess pipeline on one frame.
     ///
-    /// Buffers ping-pong:
-    ///   input → [hot_pixel] → buf_a
-    ///   buf_a → [butterworth] → buf_b
-    ///   buf_b → [band]        → buf_a
-    ///   buf_a → [motion]      → buf_b
-    ///   buf_b → [baseline]    → output
+    /// Stages marked "opt-in" are skipped (buffer passthrough via
+    /// `mem::swap`) when disabled in config. The default stack is
+    /// hot-pix → motion; everything else is for ablation or
+    /// recordings where OMF needs help.
+    ///
+    ///   input → [hot_pixel]   → buf_a   (always)
+    ///   buf_a → [butterworth] → buf_b   (opt-in: high_pass_enabled)
+    ///   buf_b → [band]        → buf_a   (opt-in: band_enabled)
+    ///   buf_a → [motion]      → buf_b   (always)
+    ///   buf_b → [denoise]     → output  (opt-in: denoise_median_ksize > 1;
+    ///                                    when off, buf_b copies to output)
     pub fn process_frame(
         &mut self,
         input: Frame<'_>,
@@ -107,8 +108,8 @@ impl PreprocessPipeline {
             hot_pixel_median_3x3(input, &mut buf_a_mut)?;
         }
 
-        // 2. Butterworth high-pass: buf_a → buf_b
-        {
+        // 2. Butterworth high-pass: buf_a → buf_b (or pass through via swap).
+        if self.cfg.high_pass_enabled {
             let buf_a_view =
                 Frame::new(&self.buf_a, self.height, self.width).expect("pipeline buf_a invariant");
             let mut buf_b_mut = FrameMut::new(&mut self.buf_b, self.height, self.width)
@@ -119,15 +120,19 @@ impl PreprocessPipeline {
                 self.butterworth_cutoff,
                 self.cfg.high_pass_order,
             )?;
+        } else {
+            std::mem::swap(&mut self.buf_a, &mut self.buf_b);
         }
 
-        // 3. Band (double-centering): buf_b → buf_a
-        {
+        // 3. Band (double-centering): buf_b → buf_a (or swap).
+        if self.cfg.band_enabled {
             let buf_b_view =
                 Frame::new(&self.buf_b, self.height, self.width).expect("pipeline buf_b invariant");
             let mut buf_a_mut = FrameMut::new(&mut self.buf_a, self.height, self.width)
                 .expect("pipeline buf_a invariant");
             band_subtract(buf_b_view, &mut buf_a_mut)?;
+        } else {
+            std::mem::swap(&mut self.buf_a, &mut self.buf_b);
         }
 
         // 4. Motion correction (dual anchor): buf_a → buf_b
@@ -140,11 +145,16 @@ impl PreprocessPipeline {
                 .motion_correct(buf_a_view, &mut buf_b_mut, &self.cfg)?
         };
 
-        // 5. Baseline running-min: buf_b → output
-        {
+        // 5. Post-motion median denoise: buf_b → output, else straight
+        //    copy. Last stage, so we write to the caller's output buffer
+        //    in both branches.
+        let ksize = self.cfg.denoise_median_ksize;
+        if ksize <= 1 {
+            output.pixels_mut().copy_from_slice(&self.buf_b);
+        } else {
             let buf_b_view =
                 Frame::new(&self.buf_b, self.height, self.width).expect("pipeline buf_b invariant");
-            self.baseline.subtract_baseline(buf_b_view, output)?;
+            median_filter(buf_b_view, output, ksize)?;
         }
 
         Ok(shift)

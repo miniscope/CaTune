@@ -1,7 +1,7 @@
 //! Integration tests for MotionState (local anchor, task 7a).
 
 use calab_cala_core::assets::{Frame, FrameMut};
-use calab_cala_core::config::PreprocessConfig;
+use calab_cala_core::config::{MotionSubpixel, PreprocessConfig};
 use calab_cala_core::preprocess::{MotionShift, MotionState};
 
 fn make_gaussian_blob(h: usize, w: usize, cy: f32, cx: f32, sigma: f32) -> Vec<f32> {
@@ -139,9 +139,13 @@ fn max_shift_clamps_search() {
     let shifted = roll_2d(&anchor, h, w, 10, 0);
 
     let mut state = MotionState::new(h, w);
+    // Pin to parabolic subpixel so the per-pass bound is max_shift + 0.5.
+    // Centroid (the default) can add up to ±radius, which loosens the
+    // bound and obscures what this test is checking.
     let cfg = PreprocessConfig::default()
         .with_motion_max_shift_px(3)
-        .with_motion_use_global_anchor(false);
+        .with_motion_use_global_anchor(false)
+        .with_motion_subpixel(MotionSubpixel::Parabolic);
     let _ = correct(&mut state, &anchor, h, w, &cfg);
     let (shift, _) = correct(&mut state, &shifted, h, w, &cfg);
     assert!(shift.dy.abs() <= 3.5, "dy = {}", shift.dy);
@@ -151,13 +155,15 @@ fn max_shift_clamps_search() {
 #[test]
 fn max_shift_clamps_each_pass_independently() {
     // With global on, each pass independently clamps to max_shift, so the
-    // composite can reach up to 2·max_shift + 2·0.5 (subpixel per pass).
+    // composite can reach up to 2·max_shift + 2·0.5 (parabolic subpixel).
     let (h, w) = (32, 32);
     let anchor = make_gaussian_blob(h, w, (h / 2) as f32, (w / 2) as f32, 2.0);
     let shifted = roll_2d(&anchor, h, w, 10, 0);
 
     let mut state = MotionState::new(h, w);
-    let cfg = PreprocessConfig::default().with_motion_max_shift_px(3);
+    let cfg = PreprocessConfig::default()
+        .with_motion_max_shift_px(3)
+        .with_motion_subpixel(MotionSubpixel::Parabolic);
     let _ = correct(&mut state, &anchor, h, w, &cfg);
     let (shift, _) = correct(&mut state, &shifted, h, w, &cfg);
     assert!(shift.dy.abs() <= 7.0, "dy = {}", shift.dy);

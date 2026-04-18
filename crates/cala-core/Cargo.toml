@@ -17,6 +17,16 @@ name = "cala-preprocess-avi"
 path = "src/bin/preprocess_avi.rs"
 required-features = ["native-cli"]
 
+[[bin]]
+name = "cala-concat-avi"
+path = "src/bin/concat_avi.rs"
+required-features = ["native-cli"]
+
+[[bin]]
+name = "cala-dump-stages-avi"
+path = "src/bin/dump_stages_avi.rs"
+required-features = ["native-cli"]
+
 [features]
 default = ["jsbindings"]
 jsbindings = ["dep:wasm-bindgen", "dep:console_error_panic_hook", "dep:serde", "dep:serde-wasm-bindgen"]

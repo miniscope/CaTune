@@ -1,4 +1,5 @@
 .planning/
+.test_data/
 node_modules/
 dist/
 apps/*/dist/

@@ -1,10 +1,10 @@
 //! Phase 1 end-to-end integration test.
 //!
-//! Drives synthetic frames through the *full* preprocess pipeline
-//! (hot-pixel → Butterworth → band → motion → baseline) via an AVI
-//! round-trip: in-memory AVI → AVI reader → PreprocessPipeline →
-//! AVI writer → AVI reader. Pins composite invariants and checks
-//! the reader + writer + pipeline agree on frame count and shape.
+//! Drives synthetic frames through the preprocess pipeline (hot-pixel
+//! → Butterworth → band → motion → denoise) via an AVI round-trip:
+//! in-memory AVI → AVI reader → PreprocessPipeline → AVI writer →
+//! AVI reader. Pins composite invariants and checks the reader + writer
+//! + pipeline agree on frame count and shape.
 
 use calab_cala_core::assets::{Frame, FrameMut};
 use calab_cala_core::config::{GrayscaleMethod, PreprocessConfig, RecordingMetadata};
@@ -16,7 +16,6 @@ use calab_cala_core::preprocess::PreprocessPipeline;
 ///   - mild row + column gradient (exercises band subtraction)
 ///   - a bright square "neuron" that drifts a pixel every other frame
 ///     (exercises motion correction)
-///   - gradually brightening (exercises baseline removal)
 fn make_synthetic_frames(w: usize, h: usize, n: usize) -> Vec<Vec<u8>> {
     let mut frames = Vec::with_capacity(n);
     for t in 0..n {
@@ -47,7 +46,6 @@ struct PipelineRun {
     frame_count: u32,
     n: usize,
     u8_outputs: Vec<Vec<u8>>,
-    min_raw: f32,
 }
 
 fn drive_pipeline(w: usize, h: usize, frames: &[Vec<u8>]) -> PipelineRun {
@@ -65,7 +63,6 @@ fn drive_pipeline(w: usize, h: usize, frames: &[Vec<u8>]) -> PipelineRun {
     let mut in_buf = vec![0.0_f32; n];
     let mut out_buf = vec![0.0_f32; n];
     let mut u8_outputs = Vec::with_capacity(frames.len());
-    let mut min_raw = f32::INFINITY;
 
     for i in 0..reader.frame_count() {
         reader
@@ -77,11 +74,6 @@ fn drive_pipeline(w: usize, h: usize, frames: &[Vec<u8>]) -> PipelineRun {
                 &mut FrameMut::new(&mut out_buf, h, w).unwrap(),
             )
             .unwrap();
-        for &v in &out_buf {
-            if v < min_raw {
-                min_raw = v;
-            }
-        }
         u8_outputs.push(
             out_buf
                 .iter()
@@ -94,7 +86,6 @@ fn drive_pipeline(w: usize, h: usize, frames: &[Vec<u8>]) -> PipelineRun {
         frame_count: reader.frame_count(),
         n,
         u8_outputs,
-        min_raw,
     }
 }
 
@@ -111,35 +102,7 @@ fn pipeline_preserves_frame_count_and_shape() {
 }
 
 #[test]
-fn pipeline_output_is_nonnegative_after_baseline() {
-    // Baseline stage subtracts a per-pixel running minimum; by
-    // construction every output pixel is ≥ 0. Tiny negative values
-    // from f32 roundoff are tolerated via a small epsilon.
-    let (w, h) = (32, 32);
-    let frames = make_synthetic_frames(w, h, 6);
-    let run = drive_pipeline(w, h, &frames);
-    assert!(
-        run.min_raw >= -1e-4,
-        "min post-baseline value = {} should be ~≥ 0",
-        run.min_raw
-    );
-}
-
-#[test]
-fn pipeline_first_frame_baseline_is_zero() {
-    // The very first frame is its own baseline, so frame 0 of the
-    // pipeline output is all-zeros (within f32 roundoff).
-    let (w, h) = (16, 16);
-    let frames = make_synthetic_frames(w, h, 3);
-    let run = drive_pipeline(w, h, &frames);
-    let first = &run.u8_outputs[0];
-    for (i, &v) in first.iter().enumerate() {
-        assert_eq!(v, 0, "frame 0 pixel {i} = {v}, expected 0");
-    }
-}
-
-#[test]
-fn pipeline_reset_drops_motion_and_baseline_state() {
+fn pipeline_reset_drops_motion_state() {
     let (w, h) = (16, 16);
     let frames = make_synthetic_frames(w, h, 3);
     let metadata = RecordingMetadata::new(2.0);
@@ -163,22 +126,9 @@ fn pipeline_reset_drops_motion_and_baseline_state() {
             .unwrap();
     }
     assert!(pipeline.motion_state().has_anchor());
-    assert!(pipeline
-        .baseline_state()
-        .min_image()
-        .pixels()
-        .iter()
-        .any(|&v| v.is_finite()));
 
     pipeline.reset();
     assert!(!pipeline.motion_state().has_anchor());
-    // After reset, baseline min_image should be +∞ everywhere.
-    for &v in pipeline.baseline_state().min_image().pixels() {
-        assert!(
-            v.is_infinite() && v > 0.0,
-            "min_image should be +∞ post-reset, got {v}"
-        );
-    }
 }
 
 #[test]
