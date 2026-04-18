@@ -239,33 +239,185 @@ impl<'a> AviUncompressedReader<'a> {
         method: GrayscaleMethod,
     ) -> Result<(), AviError> {
         let pixels = (self.width as usize) * (self.height as usize);
-        if output.len() != pixels {
-            return Err(AviError::OutputLengthMismatch {
-                expected: pixels,
-                actual: output.len(),
-            });
-        }
         let bytes = self.frame_bytes(n)?;
-        match self.channels {
-            1 => {
-                for (i, &b) in bytes.iter().enumerate() {
-                    output[i] = b as f32;
-                }
+        decode_grayscale_f32(bytes, pixels, self.channels, output, method)
+    }
+
+    /// Byte offsets of each frame's pixel data. Exposed so owning
+    /// wrappers (see `OwnedAviReader`) can cache the index without
+    /// re-parsing the container on every frame read.
+    pub fn frame_offsets(&self) -> &[usize] {
+        &self.frame_offsets
+    }
+
+    /// Size in bytes of one frame's pixel block.
+    pub fn frame_byte_size(&self) -> usize {
+        self.frame_byte_size
+    }
+}
+
+/// Shared decode helper used by both the borrowed and owning readers.
+/// Writes `output` (length = `pixels`) from the raw frame bytes,
+/// reducing 24-bit color to grayscale via `method`. Rejects any
+/// channel count other than 1 or 3.
+pub(crate) fn decode_grayscale_f32(
+    bytes: &[u8],
+    pixels: usize,
+    channels: u8,
+    output: &mut [f32],
+    method: GrayscaleMethod,
+) -> Result<(), AviError> {
+    if output.len() != pixels {
+        return Err(AviError::OutputLengthMismatch {
+            expected: pixels,
+            actual: output.len(),
+        });
+    }
+    match channels {
+        1 => {
+            if bytes.len() < pixels {
+                return Err(AviError::Truncated("frame data"));
             }
-            3 => {
-                for i in 0..pixels {
-                    let b = bytes[i * 3] as f32;
-                    let g = bytes[i * 3 + 1] as f32;
-                    let r = bytes[i * 3 + 2] as f32;
-                    output[i] = match method {
-                        GrayscaleMethod::Green => g,
-                        GrayscaleMethod::Luminance => 0.299 * r + 0.587 * g + 0.114 * b,
-                    };
-                }
+            for (i, &b) in bytes[..pixels].iter().enumerate() {
+                output[i] = b as f32;
             }
-            _ => return Err(AviError::Unsupported("channel count")),
         }
-        Ok(())
+        3 => {
+            if bytes.len() < pixels * 3 {
+                return Err(AviError::Truncated("frame data"));
+            }
+            for i in 0..pixels {
+                let b = bytes[i * 3] as f32;
+                let g = bytes[i * 3 + 1] as f32;
+                let r = bytes[i * 3 + 2] as f32;
+                output[i] = match method {
+                    GrayscaleMethod::Green => g,
+                    GrayscaleMethod::Luminance => 0.299 * r + 0.587 * g + 0.114 * b,
+                };
+            }
+        }
+        _ => return Err(AviError::Unsupported("channel count")),
+    }
+    Ok(())
+}
+
+/// Owning counterpart to `AviUncompressedReader` for callers that
+/// need to hold the AVI bytes across the WASM / PyO3 boundary. Parses
+/// the RIFF container once on construction, caches the frame index,
+/// then decodes frames directly from the owned buffer without
+/// re-walking the container.
+///
+/// This type carries no `'a` lifetime — it owns `Vec<u8>` internally —
+/// so it can be stored inside a `#[wasm_bindgen]` struct or returned
+/// from a PyO3 extension function without lifetime friction.
+#[derive(Debug, Clone)]
+pub struct OwnedAviReader {
+    bytes: Vec<u8>,
+    width: u32,
+    height: u32,
+    frame_count: u32,
+    micro_sec_per_frame: u32,
+    bit_depth: u16,
+    channels: u8,
+    frame_byte_size: usize,
+    frame_offsets: Vec<usize>,
+}
+
+impl OwnedAviReader {
+    /// Parse an AVI from the given owned byte buffer. Walks the RIFF
+    /// container once and caches the frame offset index.
+    pub fn new(bytes: Vec<u8>) -> Result<Self, AviError> {
+        let (
+            width,
+            height,
+            frame_count,
+            micro_sec_per_frame,
+            bit_depth,
+            channels,
+            frame_byte_size,
+            frame_offsets,
+        ) = {
+            let reader = AviUncompressedReader::new(&bytes)?;
+            (
+                reader.width(),
+                reader.height(),
+                reader.frame_count(),
+                reader.micro_sec_per_frame,
+                reader.bit_depth(),
+                reader.channels(),
+                reader.frame_byte_size(),
+                reader.frame_offsets().to_vec(),
+            )
+        };
+        Ok(Self {
+            bytes,
+            width,
+            height,
+            frame_count,
+            micro_sec_per_frame,
+            bit_depth,
+            channels,
+            frame_byte_size,
+            frame_offsets,
+        })
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn frame_count(&self) -> u32 {
+        self.frame_count
+    }
+
+    pub fn fps(&self) -> f32 {
+        if self.micro_sec_per_frame == 0 {
+            0.0
+        } else {
+            1_000_000.0 / self.micro_sec_per_frame as f32
+        }
+    }
+
+    pub fn bit_depth(&self) -> u16 {
+        self.bit_depth
+    }
+
+    pub fn channels(&self) -> u8 {
+        self.channels
+    }
+
+    /// Raw pixel bytes for frame `n`. Aliases the owned buffer — no
+    /// allocation.
+    pub fn frame_bytes(&self, n: u32) -> Result<&[u8], AviError> {
+        if n >= self.frame_count {
+            return Err(AviError::FrameOutOfRange(n));
+        }
+        let offset = self.frame_offsets[n as usize];
+        let end = offset
+            .checked_add(self.frame_byte_size)
+            .ok_or(AviError::Truncated("frame end"))?;
+        if end > self.bytes.len() {
+            return Err(AviError::Truncated("frame data"));
+        }
+        Ok(&self.bytes[offset..end])
+    }
+
+    /// Decode frame `n` into an `f32` grayscale buffer. Shares the
+    /// exact decode path with `AviUncompressedReader`, so bytes-in /
+    /// pixels-out parity is guaranteed.
+    pub fn read_frame_grayscale_f32(
+        &self,
+        n: u32,
+        output: &mut [f32],
+        method: GrayscaleMethod,
+    ) -> Result<(), AviError> {
+        let pixels = (self.width as usize) * (self.height as usize);
+        let bytes = self.frame_bytes(n)?;
+        decode_grayscale_f32(bytes, pixels, self.channels, output, method)
     }
 }
 

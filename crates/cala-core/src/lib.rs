@@ -7,6 +7,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod assets;
+pub mod bindings;
 pub mod buffers;
 pub mod config;
 pub mod extending;

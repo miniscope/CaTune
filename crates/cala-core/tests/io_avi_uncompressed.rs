@@ -5,7 +5,7 @@
 //! specific metadata and decoded samples. No external sample files.
 
 use calab_cala_core::config::GrayscaleMethod;
-use calab_cala_core::io::{AviError, AviUncompressedReader};
+use calab_cala_core::io::{AviError, AviUncompressedReader, OwnedAviReader};
 
 // ---- Synthetic AVI builder ----
 //
@@ -362,4 +362,149 @@ fn truncated_buffer_errors() {
         err,
         AviError::Truncated(_) | AviError::BadHeader(_) | AviError::NotAvi
     ));
+}
+
+// ---- OwnedAviReader parity tests ----
+//
+// The owning reader is what the WASM binding holds (JS can't hand us
+// a borrowed slice across the boundary). Its decode path must match
+// the borrowed reader byte-for-byte or the WASM app would diverge
+// from the Rust native path silently.
+
+#[test]
+fn owned_reader_metadata_matches_borrowed_reader() {
+    let opts = AviOpts {
+        width: 3,
+        height: 2,
+        fps: 20,
+        bit_depth: 8,
+        include_idx: false,
+    };
+    let frames = vec![
+        vec![0u8, 10, 20, 30, 40, 50],
+        vec![60u8, 70, 80, 90, 100, 110],
+    ];
+    let bytes = build_avi(&opts, &frames);
+
+    // Capture the borrowed reader's metadata, drop it, then move the
+    // byte buffer into the owning reader.
+    let (b_w, b_h, b_count, b_depth, b_channels, b_fps) = {
+        let borrowed = AviUncompressedReader::new(&bytes).unwrap();
+        (
+            borrowed.width(),
+            borrowed.height(),
+            borrowed.frame_count(),
+            borrowed.bit_depth(),
+            borrowed.channels(),
+            borrowed.fps(),
+        )
+    };
+    let owned = OwnedAviReader::new(bytes).unwrap();
+    assert_eq!(owned.width(), b_w);
+    assert_eq!(owned.height(), b_h);
+    assert_eq!(owned.frame_count(), b_count);
+    assert_eq!(owned.bit_depth(), b_depth);
+    assert_eq!(owned.channels(), b_channels);
+    assert!((owned.fps() - b_fps).abs() < 1e-3);
+}
+
+#[test]
+fn owned_reader_frame_bytes_match_borrowed_reader() {
+    let opts = AviOpts {
+        width: 4,
+        height: 3,
+        fps: 30,
+        bit_depth: 24,
+        include_idx: true,
+    };
+    // 4×3 = 12 px × 3 channels = 36 bytes per frame.
+    let frames = vec![
+        (0u8..36u8).collect::<Vec<_>>(),
+        (36u8..72u8).collect::<Vec<_>>(),
+        (100u8..136u8).collect::<Vec<_>>(),
+    ];
+    let bytes = build_avi(&opts, &frames);
+
+    let expected_frames: Vec<Vec<u8>> = {
+        let borrowed = AviUncompressedReader::new(&bytes).unwrap();
+        (0..borrowed.frame_count())
+            .map(|n| borrowed.frame_bytes(n).unwrap().to_vec())
+            .collect()
+    };
+    let owned = OwnedAviReader::new(bytes).unwrap();
+    for (n, expected) in expected_frames.iter().enumerate() {
+        let b = owned.frame_bytes(n as u32).unwrap();
+        assert_eq!(b, &expected[..], "frame {n} raw bytes must match");
+    }
+}
+
+#[test]
+fn owned_reader_grayscale_decode_matches_borrowed() {
+    let opts = AviOpts {
+        width: 2,
+        height: 2,
+        fps: 30,
+        bit_depth: 24,
+        include_idx: false,
+    };
+    // Two BGR frames with known R/G/B values.
+    let frames = vec![
+        vec![10u8, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+        vec![5u8, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+    ];
+    let bytes = build_avi(&opts, &frames);
+
+    let pixels = 4;
+    // Compute borrowed-reader outputs up front, then move the buffer
+    // into the owning reader — this sidesteps the borrow vs. move
+    // conflict without cloning.
+    let mut expected: Vec<(u32, GrayscaleMethod, Vec<f32>)> = Vec::new();
+    {
+        let borrowed = AviUncompressedReader::new(&bytes).unwrap();
+        for method in [GrayscaleMethod::Green, GrayscaleMethod::Luminance] {
+            for n in 0..2u32 {
+                let mut buf = vec![0.0f32; pixels];
+                borrowed
+                    .read_frame_grayscale_f32(n, &mut buf, method)
+                    .unwrap();
+                expected.push((n, method, buf));
+            }
+        }
+    }
+    let owned = OwnedAviReader::new(bytes).unwrap();
+    for (n, method, expected_px) in expected {
+        let mut got = vec![0.0f32; pixels];
+        owned.read_frame_grayscale_f32(n, &mut got, method).unwrap();
+        assert_eq!(
+            got, expected_px,
+            "frame {n} method {method:?} must decode identically"
+        );
+    }
+}
+
+#[test]
+fn owned_reader_rejects_out_of_range_frame() {
+    let opts = AviOpts {
+        width: 2,
+        height: 2,
+        fps: 30,
+        bit_depth: 8,
+        include_idx: false,
+    };
+    let frames = vec![vec![1u8, 2, 3, 4]];
+    let bytes = build_avi(&opts, &frames);
+    let owned = OwnedAviReader::new(bytes).unwrap();
+    match owned.frame_bytes(5) {
+        Err(AviError::FrameOutOfRange(n)) => assert_eq!(n, 5),
+        other => panic!("expected FrameOutOfRange, got {other:?}"),
+    }
+}
+
+#[test]
+fn owned_reader_surfaces_parse_errors() {
+    // A buffer that is obviously not an AVI — owned reader should
+    // bubble up the same error the borrowed reader does.
+    let bytes = b"NOT_AN_AVI_FILE".to_vec();
+    let err = OwnedAviReader::new(bytes).unwrap_err();
+    assert_eq!(err, AviError::NotAvi);
 }
