@@ -7,10 +7,12 @@
 
 mod footprints;
 mod frame;
+mod suff_stats;
 mod traces;
 
 pub use footprints::Footprints;
 pub use frame::{Frame, FrameMut, ShapeError};
+pub use suff_stats::SuffStats;
 pub use traces::Traces;
 
 /// Logical axis labels used across the crate.
