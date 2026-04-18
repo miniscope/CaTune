@@ -11,6 +11,8 @@
 //! → Algorithm 8, `residual` → Eq. 3.24, `throttle` → underfit
 //! correction discussion following Eq. 3.24.
 
+mod suff_stats;
 mod trace_bcd;
 
+pub use suff_stats::evaluate_suff_stats;
 pub use trace_bcd::evaluate_traces;
