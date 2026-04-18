@@ -297,3 +297,79 @@ impl PreprocessConfig {
         self
     }
 }
+
+// ── Fit loop (Phase 2, OMF) ────────────────────────────────────────────
+
+/// Relative convergence tolerance for `EvaluateTraces` (thesis Algorithm 7).
+/// Inner loop exits when `‖c − c_step‖ < ε · ‖c_step‖`. 1e-3 is tight
+/// enough that downstream suff-stats see well-converged traces without
+/// blowing the per-frame iteration budget on asymptotic refinement.
+pub const DEFAULT_TRACE_TOL: f32 = 1e-3;
+
+/// Hard cap on `EvaluateTraces` iterations. Bounds per-frame latency
+/// when BCD fails to converge (pathological overfit on an unmodeled
+/// frame — see thesis §3.2.3 "bounded latency" discussion).
+pub const DEFAULT_TRACE_MAX_ITER: u32 = 20;
+
+/// Number of outer iterations of `EvaluateFootprints` per frame
+/// (thesis Algorithm 8 `miter`). Footprint updates accumulate over
+/// many frames via W/M, so a small per-frame iter count is fine.
+pub const DEFAULT_FOOTPRINT_MAX_ITER: u32 = 5;
+
+/// SNR threshold `c₀` for the Heaviside gate in `EvaluateSuffStats`
+/// (thesis Eq. 3.25, `f(c) = c · H(c − c₀)`). Samples with `c_i ≤ c₀`
+/// contribute nothing to `W`, `M` on this frame. Prevents footprints
+/// from drifting toward noise on long recordings when a cell is quiet.
+/// Units are the same as trace amplitude (same as preprocessed pixel
+/// intensity). Tune per recording.
+pub const DEFAULT_SNR_C0: f32 = 0.0;
+
+/// Per-frame tuning for the OMF fit loop.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FitConfig {
+    /// Relative tolerance for `EvaluateTraces` BCD convergence.
+    pub trace_tol: f32,
+    /// Maximum BCD iterations inside one call to `EvaluateTraces`.
+    pub trace_max_iter: u32,
+    /// Outer iterations of `EvaluateFootprints` per frame.
+    pub footprint_max_iter: u32,
+    /// Heaviside SNR threshold `c₀` for suff-stats gating.
+    pub snr_c0: f32,
+}
+
+impl Default for FitConfig {
+    fn default() -> Self {
+        Self {
+            trace_tol: DEFAULT_TRACE_TOL,
+            trace_max_iter: DEFAULT_TRACE_MAX_ITER,
+            footprint_max_iter: DEFAULT_FOOTPRINT_MAX_ITER,
+            snr_c0: DEFAULT_SNR_C0,
+        }
+    }
+}
+
+impl FitConfig {
+    pub fn with_trace_tol(mut self, tol: f32) -> Self {
+        assert!(tol > 0.0, "trace_tol must be positive (got {tol})");
+        self.trace_tol = tol;
+        self
+    }
+
+    pub fn with_trace_max_iter(mut self, n: u32) -> Self {
+        assert!(n >= 1, "trace_max_iter must be ≥ 1 (got {n})");
+        self.trace_max_iter = n;
+        self
+    }
+
+    pub fn with_footprint_max_iter(mut self, n: u32) -> Self {
+        assert!(n >= 1, "footprint_max_iter must be ≥ 1 (got {n})");
+        self.footprint_max_iter = n;
+        self
+    }
+
+    pub fn with_snr_c0(mut self, c0: f32) -> Self {
+        assert!(c0 >= 0.0, "snr_c0 must be non-negative (got {c0})");
+        self.snr_c0 = c0;
+        self
+    }
+}

@@ -5,9 +5,17 @@
 //! asset suite (footprints A, traces C, suff-stats W/M, groups G, residual R)
 //! arrives in Phase 2+; see design §5.
 
+mod footprints;
 mod frame;
+mod groups;
+mod suff_stats;
+mod traces;
 
+pub use footprints::Footprints;
 pub use frame::{Frame, FrameMut, ShapeError};
+pub use groups::Groups;
+pub use suff_stats::SuffStats;
+pub use traces::Traces;
 
 /// Logical axis labels used across the crate.
 ///

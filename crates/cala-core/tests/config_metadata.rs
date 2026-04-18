@@ -8,8 +8,10 @@
 //! it reads from the config struct the caller passed in.
 
 use calab_cala_core::config::{
-    PreprocessConfig, RecordingMetadata, DEFAULT_HIGH_PASS_DIAMETERS, DEFAULT_HIGH_PASS_ORDER,
-    DEFAULT_MOTION_MAX_SHIFT_PX, DEFAULT_MOTION_USE_GLOBAL_ANCHOR, DEFAULT_NEURON_DIAMETER_UM,
+    FitConfig, PreprocessConfig, RecordingMetadata, DEFAULT_FOOTPRINT_MAX_ITER,
+    DEFAULT_HIGH_PASS_DIAMETERS, DEFAULT_HIGH_PASS_ORDER, DEFAULT_MOTION_MAX_SHIFT_PX,
+    DEFAULT_MOTION_USE_GLOBAL_ANCHOR, DEFAULT_NEURON_DIAMETER_UM, DEFAULT_SNR_C0,
+    DEFAULT_TRACE_MAX_ITER, DEFAULT_TRACE_TOL,
 };
 use calab_cala_core::preprocess::high_pass_cutoff_cycles_per_pixel;
 
@@ -183,4 +185,46 @@ fn overriding_k_changes_derived_cutoff() {
     let f_loose = high_pass_cutoff_cycles_per_pixel(&md, &cfg_loose);
     assert_close(f_tight, 1.0 / 10.0, "K=2 → cutoff period 10 px");
     assert_close(f_loose, 1.0 / 25.0, "K=5 → cutoff period 25 px");
+}
+
+// ----- FitConfig -----
+
+#[test]
+fn fit_config_default_uses_defaults() {
+    let cfg = FitConfig::default();
+    assert_close(cfg.trace_tol, DEFAULT_TRACE_TOL, "trace_tol default");
+    assert_eq!(cfg.trace_max_iter, DEFAULT_TRACE_MAX_ITER);
+    assert_eq!(cfg.footprint_max_iter, DEFAULT_FOOTPRINT_MAX_ITER);
+    assert_close(cfg.snr_c0, DEFAULT_SNR_C0, "snr_c0 default");
+}
+
+#[test]
+fn fit_config_builder_overrides_are_independent() {
+    let cfg = FitConfig::default()
+        .with_trace_tol(5e-4)
+        .with_trace_max_iter(50)
+        .with_footprint_max_iter(3)
+        .with_snr_c0(2.5);
+    assert_close(cfg.trace_tol, 5e-4, "trace_tol override");
+    assert_eq!(cfg.trace_max_iter, 50);
+    assert_eq!(cfg.footprint_max_iter, 3);
+    assert_close(cfg.snr_c0, 2.5, "snr_c0 override");
+}
+
+#[test]
+#[should_panic(expected = "trace_tol must be positive")]
+fn fit_config_rejects_nonpositive_tol() {
+    let _ = FitConfig::default().with_trace_tol(0.0);
+}
+
+#[test]
+#[should_panic(expected = "trace_max_iter must be ≥ 1")]
+fn fit_config_rejects_zero_trace_iter() {
+    let _ = FitConfig::default().with_trace_max_iter(0);
+}
+
+#[test]
+#[should_panic(expected = "snr_c0 must be non-negative")]
+fn fit_config_rejects_negative_snr_c0() {
+    let _ = FitConfig::default().with_snr_c0(-0.1);
 }
