@@ -29,7 +29,14 @@ const App: Component = () => {
 
   return (
     <DashboardShell header={<CaLaHeader />}>
-      <Show when={state.file !== null} fallback={<ImportOverlay />}>
+      <Show
+        when={
+          state.runState === 'starting' ||
+          state.runState === 'running' ||
+          state.runState === 'stopping'
+        }
+        fallback={<ImportOverlay />}
+      >
         <SingleFrameViewer />
       </Show>
     </DashboardShell>

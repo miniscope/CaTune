@@ -139,11 +139,13 @@ export function ImportOverlay(): JSX.Element {
         )}
       </Show>
 
-      <Show when={localError()}>
-        <div class="error-card">
-          <span class="error-card__icon">!</span>
-          <span>{localError()}</span>
-        </div>
+      <Show when={localError() ?? state.errorMsg}>
+        {(msg) => (
+          <div class="error-card">
+            <span class="error-card__icon">!</span>
+            <span>{msg()}</span>
+          </div>
+        )}
       </Show>
 
       <Show when={state.file}>

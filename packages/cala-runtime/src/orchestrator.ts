@@ -344,7 +344,10 @@ class Runtime implements RuntimeController {
   private buildWorkerConfig(role: WorkerRole, source: RuntimeSource): unknown {
     const override = this.cfg.workerConfigs?.[role];
     if (role === 'decodePreprocess') {
-      return { source, ...(override as object | undefined) };
+      // Structured-clone only the clonable fields of the source —
+      // frameSourceFactory is an in-process hook, not a transferable.
+      const clonable = { kind: source.kind, file: source.file };
+      return { source: clonable, ...(override as object | undefined) };
     }
     return override ?? null;
   }
@@ -367,18 +370,27 @@ class Runtime implements RuntimeController {
       case 'snapshot-request': {
         const fit = this.workers.get('fit');
         if (!fit) return;
-        fit.postMessage({
-          kind: 'snapshot-ack',
+        const ack = {
+          kind: 'snapshot-ack' as const,
           requestId: msg.requestId,
           epoch: this.currentEpoch,
           numComponents: 0,
           pixels: 0,
-        });
+        };
+        fit.postMessage(ack);
+        // Extend is the snapshot consumer (design §7.2) — mirror the
+        // ack so its epoch latch advances and its heartbeat can emit
+        // the matching metric event.
+        const extend = this.workers.get('extend');
+        extend?.postMessage(ack);
         return;
       }
-      case 'event':
+      case 'event': {
         this.eventBus.publish(msg.event);
+        const archive = this.workers.get('archive');
+        archive?.postMessage({ kind: 'event', event: msg.event });
         return;
+      }
       case 'error': {
         const err = new RuntimeWorkerError(msg.role, msg.message);
         this.lastError = err.message;

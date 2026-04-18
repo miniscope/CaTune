@@ -117,11 +117,13 @@ async function heartbeatLoop(h: RuntimeHandles): Promise<void> {
     h.tickCount += 1;
 
     // Latch consumption: if a snapshot ack arrived since the previous
-    // heartbeat, advance epoch and publish the corresponding metric
-    // event. Otherwise just emit the frame-processed beat.
+    // heartbeat, publish the corresponding metric event. We emit on
+    // any pending ack (not just monotone-advance) so unchanging-epoch
+    // live runs still produce a visible heartbeat signal for the
+    // archive. Track lastObservedEpoch for the frame-processed beat.
     const newlyObserved = h.pendingAckEpoch;
-    if (newlyObserved !== null && newlyObserved > h.lastObservedEpoch) {
-      h.lastObservedEpoch = newlyObserved;
+    if (newlyObserved !== null) {
+      if (newlyObserved > h.lastObservedEpoch) h.lastObservedEpoch = newlyObserved;
       h.pendingAckEpoch = null;
       const metric: PipelineEvent = {
         kind: 'metric',
@@ -191,8 +193,6 @@ workerSelf.onmessage = (ev: MessageEvent<WorkerInbound>): void => {
       return;
     case 'snapshot-ack':
       if (handles) {
-        // Latch — real extend would gate segmentation on this; stub
-        // just stamps the epoch onto subsequent heartbeats.
         handles.pendingAckEpoch = msg.epoch;
       }
       return;

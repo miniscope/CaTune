@@ -42,6 +42,10 @@ const BYTES_PER_F32_PIXEL = 4;
 // updates a few times per second even on a fast pipeline, without the
 // main thread paying postMessage cost on every decode.
 const DEFAULT_FRAME_PREVIEW_STRIDE = 2;
+// Standard UCLA miniscope V3/V4 pixel size. Override by exposing a
+// `pixelSizeUm` setting in the UI when the app gains recording-specific
+// metadata (Phase 6+).
+const DEFAULT_PIXEL_SIZE_UM = 2.0;
 
 export type WorkerFactories = Record<WorkerRole, WorkerFactory>;
 
@@ -101,6 +105,7 @@ function buildConfig(meta: FrameSourceMeta, factories: WorkerFactories): Runtime
     workerConfigs: {
       decodePreprocess: {
         framePreviewStride: DEFAULT_FRAME_PREVIEW_STRIDE,
+        metadataJson: JSON.stringify({ pixel_size_um: DEFAULT_PIXEL_SIZE_UM }),
       },
       fit: {
         height: meta.height,
