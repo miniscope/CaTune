@@ -12,9 +12,13 @@
 //! correction discussion following Eq. 3.24.
 
 mod footprints;
+mod residual;
 mod suff_stats;
+mod throttle;
 mod trace_bcd;
 
 pub use footprints::evaluate_footprints;
+pub use residual::evaluate_residual;
 pub use suff_stats::evaluate_suff_stats;
+pub use throttle::trace_throttle;
 pub use trace_bcd::evaluate_traces;
