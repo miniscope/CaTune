@@ -6,6 +6,12 @@ export function createDecodePreprocessWorker(): WorkerLike {
   }) as unknown as WorkerLike;
 }
 
+export function createFitWorker(): WorkerLike {
+  return new Worker(new URL('./fit.worker.ts', import.meta.url), {
+    type: 'module',
+  }) as unknown as WorkerLike;
+}
+
 export function createExtendWorker(): WorkerLike {
   return new Worker(new URL('./extend.worker.ts', import.meta.url), {
     type: 'module',
