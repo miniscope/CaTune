@@ -1,1 +1,21 @@
 /* CaLa app-specific styles. Design tokens inherit from @calab/ui. */
+
+.info-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.info-summary__sep {
+  color: var(--text-tertiary);
+}
