@@ -7,13 +7,18 @@
 //!
 //! Task 4 adds [`rank1_nmf`] — a non-negative rank-1 factorization
 //! `X ≈ a c^T` via alternating projected least squares. Used on the
-//! patch time stack to produce a candidate `(a, c)` pair; downstream
-//! quality gates (Task 5) decide whether to register it as a new
-//! estimator.
+//! patch time stack to produce a candidate `(a, c)` pair.
+//!
+//! Task 5 adds [`classify_candidate`] — the thesis Algorithm 9
+//! quality gates plus class-aware shape priors (design §3.1):
+//! reconstruction error → support extraction → 2-D morphology
+//! (area, perimeter, equivalent diameter, isoperimetric quotient) →
+//! classify as `Cell` / `Neuropil` / `SlowBaseline` or reject.
 
 use std::ops::Range;
 
 use crate::buffers::bipbuf::ResidualRingBuf;
+use crate::config::{ComponentClass, ExtendConfig, RecordingMetadata};
 
 /// Compute per-pixel residual variance over the full buffer window.
 ///
@@ -368,4 +373,174 @@ fn frobenius_residual_sq(x: &[f32], a: &[f32], c: &[f32], t: usize, p: usize) ->
         }
     }
     acc
+}
+
+// ── Quality gates + class tagging (thesis Algorithm 9, Phase 3 Task 5) ─
+
+/// Boolean support mask over the spatial factor — true pixels are
+/// those with value strictly greater than `rel_threshold × max(a)`.
+/// When `a` is all-zero, returns an all-false mask.
+pub fn support_mask(a: &[f32], rel_threshold: f32) -> Vec<bool> {
+    assert!(
+        (0.0..1.0).contains(&rel_threshold),
+        "rel_threshold must be in [0, 1) (got {rel_threshold})"
+    );
+    let max = a.iter().cloned().fold(0.0f32, f32::max);
+    if max <= 0.0 {
+        return vec![false; a.len()];
+    }
+    let cutoff = rel_threshold * max;
+    a.iter().map(|&v| v > cutoff).collect()
+}
+
+/// Pixel count of the boolean support mask.
+pub fn support_area(mask: &[bool]) -> usize {
+    mask.iter().filter(|&&b| b).count()
+}
+
+/// 4-connected perimeter: total count of mask-pixel edges that border
+/// either a non-mask pixel or the frame boundary.
+pub fn support_perimeter_4conn(mask: &[bool], h: usize, w: usize) -> u32 {
+    assert_eq!(
+        mask.len(),
+        h * w,
+        "mask length {} must equal h * w = {}",
+        mask.len(),
+        h * w
+    );
+    let mut per = 0u32;
+    for y in 0..h {
+        for x in 0..w {
+            if !mask[y * w + x] {
+                continue;
+            }
+            // Each edge to an outside or non-mask neighbor counts.
+            let neighbors = [
+                (y.checked_sub(1).map(|yy| (yy, x))),
+                (if y + 1 < h { Some((y + 1, x)) } else { None }),
+                (x.checked_sub(1).map(|xx| (y, xx))),
+                (if x + 1 < w { Some((y, x + 1)) } else { None }),
+            ];
+            for n in neighbors {
+                match n {
+                    None => per += 1,
+                    Some((ny, nx)) => {
+                        if !mask[ny * w + nx] {
+                            per += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    per
+}
+
+/// Why a candidate failed the quality-gate suite.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RejectReason {
+    /// Rank-1 recon error exceeded `cfg.recon_error_max`.
+    ReconstructionError { error: f32, max: f32 },
+    /// Support was empty (all-zero `a` after threshold).
+    SupportEmpty,
+    /// Diameter smaller than the cell-class lower bound.
+    BelowCellMin { diameter_px: f32, min_px: f32 },
+    /// Cell-diameter range but compactness below floor.
+    CellFailsCompactness { q: f32, min_q: f32 },
+    /// Diameter between cell max and neuropil min — ambiguous.
+    AmbiguousDiameter { diameter_px: f32 },
+}
+
+/// Gate outcome for one candidate.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ClassDecision {
+    Accept {
+        class: ComponentClass,
+        diameter_px: f32,
+        compactness: f32,
+        area_px: usize,
+    },
+    Reject(RejectReason),
+}
+
+/// Apply thesis Algorithm 9's quality gates + class-aware shape priors
+/// (design §3.1) to a rank-1 NMF candidate.
+///
+/// The `patch_h × patch_w` shape is needed for 2-D morphology on `a`;
+/// pixel-scale conversions use the recording's `neuron_diameter_um` /
+/// `pixel_size_um`.
+pub fn classify_candidate(
+    nmf: &Rank1Nmf,
+    recording: &RecordingMetadata,
+    cfg: &ExtendConfig,
+    patch_h: usize,
+    patch_w: usize,
+) -> ClassDecision {
+    assert_eq!(
+        nmf.a.len(),
+        patch_h * patch_w,
+        "a length {} must equal patch_h * patch_w = {}",
+        nmf.a.len(),
+        patch_h * patch_w
+    );
+    if nmf.recon_error > cfg.recon_error_max {
+        return ClassDecision::Reject(RejectReason::ReconstructionError {
+            error: nmf.recon_error,
+            max: cfg.recon_error_max,
+        });
+    }
+
+    let mask = support_mask(&nmf.a, cfg.footprint_support_threshold_rel);
+    let area = support_area(&mask);
+    if area == 0 {
+        return ClassDecision::Reject(RejectReason::SupportEmpty);
+    }
+    let perimeter = support_perimeter_4conn(&mask, patch_h, patch_w).max(1) as f32;
+    let area_f = area as f32;
+    let diameter_px = 2.0 * (area_f / std::f32::consts::PI).sqrt();
+    let compactness =
+        (4.0 * std::f32::consts::PI * area_f / (perimeter * perimeter)).min(1.0);
+
+    let neuron_d_px = recording.neuron_diameter_um / recording.pixel_size_um;
+    let cell_min_px = cfg.cell_diameter_min_d * neuron_d_px;
+    let cell_max_px = cfg.cell_diameter_max_d * neuron_d_px;
+    let neuropil_min_px = cfg.neuropil_diameter_min_d * neuron_d_px;
+    let neuropil_max_px = cfg.neuropil_diameter_max_d * neuron_d_px;
+
+    if diameter_px < cell_min_px {
+        ClassDecision::Reject(RejectReason::BelowCellMin {
+            diameter_px,
+            min_px: cell_min_px,
+        })
+    } else if diameter_px <= cell_max_px {
+        if compactness < cfg.cell_compactness_min {
+            ClassDecision::Reject(RejectReason::CellFailsCompactness {
+                q: compactness,
+                min_q: cfg.cell_compactness_min,
+            })
+        } else {
+            ClassDecision::Accept {
+                class: ComponentClass::Cell,
+                diameter_px,
+                compactness,
+                area_px: area,
+            }
+        }
+    } else if diameter_px < neuropil_min_px {
+        ClassDecision::Reject(RejectReason::AmbiguousDiameter { diameter_px })
+    } else if diameter_px <= neuropil_max_px {
+        ClassDecision::Accept {
+            class: ComponentClass::Neuropil,
+            diameter_px,
+            compactness,
+            area_px: area,
+        }
+    } else {
+        ClassDecision::Accept {
+            class: ComponentClass::SlowBaseline,
+            diameter_px,
+            compactness,
+            area_px: area,
+        }
+    }
 }

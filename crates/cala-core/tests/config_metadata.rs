@@ -10,7 +10,8 @@
 use calab_cala_core::config::{
     ComponentClass, ExtendConfig, FitConfig, PreprocessConfig, RecordingMetadata,
     DEFAULT_CELL_COMPACTNESS_MIN, DEFAULT_CELL_DIAMETER_MAX_D, DEFAULT_CELL_DIAMETER_MIN_D,
-    DEFAULT_COMPONENT_CLASS, DEFAULT_EXTEND_WINDOW_FRAMES, DEFAULT_FOOTPRINT_MAX_ITER,
+    DEFAULT_COMPONENT_CLASS, DEFAULT_EXTEND_WINDOW_FRAMES,
+    DEFAULT_FOOTPRINT_MAX_ITER, DEFAULT_FOOTPRINT_SUPPORT_THRESHOLD_REL,
     DEFAULT_HIGH_PASS_DIAMETERS, DEFAULT_HIGH_PASS_ORDER, DEFAULT_MOTION_MAX_SHIFT_PX,
     DEFAULT_MOTION_USE_GLOBAL_ANCHOR, DEFAULT_MUTATION_QUEUE_CAPACITY,
     DEFAULT_NEURON_DIAMETER_UM, DEFAULT_NEUROPIL_DIAMETER_MAX_D,
@@ -269,6 +270,11 @@ fn extend_config_default_uses_defaults() {
         "recon_error_max",
     );
     assert_close(
+        cfg.footprint_support_threshold_rel,
+        DEFAULT_FOOTPRINT_SUPPORT_THRESHOLD_REL,
+        "footprint_support_threshold_rel",
+    );
+    assert_close(
         cfg.cell_diameter_min_d,
         DEFAULT_CELL_DIAMETER_MIN_D,
         "cell_diameter_min_d",
@@ -312,6 +318,7 @@ fn extend_config_builder_overrides_are_independent() {
         .with_nmf_max_iter(100)
         .with_nmf_tol(1e-5)
         .with_recon_error_max(0.3)
+        .with_footprint_support_threshold_rel(0.2)
         .with_cell_diameter_range(0.4, 1.8)
         .with_neuropil_diameter_range(2.5, 12.0)
         .with_cell_compactness_min(0.7)
@@ -325,6 +332,11 @@ fn extend_config_builder_overrides_are_independent() {
     assert_eq!(cfg.nmf_max_iter, 100);
     assert_close(cfg.nmf_tol, 1e-5, "nmf_tol override");
     assert_close(cfg.recon_error_max, 0.3, "recon_error_max override");
+    assert_close(
+        cfg.footprint_support_threshold_rel,
+        0.2,
+        "footprint_support_threshold_rel override",
+    );
     assert_close(cfg.cell_diameter_min_d, 0.4, "cell min override");
     assert_close(cfg.cell_diameter_max_d, 1.8, "cell max override");
     assert_close(cfg.neuropil_diameter_min_d, 2.5, "neuropil min override");
@@ -370,6 +382,12 @@ fn extend_config_rejects_nonpositive_nmf_tol() {
 #[should_panic(expected = "recon_error_max must be positive")]
 fn extend_config_rejects_nonpositive_recon_error() {
     let _ = ExtendConfig::default().with_recon_error_max(0.0);
+}
+
+#[test]
+#[should_panic(expected = "footprint_support_threshold_rel must be in [0, 1)")]
+fn extend_config_rejects_out_of_range_support_threshold() {
+    let _ = ExtendConfig::default().with_footprint_support_threshold_rel(1.0);
 }
 
 #[test]

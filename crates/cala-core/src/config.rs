@@ -431,6 +431,13 @@ pub const DEFAULT_NMF_TOL: f32 = 1e-4;
 /// and the candidate is rejected — design §3 quality gate.
 pub const DEFAULT_RECON_ERROR_MAX: f32 = 0.5;
 
+/// Relative threshold on the unit-L2 spatial factor for deciding which
+/// pixels are "in" the footprint's support (for area / perimeter /
+/// compactness). Pixels below `this × max(a)` are dropped. 10% of
+/// max is a standard CNMF convention that keeps the support
+/// compact without losing the bright core.
+pub const DEFAULT_FOOTPRINT_SUPPORT_THRESHOLD_REL: f32 = 0.1;
+
 /// Minimum equivalent diameter (pixels, derived from footprint support
 /// area) for the cell class, as a multiple of `neuron_diameter_um` in
 /// pixels. 0.5 × = cells cannot be smaller than half the expected body
@@ -501,6 +508,8 @@ pub struct ExtendConfig {
     pub nmf_tol: f32,
     /// Relative reconstruction-error ceiling for candidate acceptance.
     pub recon_error_max: f32,
+    /// Relative threshold on `a` for morphological support extraction.
+    pub footprint_support_threshold_rel: f32,
     /// Minimum cell-class equivalent diameter (multiples of neuron d).
     pub cell_diameter_min_d: f32,
     /// Maximum cell-class equivalent diameter (multiples of neuron d).
@@ -530,6 +539,7 @@ impl Default for ExtendConfig {
             nmf_max_iter: DEFAULT_NMF_MAX_ITER,
             nmf_tol: DEFAULT_NMF_TOL,
             recon_error_max: DEFAULT_RECON_ERROR_MAX,
+            footprint_support_threshold_rel: DEFAULT_FOOTPRINT_SUPPORT_THRESHOLD_REL,
             cell_diameter_min_d: DEFAULT_CELL_DIAMETER_MIN_D,
             cell_diameter_max_d: DEFAULT_CELL_DIAMETER_MAX_D,
             neuropil_diameter_min_d: DEFAULT_NEUROPIL_DIAMETER_MIN_D,
@@ -580,6 +590,15 @@ impl ExtendConfig {
     pub fn with_recon_error_max(mut self, e: f32) -> Self {
         assert!(e > 0.0, "recon_error_max must be positive (got {e})");
         self.recon_error_max = e;
+        self
+    }
+
+    pub fn with_footprint_support_threshold_rel(mut self, t: f32) -> Self {
+        assert!(
+            (0.0..1.0).contains(&t),
+            "footprint_support_threshold_rel must be in [0, 1) (got {t})"
+        );
+        self.footprint_support_threshold_rel = t;
         self
     }
 
