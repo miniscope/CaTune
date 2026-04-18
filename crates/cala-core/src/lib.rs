@@ -8,5 +8,6 @@
 
 pub mod assets;
 pub mod config;
+pub mod fitting;
 pub mod io;
 pub mod preprocess;
