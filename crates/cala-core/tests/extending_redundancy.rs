@@ -54,10 +54,17 @@ fn pearson_orthogonal_signals_near_zero() {
     // should be ~0 within sampling noise.
     let n = 128usize;
     let twopi = std::f32::consts::TAU;
-    let x: Vec<f32> = (0..n).map(|i| (i as f32 / n as f32 * twopi).sin()).collect();
-    let y: Vec<f32> = (0..n).map(|i| (i as f32 / n as f32 * twopi).cos()).collect();
+    let x: Vec<f32> = (0..n)
+        .map(|i| (i as f32 / n as f32 * twopi).sin())
+        .collect();
+    let y: Vec<f32> = (0..n)
+        .map(|i| (i as f32 / n as f32 * twopi).cos())
+        .collect();
     let c = pearson_correlation(&x, &y);
-    assert!(c.abs() < 0.05, "orthogonal signals should correlate near 0 (got {c})");
+    assert!(
+        c.abs() < 0.05,
+        "orthogonal signals should correlate near 0 (got {c})"
+    );
 }
 
 #[test]
@@ -67,7 +74,10 @@ fn pearson_result_clamped_to_unit_interval() {
     let x = vec![1e10f32, 1e10 + 1.0, 1e10 + 2.0];
     let y = vec![2e10f32, 2e10 + 2.0, 2e10 + 4.0];
     let c = pearson_correlation(&x, &y);
-    assert!((-1.0..=1.0).contains(&c), "correlation should be in [-1, 1] (got {c})");
+    assert!(
+        (-1.0..=1.0).contains(&c),
+        "correlation should be in [-1, 1] (got {c})"
+    );
 }
 
 #[test]

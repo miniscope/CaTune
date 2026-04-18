@@ -561,16 +561,16 @@ impl ExtendConfig {
     }
 
     pub fn with_patch_radius_diameters(mut self, d: f32) -> Self {
-        assert!(
-            d > 0.0,
-            "patch_radius_diameters must be positive (got {d})"
-        );
+        assert!(d > 0.0, "patch_radius_diameters must be positive (got {d})");
         self.patch_radius_diameters = d;
         self
     }
 
     pub fn with_patch_min_variance(mut self, v: f32) -> Self {
-        assert!(v >= 0.0, "patch_min_variance must be non-negative (got {v})");
+        assert!(
+            v >= 0.0,
+            "patch_min_variance must be non-negative (got {v})"
+        );
         self.patch_min_variance = v;
         self
     }

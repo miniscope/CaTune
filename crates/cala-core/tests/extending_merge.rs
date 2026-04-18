@@ -58,7 +58,11 @@ fn merge_of_scaled_copies_still_rank_one() {
 
     let result = merge_components(&support, &a, &c_i, &support, &a, &c_j, 100, 1e-6);
     approx(l2(&result.a_values), 1.0, F32_TOL, "unit L2");
-    assert!(result.recon_error < 1e-5, "rank-1 merge should be clean (got {})", result.recon_error);
+    assert!(
+        result.recon_error < 1e-5,
+        "rank-1 merge should be clean (got {})",
+        result.recon_error
+    );
 }
 
 // ----- disjoint supports -----
@@ -79,7 +83,10 @@ fn merge_of_disjoint_supports_uses_union_footprint() {
     let result = merge_components(&support_i, &a_i, &c_i, &support_j, &a_j, &c_j, 100, 1e-6);
     assert_eq!(result.support, vec![0, 1, 2, 10, 11, 12]);
     approx(l2(&result.a_values), 1.0, F32_TOL, "unit L2");
-    assert!(result.recon_error < 1e-5, "scaled-proportional disjoint merge should be rank-1");
+    assert!(
+        result.recon_error < 1e-5,
+        "scaled-proportional disjoint merge should be rank-1"
+    );
     // Both sides of the union carry positive mass.
     for v in &result.a_values {
         assert!(*v > 0.0, "every union pixel should have non-zero value");

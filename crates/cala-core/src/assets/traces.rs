@@ -134,6 +134,8 @@ impl Traces {
     /// Column `i`'s values across all frames, in push order.
     pub fn column(&self, i: usize) -> Vec<f32> {
         assert!(i < self.k, "column {i} out of range (k = {})", self.k);
-        (0..self.frames).map(|t| self.data[t * self.k + i]).collect()
+        (0..self.frames)
+            .map(|t| self.data[t * self.k + i])
+            .collect()
     }
 }

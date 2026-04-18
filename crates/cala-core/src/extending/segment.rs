@@ -90,7 +90,10 @@ pub fn patch_bounds(
     height: usize,
     width: usize,
 ) -> (Range<usize>, Range<usize>) {
-    assert!(center_y < height, "center_y {center_y} out of height {height}");
+    assert!(
+        center_y < height,
+        "center_y {center_y} out of height {height}"
+    );
     assert!(center_x < width, "center_x {center_x} out of width {width}");
     let y0 = center_y.saturating_sub(radius);
     let y1 = (center_y + radius + 1).min(height);
@@ -181,8 +184,7 @@ pub fn select_max_variance_patch(
     let (y_range, x_range) = patch_bounds(cy, cx, radius, height, width);
     let patch_h = y_range.end - y_range.start;
     let patch_w = x_range.end - x_range.start;
-    let time_stack =
-        extract_patch_stack(buf, height, width, y_range.clone(), x_range.clone());
+    let time_stack = extract_patch_stack(buf, height, width, y_range.clone(), x_range.clone());
     Some(PatchSelection {
         center_yx: (cy, cx),
         y_range,
@@ -498,8 +500,7 @@ pub fn classify_candidate(
     let perimeter = support_perimeter_4conn(&mask, patch_h, patch_w).max(1) as f32;
     let area_f = area as f32;
     let diameter_px = 2.0 * (area_f / std::f32::consts::PI).sqrt();
-    let compactness =
-        (4.0 * std::f32::consts::PI * area_f / (perimeter * perimeter)).min(1.0);
+    let compactness = (4.0 * std::f32::consts::PI * area_f / (perimeter * perimeter)).min(1.0);
 
     let neuron_d_px = recording.neuron_diameter_um / recording.pixel_size_um;
     let cell_min_px = cfg.cell_diameter_min_d * neuron_d_px;

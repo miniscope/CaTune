@@ -159,9 +159,17 @@ fn classify_accepts_cell_class_on_compact_blob() {
             area_px,
         } => {
             assert_eq!(class, ComponentClass::Cell);
-            approx(diameter_px, 2.0 * (49.0f32 / std::f32::consts::PI).sqrt(), 1e-4, "d");
+            approx(
+                diameter_px,
+                2.0 * (49.0f32 / std::f32::consts::PI).sqrt(),
+                1e-4,
+                "d",
+            );
             assert_eq!(area_px, 49);
-            assert!(compactness > 0.5, "square compactness should clear default floor (got {compactness})");
+            assert!(
+                compactness > 0.5,
+                "square compactness should clear default floor (got {compactness})"
+            );
         }
         other => panic!("expected Cell accept, got {other:?}"),
     }

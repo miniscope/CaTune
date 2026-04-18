@@ -22,10 +22,7 @@ fn l2(v: &[f32]) -> f32 {
 }
 
 fn approx(a: f32, b: f32, tol: f32, ctx: &str) {
-    assert!(
-        (a - b).abs() <= tol,
-        "{ctx}: {a} vs {b} (tol {tol})"
-    );
+    assert!((a - b).abs() <= tol, "{ctx}: {a} vs {b} (tol {tol})");
 }
 
 #[test]
@@ -37,9 +34,7 @@ fn rank1_nmf_recovers_seeded_factorization() {
         0.2, 1.0, 0.2, //
         0.0, 0.2, 0.0,
     ];
-    let c_true = vec![
-        0.0, 0.1, 0.3, 0.8, 2.0, 1.5, 0.9, 0.4, 0.2, 0.1, 0.05, 0.0,
-    ];
+    let c_true = vec![0.0, 0.1, 0.3, 0.8, 2.0, 1.5, 0.9, 0.4, 0.2, 0.1, 0.05, 0.0];
     let t = c_true.len();
     let p = a_true.len();
     let x = outer_product(&a_true, &c_true);
@@ -66,7 +61,11 @@ fn rank1_nmf_recovers_seeded_factorization() {
     }
 
     assert!(out.converged, "clean rank-1 data should converge");
-    assert!(out.recon_error < 1e-5, "recon error on exact rank-1 should be ~0 (got {})", out.recon_error);
+    assert!(
+        out.recon_error < 1e-5,
+        "recon error on exact rank-1 should be ~0 (got {})",
+        out.recon_error
+    );
 }
 
 #[test]

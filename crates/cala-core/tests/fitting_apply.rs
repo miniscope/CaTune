@@ -2,9 +2,7 @@
 
 use calab_cala_core::assets::Footprints;
 use calab_cala_core::config::{ComponentClass, FitConfig};
-use calab_cala_core::extending::mutation::{
-    DeprecateReason, MutationQueue, PipelineMutation,
-};
+use calab_cala_core::extending::mutation::{DeprecateReason, MutationQueue, PipelineMutation};
 use calab_cala_core::fitting::{ApplyOutcome, FitPipeline};
 
 const F32_TOL: f32 = 1e-5;

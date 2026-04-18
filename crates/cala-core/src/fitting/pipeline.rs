@@ -166,11 +166,7 @@ impl FitPipeline {
         // are still valid.
         let column_a = self.traces.column(pos_a);
         let column_b = self.traces.column(pos_b);
-        let summed_history: Vec<f32> = column_a
-            .iter()
-            .zip(&column_b)
-            .map(|(a, b)| a + b)
-            .collect();
+        let summed_history: Vec<f32> = column_a.iter().zip(&column_b).map(|(a, b)| a + b).collect();
 
         // Remove higher index first so the lower index stays stable.
         let (first, second) = if pos_a > pos_b {
@@ -187,8 +183,7 @@ impl FitPipeline {
 
         // Register the merged component.
         self.fp.push_component_classified(support, values, class);
-        let history =
-            build_new_component_history(self.traces.len(), &trace, Some(summed_history));
+        let history = build_new_component_history(self.traces.len(), &trace, Some(summed_history));
         self.traces.insert_component_with_history(&history);
         self.ss.insert_empty_component();
 

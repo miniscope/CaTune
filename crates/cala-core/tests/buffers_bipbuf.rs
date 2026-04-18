@@ -29,7 +29,9 @@ fn approx_eq(actual: &[f32], expected: &[f32], ctx: &str) {
 }
 
 fn synthetic_frame(frame_len: usize, seed: u32) -> Vec<f32> {
-    (0..frame_len).map(|i| (i as u32 + seed * 17) as f32).collect()
+    (0..frame_len)
+        .map(|i| (i as u32 + seed * 17) as f32)
+        .collect()
 }
 
 // ----- constructor / zero-state -----

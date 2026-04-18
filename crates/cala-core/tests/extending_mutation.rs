@@ -3,9 +3,7 @@
 
 use calab_cala_core::assets::Footprints;
 use calab_cala_core::config::{ComponentClass, FitConfig};
-use calab_cala_core::extending::mutation::{
-    DeprecateReason, MutationQueue, PipelineMutation,
-};
+use calab_cala_core::extending::mutation::{DeprecateReason, MutationQueue, PipelineMutation};
 use calab_cala_core::fitting::FitPipeline;
 
 fn make_cell_footprints() -> Footprints {

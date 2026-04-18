@@ -20,17 +20,13 @@
 
 use calab_cala_core::assets::Footprints;
 use calab_cala_core::buffers::bipbuf::ResidualRingBuf;
-use calab_cala_core::config::{
-    ComponentClass, ExtendConfig, FitConfig, RecordingMetadata,
-};
+use calab_cala_core::config::{ComponentClass, ExtendConfig, FitConfig, RecordingMetadata};
 use calab_cala_core::extending::mutation::{MutationQueue, PipelineMutation};
-use calab_cala_core::extending::overlap::{
-    overlap_fraction, patch_to_frame_support,
-};
+use calab_cala_core::extending::overlap::{overlap_fraction, patch_to_frame_support};
 use calab_cala_core::extending::redundancy::pearson_correlation;
 use calab_cala_core::extending::segment::{
-    argmax_yx, classify_candidate, extract_patch_stack, patch_bounds, rank1_nmf,
-    variance_map, ClassDecision,
+    argmax_yx, classify_candidate, extract_patch_stack, patch_bounds, rank1_nmf, variance_map,
+    ClassDecision,
 };
 use calab_cala_core::fitting::FitPipeline;
 
@@ -208,9 +204,8 @@ fn run_extend_cycle(
         return;
     }
     let mut vmap = variance_map(buf);
-    let radius_px =
-        (extend_cfg.patch_radius_diameters * recording.neuron_diameter_um
-            / recording.pixel_size_um) as usize;
+    let radius_px = (extend_cfg.patch_radius_diameters * recording.neuron_diameter_um
+        / recording.pixel_size_um) as usize;
     let radius_px = radius_px.max(2);
 
     let mut proposals = 0u32;
@@ -234,8 +229,7 @@ fn run_extend_cycle(
             extend_cfg.nmf_max_iter,
             extend_cfg.nmf_tol,
         );
-        let decision =
-            classify_candidate(&nmf, recording, extend_cfg, patch_h, patch_w);
+        let decision = classify_candidate(&nmf, recording, extend_cfg, patch_h, patch_w);
 
         // Zero out this patch in vmap so the next iteration finds a
         // new region — same effect as thesis Alg 9 line 12.
@@ -293,8 +287,7 @@ fn run_extend_cycle(
         let mut is_redundant = false;
         for i in 0..fp.len() {
             let existing_support = fp.support(i);
-            if overlap_fraction(&support, existing_support) < extend_cfg.overlap_fraction_min
-            {
+            if overlap_fraction(&support, existing_support) < extend_cfg.overlap_fraction_min {
                 continue;
             }
             let existing_col = pipeline.traces().column(i);
@@ -519,7 +512,11 @@ fn cold_start_dense_recovery() {
     let fp = pipeline.footprints();
     let est_traces: Vec<Vec<f32>> = (0..fp.len()).map(|i| pipeline.traces().column(i)).collect();
     let est_supports: Vec<&[u32]> = (0..fp.len()).map(|i| fp.support(i)).collect();
-    for (idx, gt) in truth.iter().enumerate().filter(|(_, g)| g.class == ComponentClass::Cell) {
+    for (idx, gt) in truth
+        .iter()
+        .enumerate()
+        .filter(|(_, g)| g.class == ComponentClass::Cell)
+    {
         let (gt_support, _) = gt.footprint(height, width);
         let mut best_ov = 0.0f32;
         let mut best_r = 0.0f32;
