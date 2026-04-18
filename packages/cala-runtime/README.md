@@ -15,9 +15,12 @@ design, mutation queue protocol, asset snapshot protocol.
 - `mutation-queue.ts` — bounded drop-oldest ring (extend → fit).
   [landed, task 16] Single-threaded TS port of the Rust `MutationQueue`;
   cross-worker SAB-backed version lands with the orchestrator (task 18).
-- `asset-snapshot.ts` — copy-on-write snapshot of `A, W, M` at an
-  epoch boundary. [later task 17]
-- `events.ts` — event bus consumed by the archive worker.
-  [later task 17]
+- `asset-snapshot.ts` — extend↔fit snapshot request/ack protocol with
+  correlation ids and ack-timeout diagnostics. [landed, task 17]
+  Single-threaded in-memory transport; cross-worker SAB-backed version
+  lands with the orchestrator (task 18).
+- `events.ts` — `PipelineEvent` bus (birth / merge / split / deprecate
+  / reject / metric) with drop-oldest backpressure, consumed by the
+  archive worker. [landed, task 17]
 - `orchestrator.ts` — spawns workers, wires channels, tracks epochs,
   owns two-pass toggle. [later task 18]

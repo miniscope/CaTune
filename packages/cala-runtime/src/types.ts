@@ -41,14 +41,29 @@ export {
   type MutationQueueConfig,
 } from './mutation-queue.ts';
 
-// TODO(task 17): Snapshot surface — copy-on-write asset view protocol that
-// gives the extend worker a consistent `A, W, M` at an epoch boundary.
-// See CALA_DESIGN §7.2.
-export type Snapshot = Todo<'Snapshot'>;
+// Snapshot protocol surface — extend→fit control channel for
+// consistent views of `(Ã, W, M, epoch)`. See CALA_DESIGN §7.2.
+export {
+  SnapshotProtocol,
+  SnapshotTimeoutError,
+  SnapshotCapacityError,
+  type SnapshotAck,
+  type SnapshotRequest,
+  type SnapshotProtocolConfig,
+  type SnapshotProtocolStats,
+} from './asset-snapshot.ts';
 
-// TODO(task 17): PipelineEvent surface — compact event records emitted by
-// fit for the archive worker. See CALA_DESIGN §9.2.
-export type PipelineEvent = Todo<'PipelineEvent'>;
+// PipelineEvent surface — compact event records emitted by fit for
+// the archive worker. See CALA_DESIGN §9.2.
+export {
+  EventBus,
+  EventBusSubscriberError,
+  type PipelineEvent,
+  type FootprintSnap,
+  type EventBusConfig,
+  type EventBusStats,
+  type Unsubscribe,
+} from './events.ts';
 
 // TODO(task 18): Orchestrator surface — creates workers, wires channels,
 // tracks epochs, owns two-pass toggle. See CALA_DESIGN §7.
