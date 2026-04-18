@@ -18,8 +18,8 @@
 //! cleaning" framing at the end of thesis §3.2.3.
 
 use crate::assets::{Footprints, Groups, SuffStats, Traces};
-use crate::config::FitConfig;
-use crate::extending::mutation::{Epoch, Snapshot};
+use crate::config::{ComponentClass, FitConfig};
+use crate::extending::mutation::{Epoch, MutationQueue, PipelineMutation, Snapshot};
 
 use super::{
     evaluate_footprints, evaluate_residual, evaluate_suff_stats, evaluate_traces, trace_throttle,
@@ -67,6 +67,148 @@ impl FitPipeline {
     /// per-component traces it is passed explicitly.
     pub fn snapshot(&self) -> Snapshot {
         Snapshot::new(self.fp.clone(), self.ss.clone(), self.epoch)
+    }
+
+    /// Apply one mutation atomically, extending `(Ã, C̃, W, M)` in a
+    /// single step and bumping the epoch on success. Groups are
+    /// rebuilt each `step` so no direct `G` surgery is needed here.
+    ///
+    /// Returns `Applied { new_epoch }` on success, `Stale` when the
+    /// mutation references ids that have been deprecated since its
+    /// snapshot, or `Invalid` on self-inconsistent input.
+    pub fn apply_mutation(&mut self, mutation: PipelineMutation) -> ApplyOutcome {
+        match mutation {
+            PipelineMutation::Register {
+                class,
+                support,
+                values,
+                trace,
+                ..
+            } => self.apply_register(class, support, values, trace),
+            PipelineMutation::Merge {
+                merge_ids,
+                class,
+                support,
+                values,
+                trace,
+                ..
+            } => self.apply_merge(merge_ids, class, support, values, trace),
+            PipelineMutation::Deprecate { id, .. } => self.apply_deprecate(id),
+        }
+    }
+
+    /// Drain a mutation queue and apply each mutation in FIFO order.
+    /// Returns `(applied, stale)` counts; `invalid` rejections are
+    /// lumped with `stale` (the archive metrics surface both as
+    /// "dropped on apply" in Phase 6).
+    pub fn drain_apply(&mut self, queue: &mut MutationQueue) -> ApplyBatchReport {
+        let mut applied = 0u32;
+        let mut stale = 0u32;
+        let mut invalid = 0u32;
+        for m in queue.drain() {
+            match self.apply_mutation(m) {
+                ApplyOutcome::Applied { .. } => applied += 1,
+                ApplyOutcome::Stale => stale += 1,
+                ApplyOutcome::Invalid(_) => invalid += 1,
+            }
+        }
+        ApplyBatchReport {
+            applied,
+            stale,
+            invalid,
+        }
+    }
+
+    fn apply_register(
+        &mut self,
+        class: ComponentClass,
+        support: Vec<u32>,
+        values: Vec<f32>,
+        trace: Vec<f32>,
+    ) -> ApplyOutcome {
+        if support.len() != values.len() {
+            return ApplyOutcome::Invalid("support / values length mismatch");
+        }
+        self.fp.push_component_classified(support, values, class);
+        let history = build_new_component_history(self.traces.len(), &trace, None);
+        self.traces.insert_component_with_history(&history);
+        self.ss.insert_empty_component();
+        self.epoch += 1;
+        ApplyOutcome::Applied {
+            new_epoch: self.epoch,
+        }
+    }
+
+    fn apply_merge(
+        &mut self,
+        merge_ids: [u32; 2],
+        class: ComponentClass,
+        support: Vec<u32>,
+        values: Vec<f32>,
+        trace: Vec<f32>,
+    ) -> ApplyOutcome {
+        if support.len() != values.len() {
+            return ApplyOutcome::Invalid("support / values length mismatch");
+        }
+        if merge_ids[0] == merge_ids[1] {
+            return ApplyOutcome::Invalid("merge ids must differ");
+        }
+        let (pos_a, pos_b) = match (
+            self.fp.position_of(merge_ids[0]),
+            self.fp.position_of(merge_ids[1]),
+        ) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return ApplyOutcome::Stale,
+        };
+
+        // Pre-compute merged pre-window history = column_a + column_b.
+        // The column read happens before we mutate Traces so indices
+        // are still valid.
+        let column_a = self.traces.column(pos_a);
+        let column_b = self.traces.column(pos_b);
+        let summed_history: Vec<f32> = column_a
+            .iter()
+            .zip(&column_b)
+            .map(|(a, b)| a + b)
+            .collect();
+
+        // Remove higher index first so the lower index stays stable.
+        let (first, second) = if pos_a > pos_b {
+            (pos_a, pos_b)
+        } else {
+            (pos_b, pos_a)
+        };
+        self.fp.deprecate_by_id(merge_ids[0]);
+        self.fp.deprecate_by_id(merge_ids[1]);
+        self.traces.remove_component(first);
+        self.traces.remove_component(second);
+        self.ss.remove_component(first);
+        self.ss.remove_component(second);
+
+        // Register the merged component.
+        self.fp.push_component_classified(support, values, class);
+        let history =
+            build_new_component_history(self.traces.len(), &trace, Some(summed_history));
+        self.traces.insert_component_with_history(&history);
+        self.ss.insert_empty_component();
+
+        self.epoch += 1;
+        ApplyOutcome::Applied {
+            new_epoch: self.epoch,
+        }
+    }
+
+    fn apply_deprecate(&mut self, id: u32) -> ApplyOutcome {
+        let Some(pos) = self.fp.position_of(id) else {
+            return ApplyOutcome::Stale;
+        };
+        self.fp.deprecate_by_id(id);
+        self.traces.remove_component(pos);
+        self.ss.remove_component(pos);
+        self.epoch += 1;
+        ApplyOutcome::Applied {
+            new_epoch: self.epoch,
+        }
     }
 
     pub fn footprints(&self) -> &Footprints {
@@ -131,4 +273,49 @@ impl FitPipeline {
         evaluate_residual(&self.fp, &c, y, &mut self.residual);
         &self.residual
     }
+}
+
+/// Per-mutation outcome reported by `FitPipeline::apply_mutation`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApplyOutcome {
+    /// Mutation applied; `new_epoch` is the epoch after advancing.
+    Applied { new_epoch: Epoch },
+    /// Mutation dropped because one of its referenced ids is no
+    /// longer live. Extend will retry with a fresh snapshot.
+    Stale,
+    /// Mutation was self-inconsistent (shape mismatch, degenerate
+    /// merge, etc). `'static` reason string for logging.
+    Invalid(&'static str),
+}
+
+/// Aggregated outcome of `FitPipeline::drain_apply`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ApplyBatchReport {
+    pub applied: u32,
+    pub stale: u32,
+    pub invalid: u32,
+}
+
+/// Construct the per-frame history vector for a newly registered or
+/// merged component. Pre-window frames are filled with
+/// `prewindow_fill` (zero for fresh discoveries, summed source
+/// histories for merges); the last `min(window.len(), frames)`
+/// positions are overwritten with the extend-supplied window trace.
+fn build_new_component_history(
+    frames: usize,
+    window_trace: &[f32],
+    prewindow_fill: Option<Vec<f32>>,
+) -> Vec<f32> {
+    let mut history = prewindow_fill.unwrap_or_else(|| vec![0.0f32; frames]);
+    assert_eq!(
+        history.len(),
+        frames,
+        "prewindow_fill length {} must match frames {}",
+        history.len(),
+        frames
+    );
+    let window_len = window_trace.len().min(frames);
+    let start = frames - window_len;
+    history[start..frames].copy_from_slice(&window_trace[window_trace.len() - window_len..]);
+    history
 }

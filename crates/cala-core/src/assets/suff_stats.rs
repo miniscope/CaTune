@@ -83,4 +83,64 @@ impl SuffStats {
     pub fn m_at(&self, i: usize, j: usize) -> f32 {
         self.m[self.m_idx(i, j)]
     }
+
+    /// Grow `k` by 1, appending a zero column to `W` (per pixel) and
+    /// a zero row + column to `M`. Used by Phase 3 apply when a new
+    /// component is registered (merge or fresh discovery).
+    pub fn insert_empty_component(&mut self) {
+        let new_k = self
+            .k
+            .checked_add(1)
+            .expect("SuffStats k overflowed usize on insert");
+        let mut new_w = Vec::with_capacity(self.pixels * new_k);
+        for p in 0..self.pixels {
+            let row_start = p * self.k;
+            new_w.extend_from_slice(&self.w[row_start..row_start + self.k]);
+            new_w.push(0.0);
+        }
+        let mut new_m = vec![0.0f32; new_k * new_k];
+        for i in 0..self.k {
+            for j in 0..self.k {
+                new_m[i * new_k + j] = self.m[i * self.k + j];
+            }
+        }
+        self.k = new_k;
+        self.w = new_w;
+        self.m = new_m;
+    }
+
+    /// Remove the component at position `pos` — drops a column from
+    /// `W` and a row + column from `M`. Panics on out-of-range index.
+    pub fn remove_component(&mut self, pos: usize) {
+        assert!(
+            pos < self.k,
+            "remove_component pos {pos} out of range (k = {})",
+            self.k
+        );
+        let new_k = self.k - 1;
+        if new_k == 0 {
+            self.k = 0;
+            self.w = Vec::new();
+            self.m = Vec::new();
+            return;
+        }
+        let mut new_w = Vec::with_capacity(self.pixels * new_k);
+        for p in 0..self.pixels {
+            let row_start = p * self.k;
+            new_w.extend_from_slice(&self.w[row_start..row_start + pos]);
+            new_w.extend_from_slice(&self.w[row_start + pos + 1..row_start + self.k]);
+        }
+        let mut new_m = Vec::with_capacity(new_k * new_k);
+        for i in 0..self.k {
+            if i == pos {
+                continue;
+            }
+            let row_start = i * self.k;
+            new_m.extend_from_slice(&self.m[row_start..row_start + pos]);
+            new_m.extend_from_slice(&self.m[row_start + pos + 1..row_start + self.k]);
+        }
+        self.k = new_k;
+        self.w = new_w;
+        self.m = new_m;
+    }
 }
