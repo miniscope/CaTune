@@ -173,6 +173,13 @@ class StubPreprocessor {
   processFrameF32(input: Float32Array): Float32Array {
     return input;
   }
+  processFrameF32WithStages(input: Float32Array): Float32Array {
+    const out = new Float32Array(input.length * 3);
+    out.set(input, 0);
+    out.set(input, input.length);
+    out.set(input, input.length * 2);
+    return out;
+  }
   free(): void {}
 }
 
@@ -196,6 +203,36 @@ class StubFitter {
     fitterDrainApplyCount += 1;
     this.currentEpoch += 1n;
     return new Uint32Array([1, 0, 0]);
+  }
+  drainApplyEvents(_handle: unknown): {
+    report: [number, number, number];
+    events: Array<Record<string, unknown>>;
+  } {
+    fitterDrainApplyCount += 1;
+    const id = Number(this.currentEpoch);
+    this.currentEpoch += 1n;
+    return {
+      report: [1, 0, 0],
+      events: [
+        {
+          kind: 'birth',
+          id,
+          class: 'cell',
+          support: [0],
+          values: [1],
+          patch: [0, 0],
+        },
+      ],
+    };
+  }
+  reconstructLastFrame(): Float32Array {
+    return new Float32Array(0);
+  }
+  componentIds(): Uint32Array {
+    return new Uint32Array(0);
+  }
+  lastTrace(): Float32Array {
+    return new Float32Array(0);
   }
   takeSnapshot(): { epoch(): bigint; numComponents(): number; pixels(): number; free(): void } {
     return {
@@ -239,6 +276,8 @@ class StubExtender {
 vi.mock('@calab/cala-core', () => ({
   initCalaCore: vi.fn(async () => undefined),
   calaMemoryBytes: vi.fn(() => 2 * 1024 * 1024),
+  drainApplyEventsTyped: (fitter: { drainApplyEvents: (q: unknown) => unknown }, queue: unknown) =>
+    fitter.drainApplyEvents(queue),
   AviReader: StubAviReader,
   Preprocessor: StubPreprocessor,
   Fitter: StubFitter,

@@ -73,6 +73,17 @@ export type PipelineEvent =
       t: number;
       neuronId: number;
       footprint: FootprintSnap;
+    }
+  // Per-neuron trace sample emitted by fit at vitals cadence
+  // (Phase 7 task 8). `ids[i]` owns `values[i]`; a neuron that's
+  // missing from this sample has been deprecated since the last
+  // one. Strided so the main-thread traces panel gets a smooth
+  // scroll without paying postMessage cost on every frame.
+  | {
+      kind: 'trace-sample';
+      t: number;
+      ids: Uint32Array;
+      values: Float32Array;
     };
 
 export type Unsubscribe = () => void;

@@ -4,6 +4,8 @@ import {
   Fitter,
   MutationQueueHandle,
   calaMemoryBytes,
+  drainApplyEventsTyped,
+  type WasmAppliedEvent,
 } from '@calab/cala-core';
 import {
   METRIC_CELL_COUNT,
@@ -73,6 +75,9 @@ const DEFAULT_VITALS_STRIDE = 8;
 // (design §9.3). Matches the archive's footprint-history neuron cap
 // so upstream and storage stay within the same envelope.
 const DEFAULT_FOOTPRINT_SCHEDULER_MAX_NEURONS = 512;
+// Reconstruction preview cadence (design §12 frame panel, Phase 7
+// task 6). 0 disables. Overridable via `workerConfig.framePreviewStride`.
+const DEFAULT_FRAME_PREVIEW_STRIDE = 0;
 // Extend-cycle cadence (design §13 bounded-work-per-cycle). One
 // cycle every N fit steps keeps segmentation cost amortized across
 // the fit hot path; default 32 ≈ ~1 s at 30 fps. Overridable via
@@ -117,6 +122,7 @@ interface FitWorkerConfig {
   frameChannelSlotCount: number;
   frameChannelWaitTimeoutMs: number;
   frameChannelPollIntervalMs: number;
+  framePreviewStride: number;
 }
 
 // Route through `self` when present so `vi.stubGlobal('self', harness)`
@@ -228,6 +234,7 @@ function parseConfig(raw: unknown): FitWorkerConfig {
       cfg.frameChannelPollIntervalMs,
       DEFAULT_FRAME_CHANNEL_POLL_INTERVAL_MS,
     ),
+    framePreviewStride: numberOr(cfg.framePreviewStride, DEFAULT_FRAME_PREVIEW_STRIDE),
   };
 }
 
@@ -370,6 +377,7 @@ function updateSchedulerFromEvent(scheduler: FootprintSnapshotScheduler, ev: Pip
     case 'reject':
     case 'metric':
     case 'footprint-snapshot':
+    case 'trace-sample':
       return;
   }
 }
@@ -454,6 +462,46 @@ function residualL2(residual: ArrayLike<number> | Float32Array): number {
   return Math.sqrt(sumSq);
 }
 
+function quantizeF32ToU8(frame: Float32Array): Uint8ClampedArray {
+  // Autoscale to the [0, 255] range so the canvas shows a meaningful
+  // grayscale regardless of the reconstruction's absolute magnitude.
+  // Mirrors `quantizeToU8` in `lib/frame-preview.ts` but duplicated
+  // here to avoid a main-thread import inside the worker bundle.
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < frame.length; i += 1) {
+    const v = frame[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const out = new Uint8ClampedArray(frame.length);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max - min < 1e-12) {
+    out.fill(128);
+    return out;
+  }
+  const range = max - min;
+  for (let i = 0; i < frame.length; i += 1) {
+    out[i] = Math.round(((frame[i] - min) / range) * 255);
+  }
+  return out;
+}
+
+function emitReconstructionPreview(h: RuntimeHandles, frameIndex: number): void {
+  const stride = h.config.framePreviewStride;
+  if (stride <= 0 || (frameIndex + 1) % stride !== 0) return;
+  const recon = h.fitter.reconstructLastFrame();
+  if (recon.length === 0) return;
+  post({
+    kind: 'frame-preview',
+    role: ROLE,
+    index: frameIndex,
+    width: h.config.width,
+    height: h.config.height,
+    stage: 'reconstruction',
+    pixels: quantizeF32ToU8(recon),
+  });
+}
+
 function emitVitals(h: RuntimeHandles, frameIndex: number): void {
   if (h.config.vitalsStride <= 0) return;
   if ((frameIndex + 1) % h.config.vitalsStride !== 0) return;
@@ -475,6 +523,20 @@ function emitVitals(h: RuntimeHandles, frameIndex: number): void {
   for (const { name, value } of metrics) {
     h.eventBus.publish({ kind: 'metric', t: frameIndex, name, value });
   }
+
+  // Per-neuron trace sample for the traces panel (Phase 7 task 8).
+  // `componentIds()` and `lastTrace()` are ordered identically by the
+  // Rust side, so `ids[i]` owns `values[i]` until the next mutation.
+  const idsArr = h.fitter.componentIds();
+  const trace = h.fitter.lastTrace();
+  if (idsArr.length > 0 && trace.length === idsArr.length) {
+    h.eventBus.publish({
+      kind: 'trace-sample',
+      t: frameIndex,
+      ids: Uint32Array.from(idsArr),
+      values: trace instanceof Float32Array ? trace : Float32Array.from(trace),
+    });
+  }
 }
 
 // Metric name for the per-cycle extend activity signal. Lives here
@@ -482,6 +544,43 @@ function emitVitals(h: RuntimeHandles, frameIndex: number): void {
 // header vital — the dashboard's event feed + metric timeseries
 // surface it, the sparkline bar does not.
 const METRIC_EXTEND_PROPOSED = 'extend.proposed';
+
+function wasmEventToPipelineEvent(e: WasmAppliedEvent, t: number): PipelineEvent {
+  switch (e.kind) {
+    case 'birth':
+      return {
+        kind: 'birth',
+        t,
+        id: e.id,
+        patch: e.patch,
+        footprintSnap: {
+          pixelIndices: Uint32Array.from(e.support),
+          values: Float32Array.from(e.values),
+        },
+      };
+    case 'merge':
+      return {
+        kind: 'merge',
+        t,
+        ids: [e.ids[0], e.ids[1]],
+        into: e.into,
+        footprintSnap: {
+          pixelIndices: Uint32Array.from(e.support),
+          values: Float32Array.from(e.values),
+        },
+      };
+    case 'deprecate':
+      return { kind: 'deprecate', t, id: e.id, reason: e.reason };
+  }
+}
+
+function publishAppliedEvents(h: RuntimeHandles, wasmEvents: WasmAppliedEvent[], t: number): void {
+  for (const we of wasmEvents) {
+    const ev = wasmEventToPipelineEvent(we, t);
+    h.eventBus.publish(ev);
+    updateSchedulerFromEvent(h.footprintScheduler, ev);
+  }
+}
 
 function runExtendCycleIfDue(h: RuntimeHandles, frameIndex: number, residual: Float32Array): void {
   if (!h.extender || h.config.extendCycleStride <= 0) return;
@@ -497,21 +596,15 @@ function runExtendCycleIfDue(h: RuntimeHandles, frameIndex: number, residual: Fl
     name: METRIC_EXTEND_PROPOSED,
     value: proposed,
   });
-  // `runCycle` pushes to the Rust-side mutation queue. The JS-side
-  // `drainMutationsOnce` only calls `drainApply` when its own queue
-  // has items (from test injection), so the Rust queue would leak.
-  // Apply any pending Rust mutations right here — epoch advances
-  // and the cell_count vital reflects the extend's work.
   if (proposed > 0) {
-    h.fitter.drainApply(h.mutationQueueHandle);
+    // Apply the queued mutations and surface each one as a real
+    // structural event on the bus (Phase 7 task 3). Phase 6 used
+    // `drainApply` + a metric; the event feed had no `birth` rows
+    // because the mutation payloads never left the Rust side.
+    const { events } = drainApplyEventsTyped(h.fitter, h.mutationQueueHandle);
+    publishAppliedEvents(h, events, frameIndex);
     post({ kind: 'mutation-applied', role: ROLE, epoch: h.fitter.epoch() });
   }
-  // TODO Phase 7: surface the actual `register` payloads (support +
-  // values + class + new id) as `birth` PipelineEvents. Requires a
-  // new `Fitter.drainApplyEvents()` WASM binding that returns the
-  // applied-mutation metadata alongside the apply counts. Until
-  // then, births are visible through (a) epoch advance and (b)
-  // cell_count vital, but not through the structural event feed.
 }
 
 async function fitLoop(h: RuntimeHandles): Promise<void> {
@@ -532,6 +625,7 @@ async function fitLoop(h: RuntimeHandles): Promise<void> {
     takeCadencedSnapshot(h, frameIndex);
     emitScheduledFootprints(h, frameIndex);
     emitVitals(h, frameIndex);
+    emitReconstructionPreview(h, frameIndex);
     if ((frameIndex + 1) % h.config.heartbeatStride === 0) {
       post({
         kind: 'frame-processed',

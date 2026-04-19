@@ -78,12 +78,34 @@ export class Fitter {
     free(): void;
     [Symbol.dispose](): void;
     /**
+     * Live neuron ids in the same order as `last_trace`'s vector.
+     * Used by the traces panel (Phase 7 task 8) so per-id timeseries
+     * samples carry the right id even as mutations insert / remove
+     * components across cycles.
+     */
+    componentIds(): Uint32Array;
+    /**
      * Drain every mutation in `queue` and apply in FIFO order. The
      * returned flat `Uint32Array` carries `[applied, stale, invalid]`
      * counts — ready to push to the archive worker for dashboard
      * metrics.
      */
     drainApply(queue: MutationQueueHandle): Uint32Array;
+    /**
+     * Drain + apply like `drainApply`, but also return the per-
+     * mutation event payloads. Shape:
+     *
+     * ```js
+     * { report: [applied, stale, invalid], events: AppliedEvent[] }
+     * ```
+     *
+     * Each `AppliedEvent` is a tagged object (`kind: 'birth' | 'merge'
+     * | 'deprecate'`) carrying the minimal fields the event-feed UI
+     * needs (§9.2). `support` and `values` come through as plain
+     * `number[]` — they're small (~50 elements per birth) and cross
+     * the WASM boundary at extend-cycle cadence, not per frame.
+     */
+    drainApplyEvents(queue: MutationQueueHandle): any;
     /**
      * Current asset epoch. Advances once per successful mutation
      * apply; not touched by per-frame `step` calls.
@@ -106,6 +128,15 @@ export class Fitter {
      * Number of live components in `Ã`.
      */
     numComponents(): number;
+    /**
+     * `Ã · c_t` reconstruction of the most recent frame (design §3
+     * fit loop). Returns an empty `Float32Array` before the first
+     * `step()` has landed. Used by W2's preview path (Phase 7 task
+     * 6) so the dashboard's 4-canvas frame panel can show what the
+     * model thinks the frame looked like alongside the raw / hot-
+     * pixel / motion-corrected stages from W1.
+     */
+    reconstructLastFrame(): Float32Array;
     /**
      * Run one OMF frame. Returns the residual `R_t` as a new
      * `Float32Array` so the extend worker can read it.
@@ -174,6 +205,17 @@ export class Preprocessor {
      */
     processFrameF32(input: Float32Array): Float32Array;
     /**
+     * Same as `processFrameF32` but also returns the post-hot-pixel
+     * and post-motion intermediate frames, concatenated after the
+     * final frame. Used by W1's preview path (Phase 7 task 5) so the
+     * dashboard's 4-canvas frame panel can render raw / hot-pixel /
+     * motion / reconstruction side by side.
+     *
+     * Returned layout (all `pixels` = height·width in length):
+     * `[final || hot_pixel || motion]` → total length `3·pixels`.
+     */
+    processFrameF32WithStages(input: Float32Array): Float32Array;
+    /**
      * Convenience: decode raw AVI bytes to grayscale and preprocess
      * in one call. Avoids a round-trip across the JS boundary for
      * the intermediate f32 buffer.
@@ -227,12 +269,15 @@ export interface InitOutput {
     readonly extender_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly extender_pushResidual: (a: number, b: number, c: number, d: number) => void;
     readonly extender_runCycle: (a: number, b: number, c: number) => number;
+    readonly fitter_componentIds: (a: number, b: number) => void;
     readonly fitter_drainApply: (a: number, b: number, c: number) => void;
+    readonly fitter_drainApplyEvents: (a: number, b: number, c: number) => void;
     readonly fitter_epoch: (a: number) => bigint;
     readonly fitter_height: (a: number) => number;
     readonly fitter_lastTrace: (a: number, b: number) => void;
     readonly fitter_new: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly fitter_numComponents: (a: number) => number;
+    readonly fitter_reconstructLastFrame: (a: number, b: number) => void;
     readonly fitter_step: (a: number, b: number, c: number, d: number) => void;
     readonly fitter_takeSnapshot: (a: number) => number;
     readonly fitter_width: (a: number) => number;
@@ -245,6 +290,7 @@ export interface InitOutput {
     readonly mutationqueuehandle_pushDeprecate: (a: number, b: number, c: bigint, d: number, e: number, f: number) => void;
     readonly preprocessor_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly preprocessor_processFrameF32: (a: number, b: number, c: number, d: number) => void;
+    readonly preprocessor_processFrameF32WithStages: (a: number, b: number, c: number, d: number) => void;
     readonly preprocessor_processFrameU8: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly preprocessor_reset: (a: number) => void;
     readonly snapshothandle_epoch: (a: number) => bigint;
@@ -252,9 +298,9 @@ export interface InitOutput {
     readonly snapshothandle_pixels: (a: number) => number;
     readonly init_panic_hook: () => void;
     readonly extender_residualLen: (a: number) => number;
-    readonly __wbindgen_export: (a: number, b: number, c: number) => void;
-    readonly __wbindgen_export2: (a: number, b: number) => number;
-    readonly __wbindgen_export3: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_export: (a: number, b: number) => number;
+    readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_export3: (a: number, b: number, c: number) => void;
     readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
 }
 

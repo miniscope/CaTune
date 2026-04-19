@@ -30,6 +30,75 @@
   align-items: start;
 }
 
+/* 4-canvas frame panel (Phase 7 task 7). */
+.frame-quad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+}
+
+.frame-quad__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.frame-quad__caption {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.frame-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.frame-stage__label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.frame-stage__canvas-wrap {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+}
+
+.frame-stage__canvas {
+  image-rendering: pixelated;
+  max-width: 100%;
+  height: auto;
+  background: var(--bg-inset);
+  display: block;
+}
+
+.frame-stage__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  pointer-events: none;
+}
+
 .frame-viewer__canvas-wrap {
   position: relative;
   background: var(--bg-secondary);
@@ -248,25 +317,66 @@
 
 .cala-dashboard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 360px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'vitals vitals'
-    'frame events';
+    'vitals     vitals     vitals'
+    'frame      footprints events'
+    'traces     traces     events';
   gap: var(--space-md);
   padding: var(--space-md);
   height: 100%;
   min-height: 0;
 }
 
+.cala-dashboard__footprints {
+  grid-area: footprints;
+  min-width: 0;
+  min-height: 0;
+}
+
 .cala-dashboard__vitals {
   grid-area: vitals;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.cala-dashboard__vitals > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.export-button {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.export-button:hover:not(:disabled) {
+  background: var(--bg-inset);
+}
+
+.export-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .cala-dashboard__frame {
   grid-area: frame;
   min-width: 0;
   min-height: 0;
+}
+
+.cala-dashboard__traces {
+  grid-area: traces;
+  min-width: 0;
 }
 
 .cala-dashboard__events {
@@ -278,6 +388,134 @@
   padding: var(--space-sm) var(--space-md);
   display: flex;
   flex-direction: column;
+}
+
+.traces-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.traces-panel__header {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.traces-panel__chart {
+  min-height: 260px;
+}
+
+.footprints-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-height: 0;
+}
+
+.footprints-panel__header {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.footprints-panel__canvas-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+  min-height: 260px;
+  padding: var(--space-xs);
+}
+
+.footprints-panel__canvas {
+  image-rendering: pixelated;
+  max-width: 100%;
+  height: auto;
+  cursor: crosshair;
+  display: block;
+}
+
+/* Per-neuron zoom panel (Phase 7 task 12). */
+.neuron-zoom {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.neuron-zoom__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.neuron-zoom__id {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.neuron-zoom__close {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 var(--space-xs);
+}
+
+.neuron-zoom__close:hover {
+  color: var(--text-primary);
+}
+
+.neuron-zoom__body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.neuron-zoom__footprint-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+}
+
+.neuron-zoom__footprint {
+  image-rendering: pixelated;
+  width: 64px;
+  height: 64px;
+  background: black;
+}
+
+.neuron-zoom__trace {
+  min-width: 0;
+}
+
+.neuron-zoom__empty {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
 }
 
 /* Simplified single-frame viewer: no side panel in the new layout. */

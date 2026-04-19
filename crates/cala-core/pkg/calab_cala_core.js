@@ -61,7 +61,7 @@ export class AviReader {
     constructor(bytes) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export2);
+            const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
             const len0 = WASM_VECTOR_LEN;
             wasm.avireader_new(retptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -90,7 +90,7 @@ export class AviReader {
     readFrameGrayscaleF32(n, method) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(method, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(method, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
             wasm.avireader_readFrameGrayscaleF32(retptr, this.__wbg_ptr, n, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -101,7 +101,7 @@ export class AviReader {
                 throw takeObject(r2);
             }
             var v2 = getArrayF32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v2;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
@@ -150,9 +150,9 @@ export class Extender {
     constructor(height, width, residual_window_len, extend_cfg_json, metadata_json) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(extend_cfg_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(extend_cfg_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(metadata_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr1 = passStringToWasm0(metadata_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
             wasm.extender_new(retptr, height, width, residual_window_len, ptr0, len0, ptr1, len1);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -176,7 +176,7 @@ export class Extender {
     pushResidual(residual) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArrayF32ToWasm0(residual, wasm.__wbindgen_export2);
+            const ptr0 = passArrayF32ToWasm0(residual, wasm.__wbindgen_export);
             const len0 = WASM_VECTOR_LEN;
             wasm.extender_pushResidual(retptr, this.__wbg_ptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -232,6 +232,26 @@ export class Fitter {
         wasm.__wbg_fitter_free(ptr, 0);
     }
     /**
+     * Live neuron ids in the same order as `last_trace`'s vector.
+     * Used by the traces panel (Phase 7 task 8) so per-id timeseries
+     * samples carry the right id even as mutations insert / remove
+     * components across cycles.
+     * @returns {Uint32Array}
+     */
+    componentIds() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.fitter_componentIds(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayU32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Drain every mutation in `queue` and apply in FIFO order. The
      * returned flat `Uint32Array` carries `[applied, stale, invalid]`
      * counts — ready to push to the archive worker for dashboard
@@ -247,8 +267,40 @@ export class Fitter {
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var v1 = getArrayU32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Drain + apply like `drainApply`, but also return the per-
+     * mutation event payloads. Shape:
+     *
+     * ```js
+     * { report: [applied, stale, invalid], events: AppliedEvent[] }
+     * ```
+     *
+     * Each `AppliedEvent` is a tagged object (`kind: 'birth' | 'merge'
+     * | 'deprecate'`) carrying the minimal fields the event-feed UI
+     * needs (§9.2). `support` and `values` come through as plain
+     * `number[]` — they're small (~50 elements per birth) and cross
+     * the WASM boundary at extend-cycle cadence, not per frame.
+     * @param {MutationQueueHandle} queue
+     * @returns {any}
+     */
+    drainApplyEvents(queue) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(queue, MutationQueueHandle);
+            wasm.fitter_drainApplyEvents(retptr, this.__wbg_ptr, queue.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -281,7 +333,7 @@ export class Fitter {
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var v1 = getArrayF32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v1;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
@@ -299,7 +351,7 @@ export class Fitter {
     constructor(height, width, cfg_json) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(cfg_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(cfg_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
             wasm.fitter_new(retptr, height, width, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -324,6 +376,28 @@ export class Fitter {
         return ret >>> 0;
     }
     /**
+     * `Ã · c_t` reconstruction of the most recent frame (design §3
+     * fit loop). Returns an empty `Float32Array` before the first
+     * `step()` has landed. Used by W2's preview path (Phase 7 task
+     * 6) so the dashboard's 4-canvas frame panel can show what the
+     * model thinks the frame looked like alongside the raw / hot-
+     * pixel / motion-corrected stages from W1.
+     * @returns {Float32Array}
+     */
+    reconstructLastFrame() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.fitter_reconstructLastFrame(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayF32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Run one OMF frame. Returns the residual `R_t` as a new
      * `Float32Array` so the extend worker can read it.
      * @param {Float32Array} y
@@ -332,7 +406,7 @@ export class Fitter {
     step(y) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArrayF32ToWasm0(y, wasm.__wbindgen_export2);
+            const ptr0 = passArrayF32ToWasm0(y, wasm.__wbindgen_export);
             const len0 = WASM_VECTOR_LEN;
             wasm.fitter_step(retptr, this.__wbg_ptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -343,7 +417,7 @@ export class Fitter {
                 throw takeObject(r2);
             }
             var v2 = getArrayF32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v2;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
@@ -429,7 +503,7 @@ export class MutationQueueHandle {
     constructor(extend_cfg_json) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(extend_cfg_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(extend_cfg_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
             wasm.mutationqueuehandle_new(retptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -457,7 +531,7 @@ export class MutationQueueHandle {
     pushDeprecate(snapshot_epoch, id, reason) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(reason, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(reason, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
             wasm.mutationqueuehandle_pushDeprecate(retptr, this.__wbg_ptr, snapshot_epoch, id, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -505,9 +579,9 @@ export class Preprocessor {
     constructor(height, width, metadata_json, cfg_json) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(metadata_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr0 = passStringToWasm0(metadata_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(cfg_json, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr1 = passStringToWasm0(cfg_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
             wasm.preprocessor_new(retptr, height, width, ptr0, len0, ptr1, len1);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -533,7 +607,7 @@ export class Preprocessor {
     processFrameF32(input) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArrayF32ToWasm0(input, wasm.__wbindgen_export2);
+            const ptr0 = passArrayF32ToWasm0(input, wasm.__wbindgen_export);
             const len0 = WASM_VECTOR_LEN;
             wasm.preprocessor_processFrameF32(retptr, this.__wbg_ptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -544,7 +618,39 @@ export class Preprocessor {
                 throw takeObject(r2);
             }
             var v2 = getArrayF32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
+            return v2;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Same as `processFrameF32` but also returns the post-hot-pixel
+     * and post-motion intermediate frames, concatenated after the
+     * final frame. Used by W1's preview path (Phase 7 task 5) so the
+     * dashboard's 4-canvas frame panel can render raw / hot-pixel /
+     * motion / reconstruction side by side.
+     *
+     * Returned layout (all `pixels` = height·width in length):
+     * `[final || hot_pixel || motion]` → total length `3·pixels`.
+     * @param {Float32Array} input
+     * @returns {Float32Array}
+     */
+    processFrameF32WithStages(input) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArrayF32ToWasm0(input, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.preprocessor_processFrameF32WithStages(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            var v2 = getArrayF32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v2;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
@@ -562,9 +668,9 @@ export class Preprocessor {
     processFrameU8(input, channels, method) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArray8ToWasm0(input, wasm.__wbindgen_export2);
+            const ptr0 = passArray8ToWasm0(input, wasm.__wbindgen_export);
             const len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(method, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr1 = passStringToWasm0(method, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
             wasm.preprocessor_processFrameU8(retptr, this.__wbg_ptr, ptr0, len0, channels, ptr1, len1);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -575,7 +681,7 @@ export class Preprocessor {
                 throw takeObject(r2);
             }
             var v3 = getArrayF32FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export(r0, r1 * 4, 4);
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
             return v3;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
@@ -648,6 +754,13 @@ export function init_panic_hook() {
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg_String_8564e559799eccda: function(arg0, arg1) {
+            const ret = String(getObject(arg1));
+            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        },
         __wbg___wbindgen_throw_6b64449b9b9ed33c: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -659,23 +772,46 @@ function __wbg_get_imports() {
                 deferred0_1 = arg1;
                 console.error(getStringFromWasm0(arg0, arg1));
             } finally {
-                wasm.__wbindgen_export(deferred0_0, deferred0_1, 1);
+                wasm.__wbindgen_export3(deferred0_0, deferred0_1, 1);
             }
         },
         __wbg_new_227d7c05414eb861: function() {
             const ret = new Error();
             return addHeapObject(ret);
         },
+        __wbg_new_682678e2f47e32bc: function() {
+            const ret = new Array();
+            return addHeapObject(ret);
+        },
+        __wbg_new_aa8d0fa9762c29bd: function() {
+            const ret = new Object();
+            return addHeapObject(ret);
+        },
+        __wbg_set_3bf1de9fab0cd644: function(arg0, arg1, arg2) {
+            getObject(arg0)[arg1 >>> 0] = takeObject(arg2);
+        },
+        __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
+            getObject(arg0)[takeObject(arg1)] = takeObject(arg2);
+        },
         __wbg_stack_3b0d974bbf31e44f: function(arg0, arg1) {
             const ret = getObject(arg1).stack;
-            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
+            const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         },
-        __wbindgen_cast_0000000000000001: function(arg0, arg1) {
+        __wbindgen_cast_0000000000000001: function(arg0) {
+            // Cast intrinsic for `F64 -> Externref`.
+            const ret = arg0;
+            return addHeapObject(ret);
+        },
+        __wbindgen_cast_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
+            return addHeapObject(ret);
+        },
+        __wbindgen_object_clone_ref: function(arg0) {
+            const ret = getObject(arg0);
             return addHeapObject(ret);
         },
         __wbindgen_object_drop_ref: function(arg0) {

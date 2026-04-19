@@ -14,6 +14,7 @@ import {
 } from '@calab/cala-runtime';
 import { state, setRunState, setErrorMsg } from './data-store.ts';
 import { recordFrameProcessed } from './dashboard-store.ts';
+import { resetMaxProjection, updateMaxProjection } from './max-projection-store.ts';
 import {
   createDecodePreprocessWorker,
   createFitWorker,
@@ -68,12 +69,23 @@ export interface LatestFramePreview {
   pixels: Uint8ClampedArray;
 }
 
+export type FrameStage = 'raw' | 'hotPixel' | 'motion' | 'reconstruction';
+
+export type LatestFramesByStage = Partial<Record<FrameStage, LatestFramePreview>>;
+
 // Signal (not store) because the preview updates every few frames and
 // fine-grained store reactivity is wasted overhead — the viewer
 // re-renders the whole canvas per update regardless.
-const [latestFrameSignal, setLatestFrameSignal] = createSignal<LatestFramePreview | null>(null);
+const [latestFramesSignal, setLatestFramesSignal] = createSignal<LatestFramesByStage>({});
 
-export const latestFrame: Accessor<LatestFramePreview | null> = latestFrameSignal;
+export const latestFrames: Accessor<LatestFramesByStage> = latestFramesSignal;
+
+// Back-compat for callers that only want the final preprocess stage
+// (the single-frame viewer reads this; the 4-canvas panel reads
+// `latestFrames` directly). Tracks the `motion` stage since that is
+// what the Phase 6 viewer always showed — the frame fit sees.
+export const latestFrame: Accessor<LatestFramePreview | null> = () =>
+  latestFramesSignal().motion ?? null;
 
 function buildConfig(meta: FrameSourceMeta, factories: WorkerFactories): RuntimeConfig {
   const frameBytes = meta.width * meta.height * BYTES_PER_F32_PIXEL;
@@ -111,6 +123,7 @@ function buildConfig(meta: FrameSourceMeta, factories: WorkerFactories): Runtime
       fit: {
         height: meta.height,
         width: meta.width,
+        framePreviewStride: DEFAULT_FRAME_PREVIEW_STRIDE,
         // Shared with W1's metadata: extend's `RecordingMetadata`
         // parser (task 11) needs `pixel_size_um` to translate the
         // neuron-diameter gate into pixels.
@@ -162,12 +175,19 @@ function wrapFactories(base: WorkerFactories): WorkerFactories {
         const listener = (ev: { data: WorkerOutbound }): void => {
           const msg = ev.data;
           if (msg.kind === 'frame-preview') {
-            setLatestFrameSignal({
+            const preview = {
               index: msg.index,
               width: msg.width,
               height: msg.height,
               pixels: msg.pixels,
-            });
+            };
+            setLatestFramesSignal((prev) => ({
+              ...prev,
+              [msg.stage]: preview,
+            }));
+            // Running max projection off the motion stage — footprints
+            // panel (Phase 7 task 10) renders on top of this.
+            if (msg.stage === 'motion') updateMaxProjection(preview);
             return;
           }
         };
@@ -177,11 +197,28 @@ function wrapFactories(base: WorkerFactories): WorkerFactories {
       if (role === 'fit') {
         // Fit is the only worker that knows the real pipeline epoch,
         // so the dashboard frame/epoch label is driven from its
-        // heartbeat. W1's `frame-processed` is ignored here.
+        // heartbeat. W1's `frame-processed` is ignored here. Phase 7
+        // task 6 added `frame-preview` posts with `stage:
+        // 'reconstruction'` — route them into the same `latestFrames`
+        // signal as W1 so the 4-canvas frame panel can read all four
+        // stages from one place.
         const listener = (ev: { data: WorkerOutbound }): void => {
           const msg = ev.data;
           if (msg.kind === 'frame-processed') {
             recordFrameProcessed(msg.index, msg.epoch);
+            return;
+          }
+          if (msg.kind === 'frame-preview') {
+            setLatestFramesSignal((prev) => ({
+              ...prev,
+              [msg.stage]: {
+                index: msg.index,
+                width: msg.width,
+                height: msg.height,
+                pixels: msg.pixels,
+              },
+            }));
+            return;
           }
         };
         worker.addEventListener('message', listener);
@@ -209,6 +246,7 @@ export async function startRun(opts: StartOptions = {}): Promise<void> {
 
   setErrorMsg(null);
   setRunState('starting');
+  resetMaxProjection();
 
   const baseFactories = opts.factories ?? defaultWorkerFactories();
   const factories = wrapFactories(baseFactories);
@@ -241,14 +279,30 @@ export async function startRun(opts: StartOptions = {}): Promise<void> {
     currentPreviewDetach = null;
     currentFitDetach?.();
     currentFitDetach = null;
-    currentArchiveWorker = null;
+    // Intentionally *keep* `currentArchiveWorker` alive after a
+    // natural run end so the export flow (Phase 7 task 15) can
+    // still reach the archive worker's queries while the run state
+    // is `stopped`. The next `startRun` call wipes it via
+    // `wrapFactories` re-spawning a fresh archive worker, and a
+    // full teardown is covered by the `stopRun` path + the
+    // `currentRuntime === null` gate.
   }
 }
 
 export async function stopRun(): Promise<void> {
   const rt = currentRuntime;
-  if (rt === null) return;
-  await rt.stop();
+  if (rt === null) {
+    // No active run; still clear any lingering post-completion
+    // archive worker reference so export can't post to a dead
+    // worker after explicit user teardown.
+    currentArchiveWorker = null;
+    return;
+  }
+  try {
+    await rt.stop();
+  } finally {
+    currentArchiveWorker = null;
+  }
 }
 
 export function currentRunState(): RuntimeState {

@@ -1,18 +1,37 @@
 // .npy binary format writer
-// Inverse of npy-parser.ts — serializes a Float32Array + shape into .npy format.
+// Inverse of npy-parser.ts — serializes a typed array + shape into .npy format.
 // Reference: https://numpy.org/doc/2.3/reference/generated/numpy.lib.format.html
 
 /**
- * Write a Float32Array as a .npy binary buffer (version 1.0, little-endian float32).
+ * NumPy dtype descriptor for the supported typed arrays. Little-
+ * endian scalar tags — matches what `parseNpy` accepts.
+ */
+type NpyDtypeDescr = '<f4' | '<u4' | '<i4';
+
+function descrForData(data: Float32Array | Uint32Array | Int32Array): NpyDtypeDescr {
+  if (data instanceof Float32Array) return '<f4';
+  if (data instanceof Uint32Array) return '<u4';
+  return '<i4';
+}
+
+/**
+ * Write a typed array as a .npy binary buffer (version 1.0,
+ * little-endian). Supports Float32Array (`<f4`), Uint32Array (`<u4`),
+ * and Int32Array (`<i4`) — the only dtypes the CaLa export flow
+ * currently needs.
  *
- * @param data - The flat Float32Array of values
+ * @param data - The flat typed array of values
  * @param shape - The array shape, e.g. [rows, cols]
  * @returns ArrayBuffer containing the complete .npy file
  */
-export function writeNpy(data: Float32Array, shape: number[]): ArrayBuffer {
+export function writeNpy(
+  data: Float32Array | Uint32Array | Int32Array,
+  shape: number[],
+): ArrayBuffer {
   // 1. Build header dict string
+  const descr = descrForData(data);
   const shapeStr = shape.length === 1 ? `(${shape[0]},)` : `(${shape.join(', ')})`;
-  const headerDict = `{'descr': '<f4', 'fortran_order': False, 'shape': ${shapeStr}, }`;
+  const headerDict = `{'descr': '${descr}', 'fortran_order': False, 'shape': ${shapeStr}, }`;
   const headerBytes = new TextEncoder().encode(headerDict);
 
   // 2. Compute padding to 64-byte alignment

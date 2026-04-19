@@ -77,6 +77,20 @@ export type WorkerInbound =
   // Returns every `(t, sparse A column)` snapshot the archive has
   // recorded for `neuronId`, ordered oldest→newest.
   | { kind: 'request-footprint-history'; requestId: number; neuronId: number }
+  // All live neuron traces (design §8 traces panel, Phase 7 task 8).
+  // `idFilter`, if present, restricts the reply to the intersection
+  // with ids the archive has seen. Empty filter (undefined) returns
+  // every tracked id. Reply is `all-traces`.
+  | {
+      kind: 'request-all-traces';
+      requestId: number;
+      idFilter?: Uint32Array;
+    }
+  // All live-neuron footprints for the footprints panel overlay
+  // (design §8, Phase 7 task 10). Returns the most recent sparse
+  // `A` column snapshot per id for neurons that are not currently
+  // deprecated. Reply is `all-footprints`.
+  | { kind: 'request-all-footprints'; requestId: number }
   // Main-thread authored mutation (Phase 6 task 13). The orchestrator
   // forwards these to the fit worker so the UI can deprecate a
   // neuron, force a merge, etc. The worker pushes through the same
@@ -137,18 +151,49 @@ export type WorkerOutbound =
       pixelIndices: Uint32Array[];
       values: Float32Array[];
     }
-  // W1 preview frame for the dashboard viewer (design §12 frame panel,
-  // Phase 5 exit). Strided like `frame-processed` so the post rate is
-  // bounded even when W1 outruns the main-thread canvas; `pixels` is
-  // an 8-bit grayscale projection of the preprocessed f32 frame
-  // (post-autoscale) so the main thread can `putImageData` without
-  // touching the SAB slot the fit worker is still reading.
+  // Reply to `request-all-traces`. `ids[i]`, `times[i]`, and
+  // `values[i]` are parallel. Each per-id `times`/`values` pair is
+  // chronological oldest → newest. Ids not currently tracked are
+  // omitted from the reply (same empty-means-unknown contract as
+  // `request-timeseries`).
+  | {
+      kind: 'all-traces';
+      role: WorkerRole;
+      requestId: number;
+      ids: Uint32Array;
+      times: Float32Array[];
+      values: Float32Array[];
+    }
+  // Reply to `request-all-footprints`. `ids[i]` owns
+  // `pixelIndices[i]` + `values[i]`. Each sparse pair describes the
+  // footprint's latest snapshot in frame coords (linear index →
+  // weight). Deprecated neurons are excluded.
+  | {
+      kind: 'all-footprints';
+      role: WorkerRole;
+      requestId: number;
+      ids: Uint32Array;
+      pixelIndices: Uint32Array[];
+      values: Float32Array[];
+    }
+  // W1 + W2 preview frames for the dashboard (design §12 frame
+  // panel). Strided like `frame-processed` so the post rate is
+  // bounded even when the producing worker outruns the main-thread
+  // canvas; `pixels` is an 8-bit grayscale projection of the
+  // producing stage's f32 frame (post-autoscale).
+  //
+  // `stage` disambiguates the four panels (Phase 7 task 5):
+  // - 'raw'            — W1 post-decode, pre-preprocess.
+  // - 'hotPixel'       — W1 post hot-pixel median, pre-motion.
+  // - 'motion'         — W1 post-motion (what fit sees).
+  // - 'reconstruction' — W2 `Ã · c_t` reconstruction.
   | {
       kind: 'frame-preview';
       role: WorkerRole;
       index: number;
       width: number;
       height: number;
+      stage: 'raw' | 'hotPixel' | 'motion' | 'reconstruction';
       pixels: Uint8ClampedArray;
     };
 

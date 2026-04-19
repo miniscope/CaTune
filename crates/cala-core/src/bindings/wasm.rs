@@ -34,7 +34,18 @@ use crate::extending::driver as extend_driver;
 use crate::extending::mutation::{
     DeprecateReason, Epoch, MutationQueue, PipelineMutation, Snapshot,
 };
+use crate::fitting::AppliedEvent;
 use crate::fitting::FitPipeline;
+
+// Wire-shape for `Fitter::drainApplyEvents`. Kept private to the
+// binding so the rest of the crate stays unaware of wasm-specific
+// shapes. Serde is available whenever `jsbindings` is on (see
+// Cargo.toml — `jsbindings` implies `serde`).
+#[derive(serde::Serialize)]
+struct DrainApplyEventsResult {
+    report: [u32; 3],
+    events: Vec<AppliedEvent>,
+}
 use crate::io::{decode_grayscale_f32, OwnedAviReader};
 use crate::preprocess::PreprocessPipeline;
 
@@ -232,6 +243,56 @@ impl Preprocessor {
             .map_err(|e| js_err("preprocess", format!("decode: {e:?}")))?;
         self.process_frame_f32(&gray)
     }
+
+    /// Same as `processFrameF32` but also returns the post-hot-pixel
+    /// and post-motion intermediate frames, concatenated after the
+    /// final frame. Used by W1's preview path (Phase 7 task 5) so the
+    /// dashboard's 4-canvas frame panel can render raw / hot-pixel /
+    /// motion / reconstruction side by side.
+    ///
+    /// Returned layout (all `pixels` = height·width in length):
+    /// `[final || hot_pixel || motion]` → total length `3·pixels`.
+    #[wasm_bindgen(js_name = processFrameF32WithStages)]
+    pub fn process_frame_f32_with_stages(&mut self, input: &[f32]) -> Result<Vec<f32>, JsValue> {
+        let pixels = (self.height as usize) * (self.width as usize);
+        if input.len() != pixels {
+            return Err(js_err(
+                "preprocess",
+                format!(
+                    "input length {} does not match height·width = {}",
+                    input.len(),
+                    pixels
+                ),
+            ));
+        }
+        let mut out = vec![0.0f32; pixels];
+        let mut hot = vec![0.0f32; pixels];
+        let mut motion = vec![0.0f32; pixels];
+        {
+            let input_view = Frame::new(input, self.height as usize, self.width as usize)
+                .map_err(|e| js_err("preprocess", format!("input shape: {e:?}")))?;
+            let mut out_view = FrameMut::new(&mut out, self.height as usize, self.width as usize)
+                .map_err(|e| js_err("preprocess", format!("output shape: {e:?}")))?;
+            let mut hot_view = FrameMut::new(&mut hot, self.height as usize, self.width as usize)
+                .map_err(|e| js_err("preprocess", format!("hot shape: {e:?}")))?;
+            let mut motion_view =
+                FrameMut::new(&mut motion, self.height as usize, self.width as usize)
+                    .map_err(|e| js_err("preprocess", format!("motion shape: {e:?}")))?;
+            self.pipeline
+                .process_frame_with_stages(
+                    input_view,
+                    &mut out_view,
+                    &mut hot_view,
+                    &mut motion_view,
+                )
+                .map_err(|e| js_err("preprocess", format!("{e:?}")))?;
+        }
+        let mut combined = Vec::with_capacity(3 * pixels);
+        combined.extend_from_slice(&out);
+        combined.extend_from_slice(&hot);
+        combined.extend_from_slice(&motion);
+        Ok(combined)
+    }
 }
 
 // ── Fit ────────────────────────────────────────────────────────────
@@ -315,6 +376,36 @@ impl Fitter {
         }
     }
 
+    /// Live neuron ids in the same order as `last_trace`'s vector.
+    /// Used by the traces panel (Phase 7 task 8) so per-id timeseries
+    /// samples carry the right id even as mutations insert / remove
+    /// components across cycles.
+    #[wasm_bindgen(js_name = componentIds)]
+    pub fn component_ids(&self) -> Vec<u32> {
+        let fp = self.pipeline.footprints();
+        (0..fp.len()).map(|i| fp.id(i)).collect()
+    }
+
+    /// `Ã · c_t` reconstruction of the most recent frame (design §3
+    /// fit loop). Returns an empty `Float32Array` before the first
+    /// `step()` has landed. Used by W2's preview path (Phase 7 task
+    /// 6) so the dashboard's 4-canvas frame panel can show what the
+    /// model thinks the frame looked like alongside the raw / hot-
+    /// pixel / motion-corrected stages from W1.
+    #[wasm_bindgen(js_name = reconstructLastFrame)]
+    pub fn reconstruct_last_frame(&self) -> Vec<f32> {
+        let fp = self.pipeline.footprints();
+        let Some(c) = self.pipeline.traces().last() else {
+            return Vec::new();
+        };
+        if c.len() != fp.len() {
+            return Vec::new();
+        }
+        let mut out = vec![0.0f32; fp.pixels()];
+        fp.reconstruct(c, &mut out);
+        out
+    }
+
     /// Drain every mutation in `queue` and apply in FIFO order. The
     /// returned flat `Uint32Array` carries `[applied, stale, invalid]`
     /// counts — ready to push to the archive worker for dashboard
@@ -323,6 +414,32 @@ impl Fitter {
     pub fn drain_apply(&mut self, queue: &mut MutationQueueHandle) -> Vec<u32> {
         let report = self.pipeline.drain_apply(&mut queue.inner);
         vec![report.applied, report.stale, report.invalid]
+    }
+
+    /// Drain + apply like `drainApply`, but also return the per-
+    /// mutation event payloads. Shape:
+    ///
+    /// ```js
+    /// { report: [applied, stale, invalid], events: AppliedEvent[] }
+    /// ```
+    ///
+    /// Each `AppliedEvent` is a tagged object (`kind: 'birth' | 'merge'
+    /// | 'deprecate'`) carrying the minimal fields the event-feed UI
+    /// needs (§9.2). `support` and `values` come through as plain
+    /// `number[]` — they're small (~50 elements per birth) and cross
+    /// the WASM boundary at extend-cycle cadence, not per frame.
+    #[wasm_bindgen(js_name = drainApplyEvents)]
+    pub fn drain_apply_events(
+        &mut self,
+        queue: &mut MutationQueueHandle,
+    ) -> Result<JsValue, JsValue> {
+        let (report, events) = self.pipeline.drain_apply_events(&mut queue.inner);
+        let payload = DrainApplyEventsResult {
+            report: [report.applied, report.stale, report.invalid],
+            events,
+        };
+        serde_wasm_bindgen::to_value(&payload)
+            .map_err(|e| js_err("drainApplyEvents serialization", e))
     }
 
     /// Take an extend-visible snapshot of `(Ã, W, M, epoch)` — design

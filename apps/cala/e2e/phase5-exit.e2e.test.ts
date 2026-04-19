@@ -230,6 +230,14 @@ class StubPreprocessor {
     // the shape and magnitude of the data W2 and W4 see.
     return input;
   }
+  processFrameF32WithStages(input: Float32Array): Float32Array {
+    // Identity 3-stage: final || hotPixel || motion all echo input.
+    const out = new Float32Array(input.length * 3);
+    out.set(input, 0);
+    out.set(input, input.length);
+    out.set(input, input.length * 2);
+    return out;
+  }
   free(): void {
     // noop
   }
@@ -251,6 +259,24 @@ class StubFitter {
   }
   drainApply(_handle: unknown): Uint32Array {
     return new Uint32Array([0, 0, 0]);
+  }
+  drainApplyEvents(_handle: unknown): {
+    report: [number, number, number];
+    events: Array<Record<string, unknown>>;
+  } {
+    // Phase 5 fit stub never proposes mutations — extend is a
+    // heartbeat-only stub in that phase — so this matches `drainApply`
+    // and emits no structural events.
+    return { report: [0, 0, 0], events: [] };
+  }
+  reconstructLastFrame(): Float32Array {
+    return new Float32Array(0);
+  }
+  componentIds(): Uint32Array {
+    return new Uint32Array(0);
+  }
+  lastTrace(): Float32Array {
+    return new Float32Array(0);
   }
   takeSnapshot(): { epoch(): bigint; numComponents(): number; pixels(): number; free(): void } {
     return {
@@ -295,6 +321,8 @@ class StubExtender {
 vi.mock('@calab/cala-core', () => ({
   initCalaCore: vi.fn(async () => undefined),
   calaMemoryBytes: vi.fn(() => 0),
+  drainApplyEventsTyped: (fitter: { drainApplyEvents: (q: unknown) => unknown }, queue: unknown) =>
+    fitter.drainApplyEvents(queue),
   AviReader: StubAviReader,
   Preprocessor: StubPreprocessor,
   Fitter: StubFitter,
