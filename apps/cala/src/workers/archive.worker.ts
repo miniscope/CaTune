@@ -31,6 +31,7 @@ import {
 import { TimeseriesStore } from './timeseries-store.ts';
 import { NeuronEventIndex } from './neuron-event-index.ts';
 import { FootprintHistoryStore } from './footprint-history-store.ts';
+import { NeuronTraceStore } from './neuron-trace-store.ts';
 
 // Rolling event log capacity. Design §9.2 sizes ~500 structural
 // events per typical session at ~2 KB each → ~1 MB budget; we default
@@ -62,6 +63,12 @@ const DEFAULT_MAX_INDEXED_NEURONS = 1024;
 // the §9.3 12h-session budget of ~5 MB at ~4 KB per sparse footprint.
 const DEFAULT_FOOTPRINT_HISTORY_LIMIT = 32;
 const DEFAULT_FOOTPRINT_HISTORY_MAX_NEURONS = 512;
+// Per-neuron trace ring (design §8 traces panel, Phase 7 task 8).
+// 256 samples at vitals-stride cadence (~4 Hz) covers ~1 min per
+// neuron — enough for the scrolling strip chart without pressure
+// on the event bus.
+const DEFAULT_TRACE_RING_CAPACITY = 256;
+const DEFAULT_TRACE_MAX_NEURONS = 512;
 // Local EventBus sizing. Archive is the sole subscriber post-init and
 // drains synchronously, so these are effectively no-backpressure
 // defaults — but they live in config per the no-magic-numbers rule.
@@ -90,6 +97,8 @@ interface ArchiveWorkerConfig {
   maxIndexedNeurons: number;
   footprintHistoryLimit: number;
   footprintHistoryMaxNeurons: number;
+  traceRingCapacity: number;
+  traceMaxNeurons: number;
 }
 
 const workerSelf = ((globalThis as unknown as { self?: WorkerGlobalScope }).self ??
@@ -112,6 +121,8 @@ interface RuntimeHandles {
   unsubscribeNeuronIndex: () => void;
   footprints: FootprintHistoryStore;
   unsubscribeFootprints: () => void;
+  traces: NeuronTraceStore;
+  unsubscribeTraces: () => void;
   running: boolean;
   stopped: boolean;
 }
@@ -159,6 +170,8 @@ function parseConfig(raw: unknown): ArchiveWorkerConfig {
       'footprintHistoryMaxNeurons',
       DEFAULT_FOOTPRINT_HISTORY_MAX_NEURONS,
     ),
+    traceRingCapacity: pickPositiveInt('traceRingCapacity', DEFAULT_TRACE_RING_CAPACITY),
+    traceMaxNeurons: pickPositiveInt('traceMaxNeurons', DEFAULT_TRACE_MAX_NEURONS),
   };
 }
 
@@ -184,8 +197,17 @@ function handleInit(payload: WorkerInitPayload): void {
     perNeuronLimit: cfg.footprintHistoryLimit,
     maxNeurons: cfg.footprintHistoryMaxNeurons,
   });
+  const traces = new NeuronTraceStore({
+    capacity: cfg.traceRingCapacity,
+    maxNeurons: cfg.traceMaxNeurons,
+  });
 
   const unsubscribeLog = bus.subscribe((e) => {
+    // Trace samples fire every vitals-stride frame and carry a
+    // full-K Float32Array — routing them through the structural
+    // event log would blow the ring and flood the event feed. The
+    // traces store (below) is their canonical sink.
+    if (e.kind === 'trace-sample') return;
     if (eventLog.length === cfg.eventRingCapacity) {
       eventLog.shift();
     }
@@ -236,8 +258,14 @@ function handleInit(payload: WorkerInitPayload): void {
       case 'deprecate':
       case 'reject':
       case 'metric':
+      case 'trace-sample':
         return;
     }
+  });
+
+  const unsubscribeTraces = bus.subscribe((e) => {
+    if (e.kind !== 'trace-sample') return;
+    traces.append(e.t, e.ids, e.values);
   });
 
   handles = {
@@ -251,6 +279,8 @@ function handleInit(payload: WorkerInitPayload): void {
     unsubscribeTimeseries,
     neuronIndex,
     unsubscribeNeuronIndex,
+    traces,
+    unsubscribeTraces,
     footprints,
     unsubscribeFootprints,
     running: false,
@@ -326,6 +356,20 @@ function handleFootprintHistoryRequest(requestId: number, neuronId: number): voi
   });
 }
 
+function handleAllTracesRequest(requestId: number, idFilter?: Uint32Array): void {
+  if (!handles) return;
+  const filter = idFilter ? Array.from(idFilter) : undefined;
+  const result = handles.traces.queryAll(filter);
+  post({
+    kind: 'all-traces',
+    role: ROLE,
+    requestId,
+    ids: Uint32Array.from(result.ids),
+    times: result.times,
+    values: result.values,
+  });
+}
+
 function postDoneOnce(): void {
   if (donePosted) return;
   donePosted = true;
@@ -343,6 +387,7 @@ function handleStop(): void {
   handles.unsubscribeTimeseries();
   handles.unsubscribeNeuronIndex();
   handles.unsubscribeFootprints();
+  handles.unsubscribeTraces();
   handles.bus.close();
   postDoneOnce();
 }
@@ -374,6 +419,9 @@ workerSelf.onmessage = (ev: MessageEvent<WorkerInbound>): void => {
       return;
     case 'request-footprint-history':
       handleFootprintHistoryRequest(msg.requestId, msg.neuronId);
+      return;
+    case 'request-all-traces':
+      handleAllTracesRequest(msg.requestId, msg.idFilter);
       return;
     case 'stop':
       handleStop();

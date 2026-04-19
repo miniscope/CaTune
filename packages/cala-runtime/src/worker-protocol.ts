@@ -77,6 +77,15 @@ export type WorkerInbound =
   // Returns every `(t, sparse A column)` snapshot the archive has
   // recorded for `neuronId`, ordered oldest→newest.
   | { kind: 'request-footprint-history'; requestId: number; neuronId: number }
+  // All live neuron traces (design §8 traces panel, Phase 7 task 8).
+  // `idFilter`, if present, restricts the reply to the intersection
+  // with ids the archive has seen. Empty filter (undefined) returns
+  // every tracked id. Reply is `all-traces`.
+  | {
+      kind: 'request-all-traces';
+      requestId: number;
+      idFilter?: Uint32Array;
+    }
   // Main-thread authored mutation (Phase 6 task 13). The orchestrator
   // forwards these to the fit worker so the UI can deprecate a
   // neuron, force a merge, etc. The worker pushes through the same
@@ -135,6 +144,19 @@ export type WorkerOutbound =
       neuronId: number;
       times: Float32Array;
       pixelIndices: Uint32Array[];
+      values: Float32Array[];
+    }
+  // Reply to `request-all-traces`. `ids[i]`, `times[i]`, and
+  // `values[i]` are parallel. Each per-id `times`/`values` pair is
+  // chronological oldest → newest. Ids not currently tracked are
+  // omitted from the reply (same empty-means-unknown contract as
+  // `request-timeseries`).
+  | {
+      kind: 'all-traces';
+      role: WorkerRole;
+      requestId: number;
+      ids: Uint32Array;
+      times: Float32Array[];
       values: Float32Array[];
     }
   // W1 + W2 preview frames for the dashboard (design §12 frame

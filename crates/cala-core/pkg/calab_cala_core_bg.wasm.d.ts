@@ -18,6 +18,7 @@ export const avireader_width: (a: number) => number;
 export const extender_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
 export const extender_pushResidual: (a: number, b: number, c: number, d: number) => void;
 export const extender_runCycle: (a: number, b: number, c: number) => number;
+export const fitter_componentIds: (a: number, b: number) => void;
 export const fitter_drainApply: (a: number, b: number, c: number) => void;
 export const fitter_drainApplyEvents: (a: number, b: number, c: number) => void;
 export const fitter_epoch: (a: number) => bigint;

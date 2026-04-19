@@ -50,8 +50,10 @@ export function neuronIdsForEvent(e: PipelineEvent): number[] {
     case 'reject':
     case 'metric':
     case 'footprint-snapshot':
-      // Periodic footprint snapshots are indexed by the footprint
-      // store (§9.3), not the structural-event history.
+    case 'trace-sample':
+      // Periodic footprint snapshots + per-neuron trace samples are
+      // indexed by their own stores; they don't belong in the
+      // structural-event history.
       return [];
   }
 }

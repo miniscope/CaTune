@@ -178,6 +178,12 @@ vi.mock('@calab/cala-core', () => {
       // can override this per-test.
       return new Float32Array(0);
     }
+    componentIds(): Uint32Array {
+      return new Uint32Array(0);
+    }
+    lastTrace(): Float32Array {
+      return new Float32Array(0);
+    }
 
     takeSnapshot(): { epoch(): bigint; numComponents(): number; pixels(): number; free(): void } {
       this.snapshotCalls += 1;

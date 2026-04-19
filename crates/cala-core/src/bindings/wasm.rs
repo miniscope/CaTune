@@ -376,6 +376,16 @@ impl Fitter {
         }
     }
 
+    /// Live neuron ids in the same order as `last_trace`'s vector.
+    /// Used by the traces panel (Phase 7 task 8) so per-id timeseries
+    /// samples carry the right id even as mutations insert / remove
+    /// components across cycles.
+    #[wasm_bindgen(js_name = componentIds)]
+    pub fn component_ids(&self) -> Vec<u32> {
+        let fp = self.pipeline.footprints();
+        (0..fp.len()).map(|i| fp.id(i)).collect()
+    }
+
     /// `Ã · c_t` reconstruction of the most recent frame (design §3
     /// fit loop). Returns an empty `Float32Array` before the first
     /// `step()` has landed. Used by W2's preview path (Phase 7 task

@@ -78,6 +78,13 @@ export class Fitter {
     free(): void;
     [Symbol.dispose](): void;
     /**
+     * Live neuron ids in the same order as `last_trace`'s vector.
+     * Used by the traces panel (Phase 7 task 8) so per-id timeseries
+     * samples carry the right id even as mutations insert / remove
+     * components across cycles.
+     */
+    componentIds(): Uint32Array;
+    /**
      * Drain every mutation in `queue` and apply in FIFO order. The
      * returned flat `Uint32Array` carries `[applied, stale, invalid]`
      * counts — ready to push to the archive worker for dashboard
@@ -262,6 +269,7 @@ export interface InitOutput {
     readonly extender_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly extender_pushResidual: (a: number, b: number, c: number, d: number) => void;
     readonly extender_runCycle: (a: number, b: number, c: number) => number;
+    readonly fitter_componentIds: (a: number, b: number) => void;
     readonly fitter_drainApply: (a: number, b: number, c: number) => void;
     readonly fitter_drainApplyEvents: (a: number, b: number, c: number) => void;
     readonly fitter_epoch: (a: number) => bigint;

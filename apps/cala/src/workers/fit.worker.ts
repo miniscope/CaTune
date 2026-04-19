@@ -377,6 +377,7 @@ function updateSchedulerFromEvent(scheduler: FootprintSnapshotScheduler, ev: Pip
     case 'reject':
     case 'metric':
     case 'footprint-snapshot':
+    case 'trace-sample':
       return;
   }
 }
@@ -521,6 +522,20 @@ function emitVitals(h: RuntimeHandles, frameIndex: number): void {
   ];
   for (const { name, value } of metrics) {
     h.eventBus.publish({ kind: 'metric', t: frameIndex, name, value });
+  }
+
+  // Per-neuron trace sample for the traces panel (Phase 7 task 8).
+  // `componentIds()` and `lastTrace()` are ordered identically by the
+  // Rust side, so `ids[i]` owns `values[i]` until the next mutation.
+  const idsArr = h.fitter.componentIds();
+  const trace = h.fitter.lastTrace();
+  if (idsArr.length > 0 && trace.length === idsArr.length) {
+    h.eventBus.publish({
+      kind: 'trace-sample',
+      t: frameIndex,
+      ids: Uint32Array.from(idsArr),
+      values: trace instanceof Float32Array ? trace : Float32Array.from(trace),
+    });
   }
 }
 

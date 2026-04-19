@@ -23,6 +23,8 @@ export function describeEvent(e: PipelineEvent): string {
       return `${e.name}=${e.value.toFixed(3)}`;
     case 'footprint-snapshot':
       return `id=${e.neuronId} (${e.footprint.pixelIndices.length}px)`;
+    case 'trace-sample':
+      return `${e.ids.length} traces @ t=${e.t}`;
   }
 }
 
@@ -39,6 +41,7 @@ export function idForEvent(e: PipelineEvent): string {
       return `#${e.neuronId}`;
     case 'reject':
     case 'metric':
+    case 'trace-sample':
       return '';
   }
 }

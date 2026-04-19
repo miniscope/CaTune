@@ -232,6 +232,26 @@ export class Fitter {
         wasm.__wbg_fitter_free(ptr, 0);
     }
     /**
+     * Live neuron ids in the same order as `last_trace`'s vector.
+     * Used by the traces panel (Phase 7 task 8) so per-id timeseries
+     * samples carry the right id even as mutations insert / remove
+     * components across cycles.
+     * @returns {Uint32Array}
+     */
+    componentIds() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.fitter_componentIds(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayU32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Drain every mutation in `queue` and apply in FIFO order. The
      * returned flat `Uint32Array` carries `[applied, stale, invalid]`
      * counts — ready to push to the archive worker for dashboard
