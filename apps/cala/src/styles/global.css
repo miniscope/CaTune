@@ -165,3 +165,81 @@
   display: block;
   color: var(--accent);
 }
+
+/* ─── Event feed (Phase 6 task 8) ──────────────────────────────────── */
+
+.event-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.event-feed__heading {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.event-feed__empty {
+  color: var(--text-tertiary);
+  padding: var(--space-sm);
+  font-style: italic;
+}
+
+.event-feed__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.event-feed__item {
+  display: grid;
+  grid-template-columns: 56px 88px 80px minmax(0, 1fr);
+  gap: var(--space-xs);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.event-feed__item:last-child {
+  border-bottom: none;
+}
+
+.event-feed__t {
+  color: var(--text-tertiary);
+}
+
+.event-feed__kind {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.event-feed__id {
+  color: var(--text-primary);
+}
+
+.event-feed__detail {
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.event-feed__item--birth .event-feed__kind {
+  color: var(--success, #4ade80);
+}
+
+.event-feed__item--deprecate .event-feed__kind {
+  color: var(--warning, #f59e0b);
+}
+
+.event-feed__item--reject .event-feed__kind {
+  color: var(--error, #f87171);
+}
