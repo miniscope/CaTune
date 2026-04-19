@@ -92,8 +92,7 @@ describe('extend worker (stub)', () => {
 
     await runUntil(
       harness,
-      (p) =>
-        p.some((m) => m.kind === 'frame-processed') && p.some((m) => m.kind === 'event'),
+      (p) => p.some((m) => m.kind === 'frame-processed') && p.some((m) => m.kind === 'event'),
     );
 
     const heartbeat = harness.posted.find((m) => m.kind === 'frame-processed');

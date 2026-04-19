@@ -7,6 +7,8 @@
 //! their JSON strings through the `bindings::config_json` helpers —
 //! fixing any defect here catches regressions at both targets at once.
 
+#![cfg(feature = "serde")]
+
 use calab_cala_core::bindings::config_json::{
     parse_extend_config, parse_fit_config, parse_preprocess_config, parse_recording_metadata,
 };

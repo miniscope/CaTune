@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  PipelineEvent,
-  WorkerInbound,
-  WorkerOutbound,
-} from '@calab/cala-runtime';
+import type { PipelineEvent, WorkerInbound, WorkerOutbound } from '@calab/cala-runtime';
 import { createWorkerHarness, type WorkerHarness } from './worker-harness.ts';
 
 // Small capacities keep drop-oldest behaviour observable in-test without
@@ -166,13 +162,9 @@ describe('archive worker', () => {
 
     await harness.deliver({ kind: 'request-archive-dump', requestId: 101 });
     await harness.deliver({ kind: 'request-archive-dump', requestId: 202 });
-    await runUntil(
-      harness,
-      (p) => p.filter((m) => m.kind === 'archive-dump').length >= 2,
-    );
+    await runUntil(harness, (p) => p.filter((m) => m.kind === 'archive-dump').length >= 2);
     const dumps = harness.posted.filter(
-      (m): m is Extract<WorkerOutbound, { kind: 'archive-dump' }> =>
-        m.kind === 'archive-dump',
+      (m): m is Extract<WorkerOutbound, { kind: 'archive-dump' }> => m.kind === 'archive-dump',
     );
     expect(dumps.map((d) => d.requestId)).toEqual([101, 202]);
     for (const d of dumps) {
