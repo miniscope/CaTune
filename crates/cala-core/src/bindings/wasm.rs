@@ -376,6 +376,26 @@ impl Fitter {
         }
     }
 
+    /// `Ã · c_t` reconstruction of the most recent frame (design §3
+    /// fit loop). Returns an empty `Float32Array` before the first
+    /// `step()` has landed. Used by W2's preview path (Phase 7 task
+    /// 6) so the dashboard's 4-canvas frame panel can show what the
+    /// model thinks the frame looked like alongside the raw / hot-
+    /// pixel / motion-corrected stages from W1.
+    #[wasm_bindgen(js_name = reconstructLastFrame)]
+    pub fn reconstruct_last_frame(&self) -> Vec<f32> {
+        let fp = self.pipeline.footprints();
+        let Some(c) = self.pipeline.traces().last() else {
+            return Vec::new();
+        };
+        if c.len() != fp.len() {
+            return Vec::new();
+        }
+        let mut out = vec![0.0f32; fp.pixels()];
+        fp.reconstruct(c, &mut out);
+        out
+    }
+
     /// Drain every mutation in `queue` and apply in FIFO order. The
     /// returned flat `Uint32Array` carries `[applied, stale, invalid]`
     /// counts — ready to push to the archive worker for dashboard

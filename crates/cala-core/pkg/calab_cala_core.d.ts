@@ -122,6 +122,15 @@ export class Fitter {
      */
     numComponents(): number;
     /**
+     * `Ã · c_t` reconstruction of the most recent frame (design §3
+     * fit loop). Returns an empty `Float32Array` before the first
+     * `step()` has landed. Used by W2's preview path (Phase 7 task
+     * 6) so the dashboard's 4-canvas frame panel can show what the
+     * model thinks the frame looked like alongside the raw / hot-
+     * pixel / motion-corrected stages from W1.
+     */
+    reconstructLastFrame(): Float32Array;
+    /**
      * Run one OMF frame. Returns the residual `R_t` as a new
      * `Float32Array` so the extend worker can read it.
      */
@@ -260,6 +269,7 @@ export interface InitOutput {
     readonly fitter_lastTrace: (a: number, b: number) => void;
     readonly fitter_new: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly fitter_numComponents: (a: number) => number;
+    readonly fitter_reconstructLastFrame: (a: number, b: number) => void;
     readonly fitter_step: (a: number, b: number, c: number, d: number) => void;
     readonly fitter_takeSnapshot: (a: number) => number;
     readonly fitter_width: (a: number) => number;

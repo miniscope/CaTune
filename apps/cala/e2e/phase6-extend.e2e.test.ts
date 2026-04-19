@@ -233,6 +233,9 @@ class StubFitter {
       ],
     };
   }
+  reconstructLastFrame(): Float32Array {
+    return new Float32Array(0);
+  }
   takeSnapshot(): { epoch(): bigint; numComponents(): number; pixels(): number; free(): void } {
     return {
       epoch: () => this.currentEpoch,

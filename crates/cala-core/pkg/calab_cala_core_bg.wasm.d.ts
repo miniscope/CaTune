@@ -25,6 +25,7 @@ export const fitter_height: (a: number) => number;
 export const fitter_lastTrace: (a: number, b: number) => void;
 export const fitter_new: (a: number, b: number, c: number, d: number, e: number) => void;
 export const fitter_numComponents: (a: number) => number;
+export const fitter_reconstructLastFrame: (a: number, b: number) => void;
 export const fitter_step: (a: number, b: number, c: number, d: number) => void;
 export const fitter_takeSnapshot: (a: number) => number;
 export const fitter_width: (a: number) => number;

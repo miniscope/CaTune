@@ -356,6 +356,28 @@ export class Fitter {
         return ret >>> 0;
     }
     /**
+     * `Ã · c_t` reconstruction of the most recent frame (design §3
+     * fit loop). Returns an empty `Float32Array` before the first
+     * `step()` has landed. Used by W2's preview path (Phase 7 task
+     * 6) so the dashboard's 4-canvas frame panel can show what the
+     * model thinks the frame looked like alongside the raw / hot-
+     * pixel / motion-corrected stages from W1.
+     * @returns {Float32Array}
+     */
+    reconstructLastFrame() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.fitter_reconstructLastFrame(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayF32FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export3(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * Run one OMF frame. Returns the residual `R_t` as a new
      * `Float32Array` so the extend worker can read it.
      * @param {Float32Array} y

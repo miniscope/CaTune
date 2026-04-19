@@ -75,6 +75,9 @@ const DEFAULT_VITALS_STRIDE = 8;
 // (design §9.3). Matches the archive's footprint-history neuron cap
 // so upstream and storage stay within the same envelope.
 const DEFAULT_FOOTPRINT_SCHEDULER_MAX_NEURONS = 512;
+// Reconstruction preview cadence (design §12 frame panel, Phase 7
+// task 6). 0 disables. Overridable via `workerConfig.framePreviewStride`.
+const DEFAULT_FRAME_PREVIEW_STRIDE = 0;
 // Extend-cycle cadence (design §13 bounded-work-per-cycle). One
 // cycle every N fit steps keeps segmentation cost amortized across
 // the fit hot path; default 32 ≈ ~1 s at 30 fps. Overridable via
@@ -119,6 +122,7 @@ interface FitWorkerConfig {
   frameChannelSlotCount: number;
   frameChannelWaitTimeoutMs: number;
   frameChannelPollIntervalMs: number;
+  framePreviewStride: number;
 }
 
 // Route through `self` when present so `vi.stubGlobal('self', harness)`
@@ -230,6 +234,7 @@ function parseConfig(raw: unknown): FitWorkerConfig {
       cfg.frameChannelPollIntervalMs,
       DEFAULT_FRAME_CHANNEL_POLL_INTERVAL_MS,
     ),
+    framePreviewStride: numberOr(cfg.framePreviewStride, DEFAULT_FRAME_PREVIEW_STRIDE),
   };
 }
 
@@ -456,6 +461,46 @@ function residualL2(residual: ArrayLike<number> | Float32Array): number {
   return Math.sqrt(sumSq);
 }
 
+function quantizeF32ToU8(frame: Float32Array): Uint8ClampedArray {
+  // Autoscale to the [0, 255] range so the canvas shows a meaningful
+  // grayscale regardless of the reconstruction's absolute magnitude.
+  // Mirrors `quantizeToU8` in `lib/frame-preview.ts` but duplicated
+  // here to avoid a main-thread import inside the worker bundle.
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < frame.length; i += 1) {
+    const v = frame[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const out = new Uint8ClampedArray(frame.length);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max - min < 1e-12) {
+    out.fill(128);
+    return out;
+  }
+  const range = max - min;
+  for (let i = 0; i < frame.length; i += 1) {
+    out[i] = Math.round(((frame[i] - min) / range) * 255);
+  }
+  return out;
+}
+
+function emitReconstructionPreview(h: RuntimeHandles, frameIndex: number): void {
+  const stride = h.config.framePreviewStride;
+  if (stride <= 0 || (frameIndex + 1) % stride !== 0) return;
+  const recon = h.fitter.reconstructLastFrame();
+  if (recon.length === 0) return;
+  post({
+    kind: 'frame-preview',
+    role: ROLE,
+    index: frameIndex,
+    width: h.config.width,
+    height: h.config.height,
+    stage: 'reconstruction',
+    pixels: quantizeF32ToU8(recon),
+  });
+}
+
 function emitVitals(h: RuntimeHandles, frameIndex: number): void {
   if (h.config.vitalsStride <= 0) return;
   if ((frameIndex + 1) % h.config.vitalsStride !== 0) return;
@@ -565,6 +610,7 @@ async function fitLoop(h: RuntimeHandles): Promise<void> {
     takeCadencedSnapshot(h, frameIndex);
     emitScheduledFootprints(h, frameIndex);
     emitVitals(h, frameIndex);
+    emitReconstructionPreview(h, frameIndex);
     if ((frameIndex + 1) % h.config.heartbeatStride === 0) {
       post({
         kind: 'frame-processed',

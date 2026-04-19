@@ -171,6 +171,14 @@ vi.mock('@calab/cala-core', () => {
       return { report: [0, 0, 0], events };
     }
 
+    reconstructLastFrame(): Float32Array {
+      // Empty = no components yet; matches the real Fitter's
+      // "before first step" behavior so the preview emitter skips
+      // without breaking. Tests that exercise the preview path
+      // can override this per-test.
+      return new Float32Array(0);
+    }
+
     takeSnapshot(): { epoch(): bigint; numComponents(): number; pixels(): number; free(): void } {
       this.snapshotCalls += 1;
       this.self.snapshotCalls = this.snapshotCalls;

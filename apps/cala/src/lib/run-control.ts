@@ -122,6 +122,7 @@ function buildConfig(meta: FrameSourceMeta, factories: WorkerFactories): Runtime
       fit: {
         height: meta.height,
         width: meta.width,
+        framePreviewStride: DEFAULT_FRAME_PREVIEW_STRIDE,
         // Shared with W1's metadata: extend's `RecordingMetadata`
         // parser (task 11) needs `pixel_size_um` to translate the
         // neuron-diameter gate into pixels.
@@ -191,11 +192,28 @@ function wrapFactories(base: WorkerFactories): WorkerFactories {
       if (role === 'fit') {
         // Fit is the only worker that knows the real pipeline epoch,
         // so the dashboard frame/epoch label is driven from its
-        // heartbeat. W1's `frame-processed` is ignored here.
+        // heartbeat. W1's `frame-processed` is ignored here. Phase 7
+        // task 6 added `frame-preview` posts with `stage:
+        // 'reconstruction'` — route them into the same `latestFrames`
+        // signal as W1 so the 4-canvas frame panel can read all four
+        // stages from one place.
         const listener = (ev: { data: WorkerOutbound }): void => {
           const msg = ev.data;
           if (msg.kind === 'frame-processed') {
             recordFrameProcessed(msg.index, msg.epoch);
+            return;
+          }
+          if (msg.kind === 'frame-preview') {
+            setLatestFramesSignal((prev) => ({
+              ...prev,
+              [msg.stage]: {
+                index: msg.index,
+                width: msg.width,
+                height: msg.height,
+                pixels: msg.pixels,
+              },
+            }));
+            return;
           }
         };
         worker.addEventListener('message', listener);
