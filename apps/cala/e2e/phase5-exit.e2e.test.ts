@@ -274,12 +274,38 @@ class StubMutationQueueHandle {
   }
 }
 
+class StubExtender {
+  // No-op — Phase 5 E2E does not exercise extend. Fit worker
+  // constructs one because the Extender import became unconditional
+  // in task 11; `runCycle` and `pushResidual` are wired for the
+  // real path but here they just no-op so the Phase 5 assertions
+  // (frame ticks, metric events, preview frames) remain exactly
+  // what they were before task 11 landed.
+  constructor(
+    _h: number,
+    _w: number,
+    _win: number,
+    _extendCfg: string,
+    _metadata: string,
+  ) {}
+  pushResidual(_r: Float32Array): void {}
+  runCycle(_fitter: unknown, _queue: unknown): number {
+    return 0;
+  }
+  residualLen(): number {
+    return 0;
+  }
+  free(): void {}
+}
+
 vi.mock('@calab/cala-core', () => ({
   initCalaCore: vi.fn(async () => undefined),
+  calaMemoryBytes: vi.fn(() => 0),
   AviReader: StubAviReader,
   Preprocessor: StubPreprocessor,
   Fitter: StubFitter,
   MutationQueueHandle: StubMutationQueueHandle,
+  Extender: StubExtender,
 }));
 
 // --- pump loop helper ---------------------------------------------------

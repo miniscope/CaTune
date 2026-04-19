@@ -494,15 +494,22 @@ function runExtendCycleIfDue(h: RuntimeHandles, frameIndex: number, residual: Fl
   const proposed = h.extender.runCycle(h.fitter, h.mutationQueueHandle);
   // Report activity to the archive even when zero: a long-running
   // flat line at 0 is itself a signal (quiet FOV or early residual
-  // window). Non-zero proposals will apply on the next drainApply
-  // and advance the fitter's epoch, which cascades to the cell_count
-  // vital automatically.
+  // window).
   h.eventBus.publish({
     kind: 'metric',
     t: frameIndex,
     name: METRIC_EXTEND_PROPOSED,
     value: proposed,
   });
+  // `runCycle` pushes to the Rust-side mutation queue. The JS-side
+  // `drainMutationsOnce` only calls `drainApply` when its own queue
+  // has items (from test injection), so the Rust queue would leak.
+  // Apply any pending Rust mutations right here — epoch advances
+  // and the cell_count vital reflects the extend's work.
+  if (proposed > 0) {
+    h.fitter.drainApply(h.mutationQueueHandle);
+    post({ kind: 'mutation-applied', role: ROLE, epoch: h.fitter.epoch() });
+  }
   // TODO Phase 7: surface the actual `register` payloads (support +
   // values + class + new id) as `birth` PipelineEvents. Requires a
   // new `Fitter.drainApplyEvents()` WASM binding that returns the
