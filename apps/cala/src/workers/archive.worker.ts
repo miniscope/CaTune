@@ -29,6 +29,7 @@ import {
   type WorkerOutbound,
 } from '@calab/cala-runtime';
 import { TimeseriesStore } from './timeseries-store.ts';
+import { NeuronEventIndex } from './neuron-event-index.ts';
 
 // Rolling event log capacity. Design §9.2 sizes ~500 structural
 // events per typical session at ~2 KB each → ~1 MB budget; we default
@@ -48,11 +49,20 @@ const DEFAULT_METRIC_WINDOW = 256;
 const DEFAULT_TS_L1_CAPACITY = 256;
 const DEFAULT_TS_L2_CAPACITY = 1024;
 const DEFAULT_TS_L2_STRIDE = 16;
+// Per-neuron event index bounds (design §9.2). A typical session has
+// ~500 structural events across ~100 neurons; 64 events per neuron
+// covers the long tail while capping the per-id list so a rogue
+// churn loop can't balloon memory.
+const DEFAULT_NEURON_EVENT_LIMIT = 64;
+const DEFAULT_MAX_INDEXED_NEURONS = 1024;
 // Local EventBus sizing. Archive is the sole subscriber post-init and
 // drains synchronously, so these are effectively no-backpressure
 // defaults — but they live in config per the no-magic-numbers rule.
 const DEFAULT_LOCAL_BUS_CAPACITY = 64;
-const DEFAULT_LOCAL_BUS_MAX_SUBSCRIBERS = 4;
+// One subscriber per archive sink: event ring, latest-value metric
+// snapshot, tiered timeseries, per-neuron index, footprint history,
+// plus headroom for future additions (§9.2 "bus consumer" model).
+const DEFAULT_LOCAL_BUS_MAX_SUBSCRIBERS = 8;
 
 const ROLE = 'archive' as const;
 
@@ -69,6 +79,8 @@ interface ArchiveWorkerConfig {
   timeseriesL1Capacity: number;
   timeseriesL2Capacity: number;
   timeseriesL2Stride: number;
+  neuronEventLimit: number;
+  maxIndexedNeurons: number;
 }
 
 const workerSelf = ((globalThis as unknown as { self?: WorkerGlobalScope }).self ??
@@ -87,6 +99,8 @@ interface RuntimeHandles {
   metricSnapshot: Map<string, number>;
   timeseries: TimeseriesStore;
   unsubscribeTimeseries: () => void;
+  neuronIndex: NeuronEventIndex;
+  unsubscribeNeuronIndex: () => void;
   running: boolean;
   stopped: boolean;
 }
@@ -124,6 +138,8 @@ function parseConfig(raw: unknown): ArchiveWorkerConfig {
     timeseriesL1Capacity: pickPositiveInt('timeseriesL1Capacity', DEFAULT_TS_L1_CAPACITY),
     timeseriesL2Capacity: pickPositiveInt('timeseriesL2Capacity', DEFAULT_TS_L2_CAPACITY),
     timeseriesL2Stride: pickPositiveInt('timeseriesL2Stride', DEFAULT_TS_L2_STRIDE),
+    neuronEventLimit: pickPositiveInt('neuronEventLimit', DEFAULT_NEURON_EVENT_LIMIT),
+    maxIndexedNeurons: pickPositiveInt('maxIndexedNeurons', DEFAULT_MAX_INDEXED_NEURONS),
   };
 }
 
@@ -140,6 +156,10 @@ function handleInit(payload: WorkerInitPayload): void {
     l2Capacity: cfg.timeseriesL2Capacity,
     l2Stride: cfg.timeseriesL2Stride,
     maxNames: cfg.metricWindow,
+  });
+  const neuronIndex = new NeuronEventIndex({
+    maxNeurons: cfg.maxIndexedNeurons,
+    perNeuronLimit: cfg.neuronEventLimit,
   });
 
   const unsubscribeLog = bus.subscribe((e) => {
@@ -166,6 +186,10 @@ function handleInit(payload: WorkerInitPayload): void {
     timeseries.append(e.name, e.t, e.value);
   });
 
+  const unsubscribeNeuronIndex = bus.subscribe((e) => {
+    neuronIndex.record(e);
+  });
+
   handles = {
     cfg,
     bus,
@@ -175,6 +199,8 @@ function handleInit(payload: WorkerInitPayload): void {
     metricSnapshot,
     timeseries,
     unsubscribeTimeseries,
+    neuronIndex,
+    unsubscribeNeuronIndex,
     running: false,
     stopped: false,
   };
@@ -215,6 +241,17 @@ function handleTimeseriesRequest(requestId: number, name: string): void {
   });
 }
 
+function handleNeuronEventsRequest(requestId: number, neuronId: number): void {
+  if (!handles) return;
+  post({
+    kind: 'events-for-neuron',
+    role: ROLE,
+    requestId,
+    neuronId,
+    events: handles.neuronIndex.query(neuronId),
+  });
+}
+
 function postDoneOnce(): void {
   if (donePosted) return;
   donePosted = true;
@@ -230,6 +267,7 @@ function handleStop(): void {
   handles.unsubscribeLog();
   handles.unsubscribeMetrics();
   handles.unsubscribeTimeseries();
+  handles.unsubscribeNeuronIndex();
   handles.bus.close();
   postDoneOnce();
 }
@@ -255,6 +293,9 @@ workerSelf.onmessage = (ev: MessageEvent<WorkerInbound>): void => {
       return;
     case 'request-timeseries':
       handleTimeseriesRequest(msg.requestId, msg.name);
+      return;
+    case 'request-events-for-neuron':
+      handleNeuronEventsRequest(msg.requestId, msg.neuronId);
       return;
     case 'stop':
       handleStop();

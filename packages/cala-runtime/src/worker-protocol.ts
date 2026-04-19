@@ -57,7 +57,12 @@ export type WorkerInbound =
   // Phase 6 task 1). `requestId` correlates the request with the
   // matching `timeseries` reply. Unknown names return empty arrays,
   // not an error — the dashboard polls before any samples exist.
-  | { kind: 'request-timeseries'; requestId: number; name: string };
+  | { kind: 'request-timeseries'; requestId: number; name: string }
+  // Per-neuron structural event history (design §9.2, Phase 6 task 2).
+  // Returns the archive's indexed copy of every birth / merge / split /
+  // deprecate event the given neuron participates in. Empty list for
+  // an unknown id — same contract as `request-timeseries`.
+  | { kind: 'request-events-for-neuron'; requestId: number; neuronId: number };
 
 /** Messages a worker sends back to the orchestrator. */
 export type WorkerOutbound =
@@ -91,6 +96,15 @@ export type WorkerOutbound =
       l1Values: Float32Array;
       l2Times: Float32Array;
       l2Values: Float32Array;
+    }
+  // Reply to `request-events-for-neuron`. `events` is a chronological
+  // copy of the archive's per-neuron index for `neuronId`.
+  | {
+      kind: 'events-for-neuron';
+      role: WorkerRole;
+      requestId: number;
+      neuronId: number;
+      events: PipelineEvent[];
     }
   // W1 preview frame for the dashboard viewer (design §12 frame panel,
   // Phase 5 exit). Strided like `frame-processed` so the post rate is

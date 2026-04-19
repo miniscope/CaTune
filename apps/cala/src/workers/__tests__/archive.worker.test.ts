@@ -80,6 +80,11 @@ describe('worker-protocol archive extension compiles', () => {
     };
     const inDumpReq: WorkerInbound = { kind: 'request-archive-dump', requestId: 1 };
     const inTsReq: WorkerInbound = { kind: 'request-timeseries', requestId: 2, name: 'fps' };
+    const inNeuronReq: WorkerInbound = {
+      kind: 'request-events-for-neuron',
+      requestId: 3,
+      neuronId: 5,
+    };
     const outDump: WorkerOutbound = {
       kind: 'archive-dump',
       role: 'archive',
@@ -97,11 +102,20 @@ describe('worker-protocol archive extension compiles', () => {
       l2Times: new Float32Array(0),
       l2Values: new Float32Array(0),
     };
+    const outNeuron: WorkerOutbound = {
+      kind: 'events-for-neuron',
+      role: 'archive',
+      requestId: 3,
+      neuronId: 5,
+      events: [],
+    };
     expect(inEvent.kind).toBe('event');
     expect(inDumpReq.kind).toBe('request-archive-dump');
     expect(inTsReq.kind).toBe('request-timeseries');
+    expect(inNeuronReq.kind).toBe('request-events-for-neuron');
     expect(outDump.kind).toBe('archive-dump');
     expect(outTs.kind).toBe('timeseries');
+    expect(outNeuron.kind).toBe('events-for-neuron');
   });
 });
 
@@ -235,6 +249,60 @@ describe('archive worker', () => {
     expect(Array.from(reply.l1Times)).toEqual([0, 1, 2]);
     expect(Array.from(reply.l1Values)).toEqual([10, 20, 30]);
     expect(reply.l2Times.length).toBe(0);
+  });
+
+  it('request-events-for-neuron returns every structural event the neuron participates in', async () => {
+    const harness = createWorkerHarness();
+    await loadWorker(harness);
+    await harness.deliver(makeInitMsg());
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'ready'));
+    await harness.deliver({ kind: 'run' });
+
+    await harness.deliver({ kind: 'event', event: birthEvent(1, 7) });
+    await harness.deliver({
+      kind: 'event',
+      event: {
+        kind: 'merge',
+        t: 2,
+        ids: [7, 8],
+        into: 7,
+        footprintSnap: {
+          pixelIndices: new Uint32Array([7]),
+          values: new Float32Array([1]),
+        },
+      },
+    });
+    await harness.deliver({
+      kind: 'event',
+      event: { kind: 'deprecate', t: 3, id: 7, reason: 'traceInactive' },
+    });
+    // Unrelated neuron — must not appear in the reply for id 7.
+    await harness.deliver({ kind: 'event', event: birthEvent(4, 99) });
+
+    await harness.deliver({ kind: 'request-events-for-neuron', requestId: 70, neuronId: 7 });
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'events-for-neuron'));
+    const reply = harness.posted.find((m) => m.kind === 'events-for-neuron') as Extract<
+      WorkerOutbound,
+      { kind: 'events-for-neuron' }
+    >;
+    expect(reply.neuronId).toBe(7);
+    expect(reply.events.map((e) => e.kind)).toEqual(['birth', 'merge', 'deprecate']);
+  });
+
+  it('request-events-for-neuron returns an empty list for an unknown id', async () => {
+    const harness = createWorkerHarness();
+    await loadWorker(harness);
+    await harness.deliver(makeInitMsg());
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'ready'));
+    await harness.deliver({ kind: 'run' });
+
+    await harness.deliver({ kind: 'request-events-for-neuron', requestId: 71, neuronId: 999 });
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'events-for-neuron'));
+    const reply = harness.posted.find((m) => m.kind === 'events-for-neuron') as Extract<
+      WorkerOutbound,
+      { kind: 'events-for-neuron' }
+    >;
+    expect(reply.events).toEqual([]);
   });
 
   it('request-timeseries surfaces L2 downsampling once L1 overflows', async () => {
