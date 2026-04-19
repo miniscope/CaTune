@@ -11,12 +11,11 @@ const displayName = pkg.calab?.displayName ?? path.basename(import.meta.dirname)
 // SharedArrayBuffer (design §13) requires cross-origin isolation:
 //   - Cross-Origin-Opener-Policy: same-origin
 //   - Cross-Origin-Embedder-Policy: require-corp
-// The Vite dev and preview servers set these directly. For the GitHub
-// Pages production deploy, the host doesn't let us set HTTP headers;
-// we document that constraint in apps/cala/README.md and plan to ship
-// a cross-origin-isolation service worker (coi-serviceworker pattern)
-// when the browser app actually needs SAB in production. Phase 5's
-// exit criteria only require `npm run dev` to boot with SAB enabled.
+// The Vite dev and preview servers set these directly. For the
+// GitHub Pages production deploy, `public/coi-serviceworker.js`
+// registers a service worker that re-issues top-level navigations
+// with the headers attached (Phase 6 task 14) — so production also
+// boots `crossOriginIsolated`.
 const crossOriginIsolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',

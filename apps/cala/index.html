@@ -13,6 +13,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      COOP/COEP service worker. `SharedArrayBuffer` (design §13) needs
+      cross-origin isolation; Vite dev + preview set the headers
+      directly, but GitHub Pages cannot. This script registers a
+      service worker that re-issues top-level navigations with the
+      required headers so the app boots `crossOriginIsolated`. Loaded
+      synchronously before the module script so the page is isolated
+      before any SAB-using worker is constructed.
+    -->
+    <script src="./coi-serviceworker.js"></script>
     <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>
