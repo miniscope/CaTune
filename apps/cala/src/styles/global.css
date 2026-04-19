@@ -127,3 +127,41 @@
   color: var(--text-secondary);
   word-break: break-word;
 }
+
+/* ─── Header vitals bar (Phase 6 task 7) ───────────────────────────── */
+
+.vitals-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.vitals-bar__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.vitals-bar__label {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+}
+
+.vitals-bar__value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.vitals-bar .sparkline {
+  display: block;
+  color: var(--accent);
+}

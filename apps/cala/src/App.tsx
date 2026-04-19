@@ -3,6 +3,7 @@ import { DashboardShell } from '@calab/ui';
 import { CaLaHeader } from './components/layout/CaLaHeader.tsx';
 import { ImportOverlay } from './components/layout/ImportOverlay.tsx';
 import { SingleFrameViewer } from './components/frame/SingleFrameViewer.tsx';
+import { VitalsBar } from './components/vitals/VitalsBar.tsx';
 import { state } from './lib/data-store.ts';
 import { currentArchiveWorkerForClient } from './lib/run-control.ts';
 import { createArchiveClient, type ArchiveClient } from './lib/archive-client.ts';
@@ -37,6 +38,7 @@ const App: Component = () => {
         }
         fallback={<ImportOverlay />}
       >
+        <VitalsBar />
         <SingleFrameViewer />
       </Show>
     </DashboardShell>
