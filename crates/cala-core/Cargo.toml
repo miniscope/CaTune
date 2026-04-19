@@ -29,8 +29,14 @@ required-features = ["native-cli"]
 
 [features]
 default = ["jsbindings"]
-jsbindings = ["dep:wasm-bindgen", "dep:console_error_panic_hook", "dep:serde", "dep:serde-wasm-bindgen"]
-pybindings = ["dep:pyo3", "dep:numpy", "dep:serde", "dep:serde_json"]
+# Pulls `serde` + `serde_json` in so the binding layer can round-trip
+# config structs as JSON at the JS / Python boundary. `jsbindings` and
+# `pybindings` both enable this so the same JSON config surface is the
+# single source of truth across targets (mirrors the
+# no-hardcoded-magic-numbers rule — every tuning knob is overridable).
+serde = ["dep:serde", "dep:serde_json"]
+jsbindings = ["serde", "dep:wasm-bindgen", "dep:console_error_panic_hook", "dep:serde-wasm-bindgen"]
+pybindings = ["serde", "dep:pyo3", "dep:numpy"]
 # Native-only dev tooling (CLI test harness for Phase 1). Gated so WASM
 # and PyO3 builds don't try to compile the binary.
 native-cli = []

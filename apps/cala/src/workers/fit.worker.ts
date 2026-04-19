@@ -1,0 +1,429 @@
+import { initCalaCore, Fitter, MutationQueueHandle } from '@calab/cala-core';
+import {
+  SabRingChannel,
+  EventBus,
+  SnapshotProtocol,
+  MutationQueue,
+  type ChannelConfig,
+  type PipelineEvent,
+  type PipelineMutation,
+  type WorkerInbound,
+  type WorkerInitPayload,
+  type WorkerOutbound,
+} from '@calab/cala-runtime';
+
+// Heartbeat cadence: post a `frame-processed` beat every N fit steps.
+// Mirrors W1's DEFAULT_HEARTBEAT_STRIDE so the orchestrator sees
+// equal-frequency beats from both sides of the frame channel.
+// Overridable via `workerConfig.heartbeatStride` (design §7.1).
+const DEFAULT_HEARTBEAT_STRIDE = 8;
+// Snapshot cadence: fit takes a COW snapshot every N frames so the
+// extend worker has a consistent view of `(Ã, W, M, epoch)` to work
+// against (design §7.2). 16 frames ≈ half-second at 30 fps — fresh
+// enough for extend's tens-of-frames-per-cycle, infrequent enough to
+// keep fit's hot path free of per-frame `takeSnapshot()` cost.
+const DEFAULT_SNAPSHOT_STRIDE = 16;
+// Upper bound on mutations drained per loop iteration. The underlying
+// WASM `drainApply` already pulls everything, but we re-queue any
+// oversubscribed work so a runaway extend burst can't stall fit for
+// more than one frame. Matches `DEFAULT_PROPOSALS_PER_CYCLE_MAX` in
+// `crate::config` (design §13 dense-scene risk mitigation).
+const DEFAULT_MUTATION_DRAIN_MAX_PER_ITERATION = 4;
+// Event bus capacity for the in-worker publisher. Matches the
+// archive-worker expectation from §9.2: 2 KB per event × 16 events is
+// one cycle of headroom; real backpressure lives in the SAB transport
+// that replaces this in later tasks.
+const DEFAULT_EVENT_BUS_CAPACITY = 256;
+const DEFAULT_EVENT_BUS_MAX_SUBSCRIBERS = 4;
+// Snapshot protocol defaults for the in-worker stand-in. These mirror
+// the orchestrator-side defaults — swap to the SAB transport later
+// keeps the same knob names.
+const DEFAULT_SNAPSHOT_ACK_TIMEOUT_MS = 500;
+const DEFAULT_SNAPSHOT_POLL_INTERVAL_MS = 2;
+const DEFAULT_SNAPSHOT_PENDING_CAPACITY = 1;
+const DEFAULT_FRAME_CHANNEL_WAIT_TIMEOUT_MS = 1000;
+const DEFAULT_FRAME_CHANNEL_POLL_INTERVAL_MS = 1;
+const FRAME_CHANNEL_SLOT_COUNT_FALLBACK = 4;
+// Mutation queue capacity: mirrors `DEFAULT_MUTATION_QUEUE_CAPACITY`
+// in `crate::config` (design §7.3, 32 slots, drop-oldest).
+const DEFAULT_MUTATION_QUEUE_CAPACITY = 32;
+const DEFAULT_FIT_CONFIG_JSON = '{}';
+const DEFAULT_EXTEND_CONFIG_JSON = '{}';
+
+const ROLE = 'fit' as const;
+
+interface WorkerGlobalScope {
+  postMessage(msg: WorkerOutbound): void;
+  onmessage: ((ev: MessageEvent<WorkerInbound>) => void) | null;
+}
+
+interface FitWorkerConfig {
+  height: number;
+  width: number;
+  fitConfigJson: string;
+  extendConfigJson: string;
+  heartbeatStride: number;
+  snapshotStride: number;
+  mutationDrainMaxPerIteration: number;
+  eventBusCapacity: number;
+  eventBusMaxSubscribers: number;
+  snapshotAckTimeoutMs: number;
+  snapshotPollIntervalMs: number;
+  snapshotPendingCapacity: number;
+  mutationQueueCapacity: number;
+  frameChannelSlotBytes?: number;
+  frameChannelSlotCount: number;
+  frameChannelWaitTimeoutMs: number;
+  frameChannelPollIntervalMs: number;
+}
+
+// Route through `self` when present so `vi.stubGlobal('self', harness)`
+// picks us up; falls back to `globalThis` in environments that don't
+// alias them.
+const workerSelf = ((globalThis as unknown as { self?: WorkerGlobalScope }).self ??
+  (globalThis as unknown as WorkerGlobalScope)) as WorkerGlobalScope;
+
+interface RuntimeHandles {
+  fitter: Fitter;
+  frameChannel: SabRingChannel;
+  mutationQueue: MutationQueue;
+  mutationQueueHandle: MutationQueueHandle;
+  snapshotProtocol: SnapshotProtocol;
+  eventBus: EventBus;
+  eventSubscription: () => void;
+  config: FitWorkerConfig;
+  pixels: number;
+}
+
+let handles: RuntimeHandles | null = null;
+let running = false;
+let stopRequested = false;
+let donePosted = false;
+let loopPromise: Promise<void> | null = null;
+
+function post(msg: WorkerOutbound): void {
+  workerSelf.postMessage(msg);
+}
+
+function postError(err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  post({ kind: 'error', role: ROLE, message });
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function numberOr(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function stringOr(v: unknown, fallback: string): string {
+  return typeof v === 'string' ? v : fallback;
+}
+
+function parseConfig(raw: unknown): FitWorkerConfig {
+  const cfg = asRecord(raw);
+  const height = numberOr(cfg.height, 0);
+  const width = numberOr(cfg.width, 0);
+  if (height <= 0 || width <= 0) {
+    throw new Error('workerConfig.height and workerConfig.width must be positive');
+  }
+  return {
+    height,
+    width,
+    fitConfigJson: stringOr(cfg.fitConfigJson, DEFAULT_FIT_CONFIG_JSON),
+    extendConfigJson: stringOr(cfg.extendConfigJson, DEFAULT_EXTEND_CONFIG_JSON),
+    heartbeatStride: numberOr(cfg.heartbeatStride, DEFAULT_HEARTBEAT_STRIDE),
+    snapshotStride: numberOr(cfg.snapshotStride, DEFAULT_SNAPSHOT_STRIDE),
+    mutationDrainMaxPerIteration: numberOr(
+      cfg.mutationDrainMaxPerIteration,
+      DEFAULT_MUTATION_DRAIN_MAX_PER_ITERATION,
+    ),
+    eventBusCapacity: numberOr(cfg.eventBusCapacity, DEFAULT_EVENT_BUS_CAPACITY),
+    eventBusMaxSubscribers: numberOr(cfg.eventBusMaxSubscribers, DEFAULT_EVENT_BUS_MAX_SUBSCRIBERS),
+    snapshotAckTimeoutMs: numberOr(cfg.snapshotAckTimeoutMs, DEFAULT_SNAPSHOT_ACK_TIMEOUT_MS),
+    snapshotPollIntervalMs: numberOr(cfg.snapshotPollIntervalMs, DEFAULT_SNAPSHOT_POLL_INTERVAL_MS),
+    snapshotPendingCapacity: numberOr(
+      cfg.snapshotPendingCapacity,
+      DEFAULT_SNAPSHOT_PENDING_CAPACITY,
+    ),
+    mutationQueueCapacity: numberOr(cfg.mutationQueueCapacity, DEFAULT_MUTATION_QUEUE_CAPACITY),
+    frameChannelSlotBytes:
+      typeof cfg.frameChannelSlotBytes === 'number' ? cfg.frameChannelSlotBytes : undefined,
+    frameChannelSlotCount: numberOr(cfg.frameChannelSlotCount, FRAME_CHANNEL_SLOT_COUNT_FALLBACK),
+    frameChannelWaitTimeoutMs: numberOr(
+      cfg.frameChannelWaitTimeoutMs,
+      DEFAULT_FRAME_CHANNEL_WAIT_TIMEOUT_MS,
+    ),
+    frameChannelPollIntervalMs: numberOr(
+      cfg.frameChannelPollIntervalMs,
+      DEFAULT_FRAME_CHANNEL_POLL_INTERVAL_MS,
+    ),
+  };
+}
+
+async function handleInit(payload: WorkerInitPayload): Promise<void> {
+  await initCalaCore();
+  const cfg = parseConfig(payload.workerConfig);
+
+  const pixels = cfg.height * cfg.width;
+  const fitter = new Fitter(cfg.height, cfg.width, cfg.fitConfigJson);
+  const mutationQueueHandle = new MutationQueueHandle(cfg.extendConfigJson);
+  const mutationQueue = new MutationQueue({ capacity: cfg.mutationQueueCapacity });
+
+  const channelCfg: ChannelConfig = {
+    slotBytes: cfg.frameChannelSlotBytes ?? pixels * Float32Array.BYTES_PER_ELEMENT,
+    slotCount: cfg.frameChannelSlotCount,
+    waitTimeoutMs: cfg.frameChannelWaitTimeoutMs,
+    pollIntervalMs: cfg.frameChannelPollIntervalMs,
+    sharedBuffer: payload.frameChannelBuffer,
+  };
+  const frameChannel = new SabRingChannel(channelCfg);
+
+  const snapshotProtocol = new SnapshotProtocol({
+    ackTimeoutMs: cfg.snapshotAckTimeoutMs,
+    pollIntervalMs: cfg.snapshotPollIntervalMs,
+    pendingCapacity: cfg.snapshotPendingCapacity,
+  });
+
+  const eventBus = new EventBus({
+    capacity: cfg.eventBusCapacity,
+    maxSubscribers: cfg.eventBusMaxSubscribers,
+  });
+  // Forwarding subscription: every PipelineEvent published on the
+  // in-worker bus is relayed across postMessage as a `'event'`
+  // outbound. The SAB-backed transport in later tasks replaces this
+  // `subscribe` bridge with a zero-copy ring without touching
+  // numerics callers.
+  const eventSubscription = eventBus.subscribe((event: PipelineEvent) => {
+    post({ kind: 'event', role: ROLE, event });
+  });
+
+  handles = {
+    fitter,
+    frameChannel,
+    mutationQueue,
+    mutationQueueHandle,
+    snapshotProtocol,
+    eventBus,
+    eventSubscription,
+    config: cfg,
+    pixels,
+  };
+
+  // Test-only hook so unit tests can push mutations into the worker's
+  // MutationQueue without standing up a full extend worker. Mirrors
+  // the SAB-backed producer side of §7.3 — real extend worker pushes
+  // via SAB, tests push via this handle. No production consumer reads
+  // this field.
+  (globalThis as { __calaFitHandles?: { mutationQueue: MutationQueue } }).__calaFitHandles = {
+    mutationQueue,
+  };
+
+  post({ kind: 'ready', role: ROLE });
+}
+
+function readNextFrame(h: RuntimeHandles): Float32Array | null {
+  const slot = h.frameChannel.readSlot();
+  if (slot === null) return null;
+  // Slot payload is u8; reinterpret as f32 without copy. Slot.data is
+  // already an owned copy so we can alias it safely.
+  return new Float32Array(slot.data.buffer, slot.data.byteOffset, h.pixels);
+}
+
+function mutationToEvent(m: PipelineMutation, frameIndex: number): PipelineEvent | null {
+  // Translate each applied mutation into the structural event the
+  // archive worker logs (§9.2). `register` → birth, `merge` → merge,
+  // `deprecate` → deprecate. Reject / split / metric events come
+  // from other sources (extend quality-gate fails, user overrides).
+  switch (m.type) {
+    case 'register':
+      return {
+        kind: 'birth',
+        t: frameIndex,
+        // Real id assignment happens inside fit's apply. Until the
+        // WASM surface surfaces it (later task), report the
+        // snapshot epoch as a stable per-mutation correlation id.
+        id: Number(m.snapshotEpoch),
+        patch: [0, 0],
+        footprintSnap: { pixelIndices: m.support, values: m.values },
+      };
+    case 'merge':
+      return {
+        kind: 'merge',
+        t: frameIndex,
+        ids: [m.mergeIds[0], m.mergeIds[1]],
+        into: m.mergeIds[0],
+        footprintSnap: { pixelIndices: m.support, values: m.values },
+      };
+    case 'deprecate':
+      return { kind: 'deprecate', t: frameIndex, id: m.id, reason: m.reason };
+  }
+}
+
+function drainMutationsOnce(h: RuntimeHandles, frameIndex: number): number {
+  // Apply at most `mutationDrainMaxPerIteration` queued mutations so a
+  // burst of extend proposals cannot stall the fit loop for more than
+  // one frame's worth of apply cost (design §13 dense-scene risk).
+  const cap = h.config.mutationDrainMaxPerIteration;
+  let applied = 0;
+  while (applied < cap) {
+    const m = h.mutationQueue.pop();
+    if (m === null) break;
+    // Keep the WASM side in sync. In Phase 5 `drainApply` consumes
+    // the Rust-side queue handle; once the SAB transport merges the
+    // two queues this reduces to a single call.
+    h.fitter.drainApply(h.mutationQueueHandle);
+    const ev = mutationToEvent(m, frameIndex);
+    if (ev) h.eventBus.publish(ev);
+    post({ kind: 'mutation-applied', role: ROLE, epoch: h.fitter.epoch() });
+    applied += 1;
+  }
+  return applied;
+}
+
+function takeCadencedSnapshot(h: RuntimeHandles, frameIndex: number): void {
+  if (h.config.snapshotStride <= 0) return;
+  if ((frameIndex + 1) % h.config.snapshotStride !== 0) return;
+  // Request + publish in one shot: extend's in-worker stand-in hasn't
+  // been wired yet, so fit serves a self-issued request. When the
+  // real cross-worker transport lands, the request comes from extend
+  // and this block calls only `publishAck`.
+  const requestPromise = h.snapshotProtocol.requestSnapshot().catch(() => {
+    // Capacity/timeout is a soft failure here — extend retries on
+    // its own cadence per §7.2.
+  });
+  const request = h.snapshotProtocol.pollRequest();
+  if (!request) {
+    // Another snapshot is already in flight; skip to avoid piling up.
+    return;
+  }
+  const handle = h.fitter.takeSnapshot();
+  const ackEpoch = handle.epoch();
+  const ackNumComponents = handle.numComponents();
+  const ackPixels = handle.pixels();
+  try {
+    handle.free();
+  } catch {
+    // free() is best-effort — WASM may already be torn down
+  }
+  h.snapshotProtocol.publishAck({
+    requestId: request.requestId,
+    epoch: BigInt(ackEpoch),
+    numComponents: ackNumComponents,
+    pixels: ackPixels,
+  });
+  void requestPromise;
+  post({ kind: 'snapshot-request', role: ROLE, requestId: request.requestId });
+}
+
+async function fitLoop(h: RuntimeHandles): Promise<void> {
+  let frameIndex = 0;
+  while (!stopRequested) {
+    const frame = readNextFrame(h);
+    if (frame === null) {
+      // No frame queued. Yield so the harness / decoder can push more
+      // work without spinning the CPU. A microtask is enough — we're
+      // inside a worker event loop, not a hard-spin context.
+      await new Promise<void>((r) => setTimeout(r, h.config.frameChannelPollIntervalMs));
+      continue;
+    }
+    h.fitter.step(frame);
+    drainMutationsOnce(h, frameIndex);
+    takeCadencedSnapshot(h, frameIndex);
+    if ((frameIndex + 1) % h.config.heartbeatStride === 0) {
+      post({
+        kind: 'frame-processed',
+        role: ROLE,
+        index: frameIndex,
+        epoch: h.fitter.epoch(),
+      });
+    }
+    frameIndex += 1;
+    // Cooperative yield so stop() and new channel writes land
+    // promptly in tests without racing the loop.
+    await Promise.resolve();
+  }
+}
+
+function cleanup(): void {
+  if (!handles) return;
+  try {
+    handles.eventSubscription();
+  } catch {
+    // unsubscribe is best-effort
+  }
+  try {
+    handles.eventBus.close();
+  } catch {
+    // close is idempotent but defensive
+  }
+  try {
+    handles.fitter.free();
+  } catch {
+    // free is best-effort — wasm may already be torn down
+  }
+  try {
+    handles.mutationQueueHandle.free();
+  } catch {
+    // free is best-effort
+  }
+  delete (globalThis as { __calaFitHandles?: unknown }).__calaFitHandles;
+  handles = null;
+}
+
+function postDoneOnce(): void {
+  if (donePosted) return;
+  donePosted = true;
+  post({ kind: 'done', role: ROLE });
+}
+
+async function handleRun(): Promise<void> {
+  if (!handles) {
+    postError(new Error("'run' received before successful 'init'"));
+    return;
+  }
+  if (running) return;
+  running = true;
+  stopRequested = false;
+  donePosted = false;
+  const h = handles;
+  try {
+    await fitLoop(h);
+    postDoneOnce();
+  } catch (err) {
+    postError(err);
+  } finally {
+    running = false;
+    cleanup();
+  }
+}
+
+async function handleStop(): Promise<void> {
+  stopRequested = true;
+  if (loopPromise) await loopPromise;
+  postDoneOnce();
+  cleanup();
+}
+
+workerSelf.onmessage = (ev: MessageEvent<WorkerInbound>): void => {
+  const msg = ev.data;
+  switch (msg.kind) {
+    case 'init':
+      handleInit(msg.payload).catch(postError);
+      return;
+    case 'run':
+      loopPromise = handleRun();
+      return;
+    case 'stop':
+      handleStop().catch(postError);
+      return;
+    case 'snapshot-ack':
+      // Ack of an upstream snapshot-request. In Phase 5 the
+      // orchestrator forwards snapshot-ack back to fit for bookkeeping;
+      // we log nothing — the in-worker SnapshotProtocol handled the
+      // capture synchronously at the cadence boundary.
+      return;
+  }
+};

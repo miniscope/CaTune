@@ -1,0 +1,16 @@
+{
+  "name": "calab-cala-core",
+  "type": "module",
+  "description": "Numerical core for CaLa — streaming calcium imaging demixing pipeline",
+  "version": "0.1.0",
+  "files": [
+    "calab_cala_core_bg.wasm",
+    "calab_cala_core.js",
+    "calab_cala_core.d.ts"
+  ],
+  "main": "calab_cala_core.js",
+  "types": "calab_cala_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

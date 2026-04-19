@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "baseUrl": ".",
+    "paths": {
+      "@calab/cala-core": ["../../packages/cala-core/src/index.ts"],
+      "@calab/cala-core/*": ["../../packages/cala-core/src/*"],
+      "@calab/cala-runtime": ["../../packages/cala-runtime/src/index.ts"],
+      "@calab/cala-runtime/*": ["../../packages/cala-runtime/src/*"],
+      "@calab/compute": ["../../packages/compute/src/index.ts"],
+      "@calab/compute/*": ["../../packages/compute/src/*"],
+      "@calab/core": ["../../packages/core/src/index.ts"],
+      "@calab/core/*": ["../../packages/core/src/*"],
+      "@calab/io": ["../../packages/io/src/index.ts"],
+      "@calab/io/*": ["../../packages/io/src/*"],
+      "@calab/ui": ["../../packages/ui/src/index.ts"],
+      "@calab/ui/*": ["../../packages/ui/src/*"]
+    }
+  },
+  "include": ["src", "e2e"],
+  "references": [
+    { "path": "../../packages/cala-core" },
+    { "path": "../../packages/cala-runtime" },
+    { "path": "../../packages/compute" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/io" },
+    { "path": "../../packages/ui" }
+  ]
+}

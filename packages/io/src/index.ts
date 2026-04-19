@@ -17,3 +17,16 @@ export {
   stopBridgeHeartbeat,
 } from './bridge.ts';
 export type { BridgeMetadata, BridgeConfig, BridgeProgress } from './bridge.ts';
+
+// CaLa frame sources (design §10): generic random-access frame input
+// the decoder worker reads from. Phase 5 ships `avi-uncompressed`;
+// TIFF / compressed AVI / MP4 implementations plug into the same
+// `FrameSource` contract later.
+export {
+  FrameOutOfRangeError,
+  FrameSourceParseError,
+  type FrameSource,
+  type FrameSourceMeta,
+  type GrayscaleMethod,
+} from './frame-source.ts';
+export { openAviUncompressed, openAviUncompressedFromBytes } from './avi-uncompressed.ts';

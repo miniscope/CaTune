@@ -77,6 +77,7 @@ pub const DEFAULT_DENOISE_MEDIAN_KSIZE: usize = 1;
 /// is the pragmatic default. `Luminance` is there for recordings that
 /// carry meaningful information across all three channels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GrayscaleMethod {
     /// Take the green channel as the grayscale value. Single-channel
     /// (already grayscale) inputs are passed through unchanged.
@@ -101,6 +102,7 @@ pub const DEFAULT_GRAYSCALE_METHOD: GrayscaleMethod = GrayscaleMethod::Green;
 /// sharper peaks on clean signals but breaks down when most bins
 /// carry only noise — it amplifies that noise. Kept for back-compat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MotionCorrelation {
     /// FFT cross-correlation: `F · conj(G)`. Peak stays dominated by
     /// real coherent structure, works on diffuse miniscope data.
@@ -127,6 +129,7 @@ pub const DEFAULT_MOTION_CORRELATION: MotionCorrelation = MotionCorrelation::Cro
 /// on each axis. Tighter when the peak is sharp and Gaussian-shaped,
 /// but over-trusts the two immediate neighbors when they carry noise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MotionSubpixel {
     Centroid,
     Parabolic,
@@ -146,12 +149,19 @@ pub const DEFAULT_MOTION_SUBPIXEL_RADIUS: usize = 2;
 /// Required: `pixel_size_um`. Every other field has a documented default
 /// that can be overridden with `with_*` builder methods.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RecordingMetadata {
     /// Physical size of one image pixel in micrometers.
     pub pixel_size_um: f32,
     /// Typical neuron cell-body diameter in micrometers. Used for
     /// downstream cutoff derivations.
+    #[cfg_attr(feature = "serde", serde(default = "default_neuron_diameter_um"))]
     pub neuron_diameter_um: f32,
+}
+
+#[cfg(feature = "serde")]
+fn default_neuron_diameter_um() -> f32 {
+    DEFAULT_NEURON_DIAMETER_UM
 }
 
 impl RecordingMetadata {
@@ -175,6 +185,8 @@ impl RecordingMetadata {
 /// overridable; `PreprocessConfig::default()` reads each field's value
 /// from its `DEFAULT_*` constant so defaults stay in one place.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct PreprocessConfig {
     /// Butterworth high-pass cutoff period, as a multiple of the neuron
     /// diameter in pixels. See `high_pass_cutoff_cycles_per_pixel` for
@@ -326,6 +338,8 @@ pub const DEFAULT_SNR_C0: f32 = 0.0;
 
 /// Per-frame tuning for the OMF fit loop.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct FitConfig {
     /// Relative tolerance for `EvaluateTraces` BCD convergence.
     pub trace_tol: f32,
@@ -381,6 +395,7 @@ impl FitConfig {
 /// (design §3.1). Phase 2 footprints are implicitly `Cell` — the class
 /// field was added in Phase 3 without disturbing existing callers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ComponentClass {
     /// Localized, compact, cell-scale footprint with fast transients.
     Cell,
@@ -495,6 +510,8 @@ pub const DEFAULT_PROPOSALS_PER_CYCLE_MAX: u32 = 4;
 /// `DEFAULT_*` constant via `ExtendConfig::default()`; algorithm code
 /// never reads the constants directly.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct ExtendConfig {
     /// Number of recent residual frames retained for extend search.
     pub extend_window_frames: u32,

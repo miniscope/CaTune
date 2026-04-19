@@ -1,0 +1,37 @@
+{
+  "name": "cala",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "calab": {
+    "displayName": "CaLa",
+    "description": "Streaming calcium imaging demixing",
+    "longDescription": "Stream calcium imaging recordings through a fully online demixing pipeline — preprocess, fit, and extend loops run continuously from the first frame. Watch demixing happen in real time in the browser.",
+    "features": [
+      "Browser-native streaming OMF on local AVI files",
+      "Four-worker runtime with SAB-backed channels",
+      "Rust/WASM numerical core, SolidJS dashboard",
+      "Two-pass mode for refined replay"
+    ],
+    "status": "coming-soon",
+    "hidden": true
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run --config ./vitest.e2e.config.ts",
+    "verify-sab": "node scripts/verify-sab.mjs"
+  },
+  "dependencies": {
+    "@calab/cala-core": "*",
+    "@calab/cala-runtime": "*",
+    "@calab/compute": "*",
+    "@calab/core": "*",
+    "@calab/io": "*",
+    "@calab/ui": "*",
+    "solid-js": "^1.9.11"
+  }
+}

@@ -8,5 +8,7 @@
 mod avi_uncompressed;
 mod avi_writer;
 
-pub use avi_uncompressed::{AviError, AviUncompressedReader};
+#[cfg(feature = "jsbindings")]
+pub(crate) use avi_uncompressed::decode_grayscale_f32;
+pub use avi_uncompressed::{AviError, AviUncompressedReader, OwnedAviReader};
 pub use avi_writer::write_uncompressed_avi_8bit;
