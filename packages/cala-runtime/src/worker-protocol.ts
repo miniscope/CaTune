@@ -86,6 +86,11 @@ export type WorkerInbound =
       requestId: number;
       idFilter?: Uint32Array;
     }
+  // All live-neuron footprints for the footprints panel overlay
+  // (design §8, Phase 7 task 10). Returns the most recent sparse
+  // `A` column snapshot per id for neurons that are not currently
+  // deprecated. Reply is `all-footprints`.
+  | { kind: 'request-all-footprints'; requestId: number }
   // Main-thread authored mutation (Phase 6 task 13). The orchestrator
   // forwards these to the fit worker so the UI can deprecate a
   // neuron, force a merge, etc. The worker pushes through the same
@@ -157,6 +162,18 @@ export type WorkerOutbound =
       requestId: number;
       ids: Uint32Array;
       times: Float32Array[];
+      values: Float32Array[];
+    }
+  // Reply to `request-all-footprints`. `ids[i]` owns
+  // `pixelIndices[i]` + `values[i]`. Each sparse pair describes the
+  // footprint's latest snapshot in frame coords (linear index →
+  // weight). Deprecated neurons are excluded.
+  | {
+      kind: 'all-footprints';
+      role: WorkerRole;
+      requestId: number;
+      ids: Uint32Array;
+      pixelIndices: Uint32Array[];
       values: Float32Array[];
     }
   // W1 + W2 preview frames for the dashboard (design §12 frame

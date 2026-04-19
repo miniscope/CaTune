@@ -95,4 +95,20 @@ export class NeuronEventIndex {
   knownIds(): number[] {
     return Array.from(this.byNeuron.keys());
   }
+
+  /**
+   * Subset of `knownIds()` whose latest structural event is not a
+   * `deprecate` — i.e. the neuron is still "alive" in the fit
+   * pipeline. Used by the footprints panel (Phase 7 task 10) to
+   * avoid overlaying stale outlines, and by the export flow to pick
+   * which components to dump.
+   */
+  liveIds(): number[] {
+    const out: number[] = [];
+    for (const [id, list] of this.byNeuron) {
+      if (list.length === 0) continue;
+      if (list[list.length - 1].kind !== 'deprecate') out.push(id);
+    }
+    return out;
+  }
 }

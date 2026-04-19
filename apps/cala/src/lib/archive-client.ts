@@ -34,7 +34,15 @@ export interface AllTracesReply {
   ids: Uint32Array;
   /** Per-id time axis in chronological order. */
   times: Float32Array[];
-  /** Per-id trace values aligned with `times`. */
+  /** Per-id trace values aligned with `values`. */
+  values: Float32Array[];
+}
+
+export interface AllFootprintsReply {
+  ids: Uint32Array;
+  /** Sparse support per id — linear pixel indices. */
+  pixelIndices: Uint32Array[];
+  /** Per-pixel weight, aligned with `pixelIndices`. */
   values: Float32Array[];
 }
 
@@ -44,6 +52,7 @@ export interface ArchiveClient {
   requestEventsForNeuron(neuronId: number): Promise<PipelineEvent[]>;
   requestFootprintHistory(neuronId: number): Promise<FootprintHistoryEntry[]>;
   requestAllTraces(idFilter?: Uint32Array): Promise<AllTracesReply>;
+  requestAllFootprints(): Promise<AllFootprintsReply>;
   startPolling(cb: (dump: ArchiveDump) => void): void;
   stopPolling(): void;
   onEvent(cb: (e: PipelineEvent) => void): Unsubscribe;
@@ -77,7 +86,13 @@ interface PendingReply<T> {
   resolve: (v: T) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
-  kind: 'dump' | 'timeseries' | 'events-for-neuron' | 'footprint-history' | 'all-traces';
+  kind:
+    | 'dump'
+    | 'timeseries'
+    | 'events-for-neuron'
+    | 'footprint-history'
+    | 'all-traces'
+    | 'all-footprints';
 }
 
 type PendingEntry =
@@ -85,7 +100,8 @@ type PendingEntry =
   | PendingReply<TimeseriesReply>
   | PendingReply<PipelineEvent[]>
   | PendingReply<FootprintHistoryEntry[]>
-  | PendingReply<AllTracesReply>;
+  | PendingReply<AllTracesReply>
+  | PendingReply<AllFootprintsReply>;
 
 export function createArchiveClient(
   worker: WorkerLike,
@@ -168,6 +184,18 @@ export function createArchiveClient(
         });
         return;
       }
+      case 'all-footprints': {
+        const entry = pending.get(msg.requestId);
+        if (!entry || entry.kind !== 'all-footprints') return;
+        pending.delete(msg.requestId);
+        clearTimeout(entry.timer);
+        (entry as PendingReply<AllFootprintsReply>).resolve({
+          ids: msg.ids,
+          pixelIndices: msg.pixelIndices,
+          values: msg.values,
+        });
+        return;
+      }
       case 'event':
         for (const cb of eventListeners) cb(msg.event);
         return;
@@ -245,6 +273,12 @@ export function createArchiveClient(
     });
   }
 
+  function requestAllFootprints(): Promise<AllFootprintsReply> {
+    return issueRequest<AllFootprintsReply>('all-footprints', 'all-footprints', (requestId) => {
+      worker.postMessage({ kind: 'request-all-footprints', requestId });
+    });
+  }
+
   function startPolling(cb: (dump: ArchiveDump) => void): void {
     if (disposed) return;
     pollCallback = cb;
@@ -302,6 +336,7 @@ export function createArchiveClient(
     requestEventsForNeuron,
     requestFootprintHistory,
     requestAllTraces,
+    requestAllFootprints,
     startPolling,
     stopPolling,
     onEvent,

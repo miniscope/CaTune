@@ -14,6 +14,7 @@ import {
 } from '@calab/cala-runtime';
 import { state, setRunState, setErrorMsg } from './data-store.ts';
 import { recordFrameProcessed } from './dashboard-store.ts';
+import { resetMaxProjection, updateMaxProjection } from './max-projection-store.ts';
 import {
   createDecodePreprocessWorker,
   createFitWorker,
@@ -174,15 +175,19 @@ function wrapFactories(base: WorkerFactories): WorkerFactories {
         const listener = (ev: { data: WorkerOutbound }): void => {
           const msg = ev.data;
           if (msg.kind === 'frame-preview') {
+            const preview = {
+              index: msg.index,
+              width: msg.width,
+              height: msg.height,
+              pixels: msg.pixels,
+            };
             setLatestFramesSignal((prev) => ({
               ...prev,
-              [msg.stage]: {
-                index: msg.index,
-                width: msg.width,
-                height: msg.height,
-                pixels: msg.pixels,
-              },
+              [msg.stage]: preview,
             }));
+            // Running max projection off the motion stage — footprints
+            // panel (Phase 7 task 10) renders on top of this.
+            if (msg.stage === 'motion') updateMaxProjection(preview);
             return;
           }
         };
@@ -241,6 +246,7 @@ export async function startRun(opts: StartOptions = {}): Promise<void> {
 
   setErrorMsg(null);
   setRunState('starting');
+  resetMaxProjection();
 
   const baseFactories = opts.factories ?? defaultWorkerFactories();
   const factories = wrapFactories(baseFactories);

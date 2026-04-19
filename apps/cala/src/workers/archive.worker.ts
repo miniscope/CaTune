@@ -370,6 +370,32 @@ function handleAllTracesRequest(requestId: number, idFilter?: Uint32Array): void
   });
 }
 
+function handleAllFootprintsRequest(requestId: number): void {
+  if (!handles) return;
+  // Live = latest structural event is not a deprecate. We also
+  // require a footprint history entry (otherwise we have nothing to
+  // send). Order matches `liveIds()` insertion order.
+  const ids: number[] = [];
+  const pixelIndicesOut: Uint32Array[] = [];
+  const valuesOut: Float32Array[] = [];
+  for (const id of handles.neuronIndex.liveIds()) {
+    const history = handles.footprints.query(id);
+    if (history.length === 0) continue;
+    const latest = history[history.length - 1];
+    ids.push(id);
+    pixelIndicesOut.push(latest.pixelIndices);
+    valuesOut.push(latest.values);
+  }
+  post({
+    kind: 'all-footprints',
+    role: ROLE,
+    requestId,
+    ids: Uint32Array.from(ids),
+    pixelIndices: pixelIndicesOut,
+    values: valuesOut,
+  });
+}
+
 function postDoneOnce(): void {
   if (donePosted) return;
   donePosted = true;
@@ -422,6 +448,9 @@ workerSelf.onmessage = (ev: MessageEvent<WorkerInbound>): void => {
       return;
     case 'request-all-traces':
       handleAllTracesRequest(msg.requestId, msg.idFilter);
+      return;
+    case 'request-all-footprints':
+      handleAllFootprintsRequest(msg.requestId);
       return;
     case 'stop':
       handleStop();
