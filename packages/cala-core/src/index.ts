@@ -6,4 +6,5 @@ export {
   SnapshotHandle,
   init_panic_hook,
   initCalaCore,
+  calaMemoryBytes,
 } from './wasm-adapter.ts';

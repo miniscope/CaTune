@@ -22,6 +22,7 @@ import init, {
 export { AviReader, Fitter, MutationQueueHandle, Preprocessor, SnapshotHandle, init_panic_hook };
 
 let calaReady: Promise<void> | null = null;
+let calaMemory: WebAssembly.Memory | null = null;
 
 /**
  * Initialize the cala-core WASM module. Lazy and idempotent — safe to
@@ -31,9 +32,19 @@ let calaReady: Promise<void> | null = null;
  */
 export function initCalaCore(): Promise<void> {
   if (!calaReady) {
-    calaReady = init().then(() => {
+    calaReady = init().then((mod: { memory: WebAssembly.Memory }) => {
+      calaMemory = mod.memory;
       init_panic_hook();
     });
   }
   return calaReady;
+}
+
+/**
+ * Current byte size of cala-core's WASM linear memory, or `null` if
+ * the module has not been initialized yet. Used by the fit worker to
+ * report `memoryBytes` as a vitals metric (design §12).
+ */
+export function calaMemoryBytes(): number | null {
+  return calaMemory ? calaMemory.buffer.byteLength : null;
 }

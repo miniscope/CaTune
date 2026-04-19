@@ -147,6 +147,7 @@ vi.mock('@calab/cala-core', () => {
 
   return {
     initCalaCore: vi.fn(async () => {}),
+    calaMemoryBytes: vi.fn(() => 1024 * 1024),
     Fitter,
     MutationQueueHandle,
     SnapshotHandle: class {},
@@ -212,6 +213,7 @@ function makeInitMsg(overrides: Record<string, unknown> = {}): InitHandles {
         frameChannelWaitTimeoutMs: FRAME_CHANNEL_WAIT_TIMEOUT_MS,
         frameChannelPollIntervalMs: FRAME_CHANNEL_POLL_INTERVAL_MS,
         mutationQueueCapacity: MUTATION_QUEUE_CAPACITY,
+        vitalsStride: 2,
         ...overrides,
       },
     },
@@ -428,6 +430,54 @@ describe('fit worker', () => {
     expect(mockState.fitter!.freed).toBe(true);
     // free posted exactly once: counting 'done' messages stays at 1.
     expect(harness.posted.filter((m) => m.kind === 'done').length).toBe(1);
+  });
+
+  it('emits the five vitals metrics on the vitalsStride cadence', async () => {
+    const harness = createWorkerHarness();
+    await loadWorker(harness);
+    // vitalsStride=2 → vitals emit on frame index 1 and 3 (every
+    // second frame counting from 1). Residuals below let us verify
+    // residual_l2 comes through with the right magnitude.
+    const init = makeInitMsg({ heartbeatStride: 1, snapshotStride: 1000, vitalsStride: 2 });
+    await harness.deliver(init.msg);
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'ready'));
+
+    mockState.program = [
+      { residual: new Float32Array([3, 4]) }, // L2 = 5
+      { residual: new Float32Array([1, 0]) }, // L2 = 1
+      { residual: new Float32Array([0, 2]) }, // L2 = 2
+      { residual: new Float32Array([0, 0]) }, // L2 = 0
+    ];
+    for (let i = 0; i < 4; i += 1) writeFrameToChannel(init.frameChannel, i);
+
+    await harness.deliver({ kind: 'run' });
+    await runUntil(
+      harness,
+      (p) => p.filter((m) => m.kind === 'event' && m.event.kind === 'metric').length >= 10,
+    );
+
+    const metrics = harness.posted
+      .filter(
+        (m): m is Extract<WorkerOutbound, { kind: 'event' }> =>
+          m.kind === 'event' && m.event.kind === 'metric',
+      )
+      .map((m) => m.event as Extract<PipelineEvent, { kind: 'metric' }>);
+
+    // Exactly five metrics per stride firing.
+    const names = metrics.map((m) => m.name);
+    expect(names).toContain('cell_count');
+    expect(names).toContain('fps');
+    expect(names).toContain('memory_bytes');
+    expect(names).toContain('residual_l2');
+    expect(names).toContain('extend_queue_depth');
+
+    // residual_l2 at t=1 is from the second step (L2 of [1,0] = 1).
+    const firstResidual = metrics.find((m) => m.name === 'residual_l2');
+    expect(firstResidual).toBeDefined();
+    expect(firstResidual!.value).toBeCloseTo(1, 5);
+    // memory_bytes reflects the mocked calaMemoryBytes return value.
+    const mem = metrics.find((m) => m.name === 'memory_bytes');
+    expect(mem!.value).toBe(1024 * 1024);
   });
 
   it('posts error when fit_step throws mid-loop and still frees the fitter', async () => {

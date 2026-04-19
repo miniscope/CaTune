@@ -1,4 +1,11 @@
-import { initCalaCore, Fitter, MutationQueueHandle } from '@calab/cala-core';
+import { initCalaCore, Fitter, MutationQueueHandle, calaMemoryBytes } from '@calab/cala-core';
+import {
+  METRIC_CELL_COUNT,
+  METRIC_EXTEND_QUEUE_DEPTH,
+  METRIC_FPS,
+  METRIC_MEMORY_BYTES,
+  METRIC_RESIDUAL_L2,
+} from '../lib/vitals.ts';
 import {
   SabRingChannel,
   EventBus,
@@ -49,6 +56,12 @@ const FRAME_CHANNEL_SLOT_COUNT_FALLBACK = 4;
 const DEFAULT_MUTATION_QUEUE_CAPACITY = 32;
 const DEFAULT_FIT_CONFIG_JSON = '{}';
 const DEFAULT_EXTEND_CONFIG_JSON = '{}';
+// Vitals cadence (design §12 header bar). Emit every N steps so the
+// sparkline widgets see smooth updates without per-frame postMessage
+// cost. 8 aligns with `DEFAULT_HEARTBEAT_STRIDE` so one fit iteration
+// either emits the full vitals bundle or none of it. Overridable
+// via `workerConfig.vitalsStride`.
+const DEFAULT_VITALS_STRIDE = 8;
 
 const ROLE = 'fit' as const;
 
@@ -63,6 +76,7 @@ interface FitWorkerConfig {
   fitConfigJson: string;
   extendConfigJson: string;
   heartbeatStride: number;
+  vitalsStride: number;
   snapshotStride: number;
   mutationDrainMaxPerIteration: number;
   eventBusCapacity: number;
@@ -93,6 +107,17 @@ interface RuntimeHandles {
   eventSubscription: () => void;
   config: FitWorkerConfig;
   pixels: number;
+  // Wall-clock at the previous vitals emission, used to derive fps
+  // over the interval since the last post (not instantaneous, not
+  // cumulative — just the rate the user perceives on the bar).
+  lastVitalsTimeMs: number;
+  // Frame index at the previous emission so (now - last) ÷ (framesNow
+  // - framesLast) × 1000 gives fps without caring about stride edge
+  // cases if the worker skipped a window on backpressure.
+  lastVitalsFrameIndex: number;
+  // Most recent residualL2 from `step()`; cached between frames so the
+  // vitals emission can read it without re-running math.
+  lastResidualL2: number;
 }
 
 let handles: RuntimeHandles | null = null;
@@ -135,6 +160,7 @@ function parseConfig(raw: unknown): FitWorkerConfig {
     fitConfigJson: stringOr(cfg.fitConfigJson, DEFAULT_FIT_CONFIG_JSON),
     extendConfigJson: stringOr(cfg.extendConfigJson, DEFAULT_EXTEND_CONFIG_JSON),
     heartbeatStride: numberOr(cfg.heartbeatStride, DEFAULT_HEARTBEAT_STRIDE),
+    vitalsStride: numberOr(cfg.vitalsStride, DEFAULT_VITALS_STRIDE),
     snapshotStride: numberOr(cfg.snapshotStride, DEFAULT_SNAPSHOT_STRIDE),
     mutationDrainMaxPerIteration: numberOr(
       cfg.mutationDrainMaxPerIteration,
@@ -210,6 +236,9 @@ async function handleInit(payload: WorkerInitPayload): Promise<void> {
     eventSubscription,
     config: cfg,
     pixels,
+    lastVitalsTimeMs: 0,
+    lastVitalsFrameIndex: 0,
+    lastResidualL2: 0,
   };
 
   // Test-only hook so unit tests can push mutations into the worker's
@@ -318,6 +347,39 @@ function takeCadencedSnapshot(h: RuntimeHandles, frameIndex: number): void {
   post({ kind: 'snapshot-request', role: ROLE, requestId: request.requestId });
 }
 
+function residualL2(residual: ArrayLike<number> | Float32Array): number {
+  let sumSq = 0;
+  for (let i = 0; i < residual.length; i += 1) {
+    const v = residual[i];
+    sumSq += v * v;
+  }
+  return Math.sqrt(sumSq);
+}
+
+function emitVitals(h: RuntimeHandles, frameIndex: number): void {
+  if (h.config.vitalsStride <= 0) return;
+  if ((frameIndex + 1) % h.config.vitalsStride !== 0) return;
+
+  const now = Date.now();
+  const elapsedMs = now - h.lastVitalsTimeMs;
+  const elapsedFrames = frameIndex - h.lastVitalsFrameIndex;
+  const fps =
+    h.lastVitalsTimeMs > 0 && elapsedMs > 0 ? (elapsedFrames * 1000) / elapsedMs : 0;
+  h.lastVitalsTimeMs = now;
+  h.lastVitalsFrameIndex = frameIndex;
+
+  const metrics: { name: string; value: number }[] = [
+    { name: METRIC_CELL_COUNT, value: h.fitter.numComponents() },
+    { name: METRIC_FPS, value: fps },
+    { name: METRIC_MEMORY_BYTES, value: calaMemoryBytes() ?? 0 },
+    { name: METRIC_RESIDUAL_L2, value: h.lastResidualL2 },
+    { name: METRIC_EXTEND_QUEUE_DEPTH, value: h.mutationQueue.len },
+  ];
+  for (const { name, value } of metrics) {
+    h.eventBus.publish({ kind: 'metric', t: frameIndex, name, value });
+  }
+}
+
 async function fitLoop(h: RuntimeHandles): Promise<void> {
   let frameIndex = 0;
   while (!stopRequested) {
@@ -329,9 +391,11 @@ async function fitLoop(h: RuntimeHandles): Promise<void> {
       await new Promise<void>((r) => setTimeout(r, h.config.frameChannelPollIntervalMs));
       continue;
     }
-    h.fitter.step(frame);
+    const residual = h.fitter.step(frame);
+    h.lastResidualL2 = residualL2(residual);
     drainMutationsOnce(h, frameIndex);
     takeCadencedSnapshot(h, frameIndex);
+    emitVitals(h, frameIndex);
     if ((frameIndex + 1) % h.config.heartbeatStride === 0) {
       post({
         kind: 'frame-processed',
