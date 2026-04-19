@@ -10,6 +10,16 @@
  */
 
 import type { PipelineEvent } from './events.ts';
+import type { DeprecateReason } from './mutation-queue.ts';
+
+/**
+ * Shape of a mutation the main thread can author and hand to the fit
+ * worker (Phase 6 task 13). Kept narrow on purpose: Phase 6 only ships
+ * deprecation, since it needs no footprint payload and maps cleanly
+ * onto a click-to-delete UI affordance. Register / merge from the UI
+ * land with a Phase 7 footprint picker.
+ */
+export type UserMutation = { kind: 'deprecate'; id: number; reason: DeprecateReason };
 
 /** The four workers the orchestrator spawns. Used as a tag in messages. */
 export type WorkerRole = 'decodePreprocess' | 'fit' | 'extend' | 'archive';
@@ -52,7 +62,26 @@ export type WorkerInbound =
   // Main-thread dashboard (task 24) asks for a consistent dump of the
   // archive's in-memory event log and per-name metric snapshot.
   // `requestId` correlates each dump with the eventual reply.
-  | { kind: 'request-archive-dump'; requestId: number };
+  | { kind: 'request-archive-dump'; requestId: number }
+  // Tiered timeseries query for a single named metric (design §9.1,
+  // Phase 6 task 1). `requestId` correlates the request with the
+  // matching `timeseries` reply. Unknown names return empty arrays,
+  // not an error — the dashboard polls before any samples exist.
+  | { kind: 'request-timeseries'; requestId: number; name: string }
+  // Per-neuron structural event history (design §9.2, Phase 6 task 2).
+  // Returns the archive's indexed copy of every birth / merge / split /
+  // deprecate event the given neuron participates in. Empty list for
+  // an unknown id — same contract as `request-timeseries`.
+  | { kind: 'request-events-for-neuron'; requestId: number; neuronId: number }
+  // Per-neuron footprint history query (design §9.3, Phase 6 task 3).
+  // Returns every `(t, sparse A column)` snapshot the archive has
+  // recorded for `neuronId`, ordered oldest→newest.
+  | { kind: 'request-footprint-history'; requestId: number; neuronId: number }
+  // Main-thread authored mutation (Phase 6 task 13). The orchestrator
+  // forwards these to the fit worker so the UI can deprecate a
+  // neuron, force a merge, etc. The worker pushes through the same
+  // drain path an extend-generated mutation would take.
+  | { kind: 'user-mutation'; mutation: UserMutation };
 
 /** Messages a worker sends back to the orchestrator. */
 export type WorkerOutbound =
@@ -72,6 +101,41 @@ export type WorkerOutbound =
       requestId: number;
       events: PipelineEvent[];
       metrics: Record<string, number>;
+    }
+  // Reply to `request-timeseries`. `l1*` arrays are the full-resolution
+  // recent ring for `name`; `l2*` are downsampled older samples
+  // (design §9.1 tiered retention). All arrays are fresh copies in
+  // chronological order so the caller cannot mutate archive state.
+  | {
+      kind: 'timeseries';
+      role: WorkerRole;
+      requestId: number;
+      name: string;
+      l1Times: Float32Array;
+      l1Values: Float32Array;
+      l2Times: Float32Array;
+      l2Values: Float32Array;
+    }
+  // Reply to `request-events-for-neuron`. `events` is a chronological
+  // copy of the archive's per-neuron index for `neuronId`.
+  | {
+      kind: 'events-for-neuron';
+      role: WorkerRole;
+      requestId: number;
+      neuronId: number;
+      events: PipelineEvent[];
+    }
+  // Reply to `request-footprint-history`. `times` and the typed-array
+  // payloads are parallel arrays of equal length (one entry per
+  // stored snapshot, oldest→newest).
+  | {
+      kind: 'footprint-history';
+      role: WorkerRole;
+      requestId: number;
+      neuronId: number;
+      times: Float32Array;
+      pixelIndices: Uint32Array[];
+      values: Float32Array[];
     }
   // W1 preview frame for the dashboard viewer (design §12 frame panel,
   // Phase 5 exit). Strided like `frame-processed` so the post rate is

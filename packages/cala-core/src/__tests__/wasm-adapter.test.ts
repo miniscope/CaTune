@@ -6,13 +6,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // WASM boot itself. Real WASM execution is covered at Phase 5 exit
 // (task 25) in the browser.
 
-const initSpy = vi.fn(async () => undefined);
+// Stubbed WASM memory — `initCalaCore` reads `mod.memory.buffer.byteLength`
+// via `calaMemoryBytes()`, so the init resolver must return a shape that
+// matches the real wasm-bindgen init return.
+const stubMemory = { buffer: new ArrayBuffer(0) } as unknown as WebAssembly.Memory;
+const initSpy = vi.fn(async () => ({ memory: stubMemory }));
 const panicHookSpy = vi.fn();
 
 vi.mock('../../../../crates/cala-core/pkg/calab_cala_core', () => ({
   default: initSpy,
   init_panic_hook: panicHookSpy,
   AviReader: class StubAviReader {},
+  Extender: class StubExtender {},
   Fitter: class StubFitter {},
   MutationQueueHandle: class StubMutationQueueHandle {},
   Preprocessor: class StubPreprocessor {},
@@ -60,10 +65,18 @@ describe('initCalaCore', () => {
   it('re-exports the binding types so consumers never touch crates/*', async () => {
     const mod = await loadFreshAdapter();
     expect(mod.AviReader).toBeDefined();
+    expect(mod.Extender).toBeDefined();
     expect(mod.Fitter).toBeDefined();
     expect(mod.Preprocessor).toBeDefined();
     expect(mod.MutationQueueHandle).toBeDefined();
     expect(mod.SnapshotHandle).toBeDefined();
     expect(mod.init_panic_hook).toBeDefined();
+  });
+
+  it('calaMemoryBytes returns null pre-init and the buffer size after init', async () => {
+    const { initCalaCore, calaMemoryBytes } = await loadFreshAdapter();
+    expect(calaMemoryBytes()).toBeNull();
+    await initCalaCore();
+    expect(calaMemoryBytes()).toBe(0);
   });
 });

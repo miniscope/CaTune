@@ -15,8 +15,25 @@ export interface ArchiveDump {
   metrics: Record<string, number>;
 }
 
+export interface TimeseriesReply {
+  name: string;
+  l1Times: Float32Array;
+  l1Values: Float32Array;
+  l2Times: Float32Array;
+  l2Values: Float32Array;
+}
+
+export interface FootprintHistoryEntry {
+  t: number;
+  pixelIndices: Uint32Array;
+  values: Float32Array;
+}
+
 export interface ArchiveClient {
   requestDump(): Promise<ArchiveDump>;
+  requestTimeseries(name: string): Promise<TimeseriesReply>;
+  requestEventsForNeuron(neuronId: number): Promise<PipelineEvent[]>;
+  requestFootprintHistory(neuronId: number): Promise<FootprintHistoryEntry[]>;
   startPolling(cb: (dump: ArchiveDump) => void): void;
   stopPolling(): void;
   onEvent(cb: (e: PipelineEvent) => void): Unsubscribe;
@@ -42,11 +59,22 @@ class DumpTimeoutError extends Error {
   }
 }
 
-interface PendingDump {
-  resolve: (dump: ArchiveDump) => void;
+// Generic reply binder. Every request kind shares the same
+// "post-then-await-matching-requestId" pattern; this type lets us
+// bookkeep them all in one pending map without losing type info at
+// the resolve site.
+interface PendingReply<T> {
+  resolve: (v: T) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  kind: 'dump' | 'timeseries' | 'events-for-neuron' | 'footprint-history';
 }
+
+type PendingEntry =
+  | PendingReply<ArchiveDump>
+  | PendingReply<TimeseriesReply>
+  | PendingReply<PipelineEvent[]>
+  | PendingReply<FootprintHistoryEntry[]>;
 
 export function createArchiveClient(
   worker: WorkerLike,
@@ -55,7 +83,7 @@ export function createArchiveClient(
   const pollInterval = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const dumpTimeout = options.dumpTimeoutMs ?? DEFAULT_DUMP_TIMEOUT_MS;
 
-  const pending = new Map<number, PendingDump>();
+  const pending = new Map<number, PendingEntry>();
   const eventListeners = new Set<(e: PipelineEvent) => void>();
   let nextRequestId = 1;
   let disposed = false;
@@ -64,42 +92,128 @@ export function createArchiveClient(
 
   const handleMessage = (ev: { data: WorkerOutbound }): void => {
     const msg = ev.data;
-    if (msg.kind === 'archive-dump') {
-      const entry = pending.get(msg.requestId);
-      // Unknown-id replies (e.g. from a disposed-and-recreated client
-      // sharing the worker) must not spuriously resolve a waiter.
-      if (!entry) return;
-      pending.delete(msg.requestId);
-      clearTimeout(entry.timer);
-      entry.resolve({ events: msg.events, metrics: msg.metrics });
-      return;
-    }
-    if (msg.kind === 'event') {
-      for (const cb of eventListeners) cb(msg.event);
-      return;
+    switch (msg.kind) {
+      case 'archive-dump': {
+        const entry = pending.get(msg.requestId);
+        // Unknown-id replies (e.g. from a disposed-and-recreated
+        // client sharing the worker) must not spuriously resolve a
+        // waiter. Same guard applies for every kind below.
+        if (!entry || entry.kind !== 'dump') return;
+        pending.delete(msg.requestId);
+        clearTimeout(entry.timer);
+        (entry as PendingReply<ArchiveDump>).resolve({
+          events: msg.events,
+          metrics: msg.metrics,
+        });
+        return;
+      }
+      case 'timeseries': {
+        const entry = pending.get(msg.requestId);
+        if (!entry || entry.kind !== 'timeseries') return;
+        pending.delete(msg.requestId);
+        clearTimeout(entry.timer);
+        (entry as PendingReply<TimeseriesReply>).resolve({
+          name: msg.name,
+          l1Times: msg.l1Times,
+          l1Values: msg.l1Values,
+          l2Times: msg.l2Times,
+          l2Values: msg.l2Values,
+        });
+        return;
+      }
+      case 'events-for-neuron': {
+        const entry = pending.get(msg.requestId);
+        if (!entry || entry.kind !== 'events-for-neuron') return;
+        pending.delete(msg.requestId);
+        clearTimeout(entry.timer);
+        (entry as PendingReply<PipelineEvent[]>).resolve(msg.events);
+        return;
+      }
+      case 'footprint-history': {
+        const entry = pending.get(msg.requestId);
+        if (!entry || entry.kind !== 'footprint-history') return;
+        pending.delete(msg.requestId);
+        clearTimeout(entry.timer);
+        const history: FootprintHistoryEntry[] = [];
+        for (let i = 0; i < msg.times.length; i += 1) {
+          history.push({
+            t: msg.times[i],
+            pixelIndices: msg.pixelIndices[i],
+            values: msg.values[i],
+          });
+        }
+        (entry as PendingReply<FootprintHistoryEntry[]>).resolve(history);
+        return;
+      }
+      case 'event':
+        for (const cb of eventListeners) cb(msg.event);
+        return;
+      default:
+        return;
     }
   };
 
   worker.addEventListener('message', handleMessage);
 
-  function requestDump(): Promise<ArchiveDump> {
+  function issueRequest<T>(
+    kind: PendingEntry['kind'],
+    label: string,
+    send: (requestId: number) => void,
+  ): Promise<T> {
     if (disposed) {
       return Promise.reject(new DumpAbortError('archive client disposed'));
     }
     const requestId = nextRequestId;
     nextRequestId += 1;
-    return new Promise<ArchiveDump>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(requestId);
         reject(
           new DumpTimeoutError(
-            `archive dump (requestId=${requestId}) timed out after ${dumpTimeout}ms`,
+            `archive ${label} (requestId=${requestId}) timed out after ${dumpTimeout}ms`,
           ),
         );
       }, dumpTimeout);
-      pending.set(requestId, { resolve, reject, timer });
+      pending.set(requestId, {
+        kind,
+        resolve: resolve as (v: unknown) => void,
+        reject,
+        timer,
+      } as unknown as PendingEntry);
+      send(requestId);
+    });
+  }
+
+  function requestDump(): Promise<ArchiveDump> {
+    return issueRequest<ArchiveDump>('dump', 'dump', (requestId) => {
       worker.postMessage({ kind: 'request-archive-dump', requestId });
     });
+  }
+
+  function requestTimeseries(name: string): Promise<TimeseriesReply> {
+    return issueRequest<TimeseriesReply>('timeseries', `timeseries(${name})`, (requestId) => {
+      worker.postMessage({ kind: 'request-timeseries', requestId, name });
+    });
+  }
+
+  function requestEventsForNeuron(neuronId: number): Promise<PipelineEvent[]> {
+    return issueRequest<PipelineEvent[]>(
+      'events-for-neuron',
+      `events-for-neuron(${neuronId})`,
+      (requestId) => {
+        worker.postMessage({ kind: 'request-events-for-neuron', requestId, neuronId });
+      },
+    );
+  }
+
+  function requestFootprintHistory(neuronId: number): Promise<FootprintHistoryEntry[]> {
+    return issueRequest<FootprintHistoryEntry[]>(
+      'footprint-history',
+      `footprint-history(${neuronId})`,
+      (requestId) => {
+        worker.postMessage({ kind: 'request-footprint-history', requestId, neuronId });
+      },
+    );
   }
 
   function startPolling(cb: (dump: ArchiveDump) => void): void {
@@ -153,5 +267,14 @@ export function createArchiveClient(
     pending.clear();
   }
 
-  return { requestDump, startPolling, stopPolling, onEvent, dispose };
+  return {
+    requestDump,
+    requestTimeseries,
+    requestEventsForNeuron,
+    requestFootprintHistory,
+    startPolling,
+    stopPolling,
+    onEvent,
+    dispose,
+  };
 }

@@ -53,6 +53,10 @@ const mockState = {
   program: [] as FitterProgramStep[],
   autoResidual: new Float32Array(PIXELS),
   mutationsToDrain: [] as PipelineMutation[],
+  // How many proposals the mock Extender claims per cycle. Lets
+  // tests verify the `extend.proposed` metric emission without
+  // dragging in real cala-core.
+  nextCycleProposals: 0,
 };
 
 vi.mock('@calab/cala-core', () => {
@@ -145,10 +149,34 @@ vi.mock('@calab/cala-core', () => {
     free(): void {}
   }
 
+  class Extender {
+    public pushCalls: Float32Array[] = [];
+    public cycleCalls = 0;
+    constructor(
+      _height: number,
+      _width: number,
+      _residualWindowLen: number,
+      _extendCfgJson: string,
+      _metadataJson: string,
+    ) {}
+    pushResidual(r: Float32Array): void {
+      this.pushCalls.push(new Float32Array(r));
+    }
+    runCycle(_fitter: Fitter, _queue: MutationQueueHandle): number {
+      this.cycleCalls += 1;
+      return mockState.nextCycleProposals;
+    }
+    residualLen(): number {
+      return this.pushCalls.length;
+    }
+  }
+
   return {
     initCalaCore: vi.fn(async () => {}),
+    calaMemoryBytes: vi.fn(() => 1024 * 1024),
     Fitter,
     MutationQueueHandle,
+    Extender,
     SnapshotHandle: class {},
   };
 });
@@ -159,6 +187,7 @@ function resetMockState(): void {
   mockState.program = [];
   mockState.autoResidual = new Float32Array(PIXELS);
   mockState.mutationsToDrain = [];
+  mockState.nextCycleProposals = 0;
 }
 
 function makeFrameChannel(): SabRingChannel {
@@ -212,6 +241,7 @@ function makeInitMsg(overrides: Record<string, unknown> = {}): InitHandles {
         frameChannelWaitTimeoutMs: FRAME_CHANNEL_WAIT_TIMEOUT_MS,
         frameChannelPollIntervalMs: FRAME_CHANNEL_POLL_INTERVAL_MS,
         mutationQueueCapacity: MUTATION_QUEUE_CAPACITY,
+        vitalsStride: 2,
         ...overrides,
       },
     },
@@ -428,6 +458,141 @@ describe('fit worker', () => {
     expect(mockState.fitter!.freed).toBe(true);
     // free posted exactly once: counting 'done' messages stays at 1.
     expect(harness.posted.filter((m) => m.kind === 'done').length).toBe(1);
+  });
+
+  it('drives the Extender each frame and emits extend.proposed metric on cycle stride', async () => {
+    const harness = createWorkerHarness();
+    await loadWorker(harness);
+    const init = makeInitMsg({
+      heartbeatStride: 1,
+      snapshotStride: 1000,
+      vitalsStride: 1000,
+      extendCycleStride: 2,
+      extendWindowFrames: 4,
+      metadataJson: JSON.stringify({ pixel_size_um: 2 }),
+    });
+    await harness.deliver(init.msg);
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'ready'));
+
+    mockState.program = [{}, {}, {}, {}];
+    mockState.nextCycleProposals = 3;
+    for (let i = 0; i < 4; i += 1) writeFrameToChannel(init.frameChannel, i);
+
+    await harness.deliver({ kind: 'run' });
+    await runUntil(
+      harness,
+      (p) =>
+        p.filter(
+          (m) =>
+            m.kind === 'event' && m.event.kind === 'metric' && m.event.name === 'extend.proposed',
+        ).length >= 2,
+    );
+
+    const proposedEvents = harness.posted
+      .filter(
+        (m): m is Extract<WorkerOutbound, { kind: 'event' }> =>
+          m.kind === 'event' &&
+          m.event.kind === 'metric' &&
+          (m.event as Extract<PipelineEvent, { kind: 'metric' }>).name === 'extend.proposed',
+      )
+      .map((m) => m.event as Extract<PipelineEvent, { kind: 'metric' }>);
+    expect(proposedEvents.length).toBeGreaterThanOrEqual(2);
+    expect(proposedEvents[0].value).toBe(3);
+  });
+
+  it('emits log-spaced footprint-snapshot events after a birth mutation', async () => {
+    const harness = createWorkerHarness();
+    await loadWorker(harness);
+    // Drive the scheduler by pushing a register mutation on frame 0
+    // (caches a footprint), then advance the fit loop through several
+    // frames so ages 1, 2, 4 fire.
+    const init = makeInitMsg({ heartbeatStride: 1, snapshotStride: 1000, vitalsStride: 1000 });
+    await harness.deliver(init.msg);
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'ready'));
+
+    mockState.program = [{}, {}, {}, {}, {}];
+    mockState.mutationsToDrain = [
+      {
+        type: 'register',
+        snapshotEpoch: 1n,
+        class: 'cell',
+        support: new Uint32Array([2, 3]),
+        values: new Float32Array([0.4, 0.5]),
+        trace: new Float32Array([0]),
+      },
+    ];
+    // Mutation has to be visible when the worker pops it on frame 0.
+    const handles = getFitHandles();
+    expect(handles).toBeDefined();
+    handles!.mutationQueue.push(mockState.mutationsToDrain.shift()!);
+
+    for (let i = 0; i < 5; i += 1) writeFrameToChannel(init.frameChannel, i);
+
+    await harness.deliver({ kind: 'run' });
+    await runUntil(
+      harness,
+      (p) =>
+        p.filter((m) => m.kind === 'event' && m.event.kind === 'footprint-snapshot').length >= 2,
+    );
+
+    const snaps = harness.posted
+      .filter(
+        (m): m is Extract<WorkerOutbound, { kind: 'event' }> =>
+          m.kind === 'event' && m.event.kind === 'footprint-snapshot',
+      )
+      .map((m) => m.event as Extract<PipelineEvent, { kind: 'footprint-snapshot' }>);
+    // At least the first log-spaced firing should appear; payloads
+    // should carry the cached footprint from the register mutation.
+    expect(snaps.length).toBeGreaterThanOrEqual(1);
+    expect(Array.from(snaps[0].footprint.pixelIndices)).toEqual([2, 3]);
+  });
+
+  it('emits the five vitals metrics on the vitalsStride cadence', async () => {
+    const harness = createWorkerHarness();
+    await loadWorker(harness);
+    // vitalsStride=2 → vitals emit on frame index 1 and 3 (every
+    // second frame counting from 1). Residuals below let us verify
+    // residual_l2 comes through with the right magnitude.
+    const init = makeInitMsg({ heartbeatStride: 1, snapshotStride: 1000, vitalsStride: 2 });
+    await harness.deliver(init.msg);
+    await runUntil(harness, (p) => p.some((m) => m.kind === 'ready'));
+
+    mockState.program = [
+      { residual: new Float32Array([3, 4]) }, // L2 = 5
+      { residual: new Float32Array([1, 0]) }, // L2 = 1
+      { residual: new Float32Array([0, 2]) }, // L2 = 2
+      { residual: new Float32Array([0, 0]) }, // L2 = 0
+    ];
+    for (let i = 0; i < 4; i += 1) writeFrameToChannel(init.frameChannel, i);
+
+    await harness.deliver({ kind: 'run' });
+    await runUntil(
+      harness,
+      (p) => p.filter((m) => m.kind === 'event' && m.event.kind === 'metric').length >= 10,
+    );
+
+    const metrics = harness.posted
+      .filter(
+        (m): m is Extract<WorkerOutbound, { kind: 'event' }> =>
+          m.kind === 'event' && m.event.kind === 'metric',
+      )
+      .map((m) => m.event as Extract<PipelineEvent, { kind: 'metric' }>);
+
+    // Exactly five metrics per stride firing.
+    const names = metrics.map((m) => m.name);
+    expect(names).toContain('cell_count');
+    expect(names).toContain('fps');
+    expect(names).toContain('memory_bytes');
+    expect(names).toContain('residual_l2');
+    expect(names).toContain('extend_queue_depth');
+
+    // residual_l2 at t=1 is from the second step (L2 of [1,0] = 1).
+    const firstResidual = metrics.find((m) => m.name === 'residual_l2');
+    expect(firstResidual).toBeDefined();
+    expect(firstResidual!.value).toBeCloseTo(1, 5);
+    // memory_bytes reflects the mocked calaMemoryBytes return value.
+    const mem = metrics.find((m) => m.name === 'memory_bytes');
+    expect(mem!.value).toBe(1024 * 1024);
   });
 
   it('posts error when fit_step throws mid-loop and still frees the fitter', async () => {
