@@ -223,6 +223,80 @@ describe('cala archive-client', () => {
     expect((err as Error).name).toMatch(/Abort|Dispose/);
   });
 
+  it('requestTimeseries posts request-timeseries and resolves with typed-array payloads', async () => {
+    const promise = client.requestTimeseries('fps');
+    expect(worker.posted.length).toBe(1);
+    const req = worker.posted[0] as { kind: string; requestId: number; name: string };
+    expect(req.kind).toBe('request-timeseries');
+    expect(req.name).toBe('fps');
+
+    worker.push({
+      kind: 'timeseries',
+      role: 'archive',
+      requestId: req.requestId,
+      name: 'fps',
+      l1Times: new Float32Array([0, 1, 2]),
+      l1Values: new Float32Array([30, 29, 30]),
+      l2Times: new Float32Array([]),
+      l2Values: new Float32Array([]),
+    });
+
+    const reply = await promise;
+    expect(reply.name).toBe('fps');
+    expect(Array.from(reply.l1Times)).toEqual([0, 1, 2]);
+    expect(Array.from(reply.l1Values)).toEqual([30, 29, 30]);
+  });
+
+  it('requestEventsForNeuron posts request-events-for-neuron and resolves with the event list', async () => {
+    const promise = client.requestEventsForNeuron(42);
+    const req = worker.posted[0] as {
+      kind: string;
+      requestId: number;
+      neuronId: number;
+    };
+    expect(req.kind).toBe('request-events-for-neuron');
+    expect(req.neuronId).toBe(42);
+
+    const events = [birthEvent(1, 42)];
+    worker.push({
+      kind: 'events-for-neuron',
+      role: 'archive',
+      requestId: req.requestId,
+      neuronId: 42,
+      events,
+    });
+    expect(await promise).toEqual(events);
+  });
+
+  it('requestFootprintHistory pairs times with parallel typed-array payloads', async () => {
+    const promise = client.requestFootprintHistory(9);
+    const req = worker.posted[0] as {
+      kind: string;
+      requestId: number;
+      neuronId: number;
+    };
+    expect(req.kind).toBe('request-footprint-history');
+    expect(req.neuronId).toBe(9);
+
+    worker.push({
+      kind: 'footprint-history',
+      role: 'archive',
+      requestId: req.requestId,
+      neuronId: 9,
+      times: new Float32Array([1, 5]),
+      pixelIndices: [new Uint32Array([1]), new Uint32Array([3, 4])],
+      values: [new Float32Array([0.5]), new Float32Array([0.1, 0.2])],
+    });
+
+    const history = await promise;
+    expect(history.length).toBe(2);
+    expect(history[0].t).toBe(1);
+    expect(Array.from(history[1].pixelIndices)).toEqual([3, 4]);
+    expect(Array.from(history[1].values)).toEqual([
+      0.10000000149011612, 0.20000000298023224,
+    ]);
+  });
+
   it('onEvent delivers PipelineEvent messages posted by the worker', () => {
     const received: PipelineEvent[] = [];
     const unsub = client.onEvent((e) => {
