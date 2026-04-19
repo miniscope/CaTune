@@ -337,6 +337,35 @@
 
 .cala-dashboard__vitals {
   grid-area: vitals;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.cala-dashboard__vitals > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.export-button {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.export-button:hover:not(:disabled) {
+  background: var(--bg-inset);
+}
+
+.export-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .cala-dashboard__frame {

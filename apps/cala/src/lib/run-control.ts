@@ -279,14 +279,30 @@ export async function startRun(opts: StartOptions = {}): Promise<void> {
     currentPreviewDetach = null;
     currentFitDetach?.();
     currentFitDetach = null;
-    currentArchiveWorker = null;
+    // Intentionally *keep* `currentArchiveWorker` alive after a
+    // natural run end so the export flow (Phase 7 task 15) can
+    // still reach the archive worker's queries while the run state
+    // is `stopped`. The next `startRun` call wipes it via
+    // `wrapFactories` re-spawning a fresh archive worker, and a
+    // full teardown is covered by the `stopRun` path + the
+    // `currentRuntime === null` gate.
   }
 }
 
 export async function stopRun(): Promise<void> {
   const rt = currentRuntime;
-  if (rt === null) return;
-  await rt.stop();
+  if (rt === null) {
+    // No active run; still clear any lingering post-completion
+    // archive worker reference so export can't post to a dead
+    // worker after explicit user teardown.
+    currentArchiveWorker = null;
+    return;
+  }
+  try {
+    await rt.stop();
+  } finally {
+    currentArchiveWorker = null;
+  }
 }
 
 export function currentRunState(): RuntimeState {
