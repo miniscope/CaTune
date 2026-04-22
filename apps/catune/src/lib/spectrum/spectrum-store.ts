@@ -2,7 +2,7 @@
 // Cutoffs update immediately on parameter change; expensive FFT only
 // recomputes when the underlying raw trace or selected cell changes.
 
-import { createSignal, createEffect, on } from 'solid-js';
+import { createSignal, createEffect, on, onCleanup } from 'solid-js';
 import { multiCellResults } from '../multi-cell-store.ts';
 import { samplingRate } from '../data-store.ts';
 import { currentTau, selectedCell } from '../viz-store.ts';
@@ -68,6 +68,30 @@ export function initSpectrumStore(): void {
       debounceTimer = setTimeout(computeSpectrum, 250);
     }),
   );
+
+  // Cancel pending FFT if the owning scope is disposed (re-import / unmount).
+  // Without this, a pending setTimeout fires into stale state after reset.
+  onCleanup(() => {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+  });
+}
+
+/**
+ * Clear all module-level caches so the next dataset starts clean.
+ * Called from the reset flow alongside clearMultiCellState / resetImport.
+ */
+export function resetSpectrumStore(): void {
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  lastRaw = null;
+  lastCellIdx = -1;
+  psdCache.clear();
+  setSpectrumData(null);
 }
 
 function computeSpectrum(): void {

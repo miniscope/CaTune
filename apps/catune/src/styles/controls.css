@@ -165,6 +165,8 @@
    ======================== */
 .param-slider__track-container {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .param-slider__true-marker {

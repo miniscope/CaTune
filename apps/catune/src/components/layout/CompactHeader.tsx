@@ -9,6 +9,7 @@ import {
   resetImport,
 } from '../../lib/data-store.ts';
 import { clearMultiCellState } from '../../lib/multi-cell-store.ts';
+import { resetSpectrumStore } from '../../lib/spectrum/spectrum-store.ts';
 import { TutorialLauncher } from '../tutorial/TutorialLauncher.tsx';
 import { FeedbackMenu } from './FeedbackMenu.tsx';
 import { AuthMenuWrapper } from './AuthMenuWrapper.tsx';
@@ -26,6 +27,7 @@ export interface CaTuneHeaderProps {
 export function CaTuneHeader(props: CaTuneHeaderProps): JSX.Element {
   const handleChangeData = () => {
     clearMultiCellState();
+    resetSpectrumStore();
     resetImport();
   };
 

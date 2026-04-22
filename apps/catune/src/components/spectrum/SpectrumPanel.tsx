@@ -124,19 +124,36 @@ function filterBandPlugin(
 export function SpectrumPanel() {
   const [container, setContainer] = createSignal<HTMLDivElement>();
   let uplotInstance: uPlot | undefined;
+  // Track the freqs typed-array reference across rebuilds. Cutoff-only updates
+  // from Effect 1 in spectrum-store.ts preserve the freqs reference, so we can
+  // skip the destroy+rebuild path and just redraw in that case.
+  let lastFreqs: Float64Array | null = null;
 
-  // Rebuild chart when spectrum data or container changes.
-  // container is a signal so the effect re-fires when Show renders the div.
   createEffect(
     on([spectrumData, container], () => {
+      const data = spectrumData();
+      const el = container();
+      if (!data || !el) {
+        if (uplotInstance) {
+          uplotInstance.destroy();
+          uplotInstance = undefined;
+          lastFreqs = null;
+        }
+        return;
+      }
+
+      // Same underlying freq grid → cutoff-only update. Redraw picks up the
+      // new cutoffs via the live accessors passed to filterBandPlugin.
+      if (uplotInstance && lastFreqs === data.freqs) {
+        uplotInstance.redraw();
+        return;
+      }
+
       if (uplotInstance) {
         uplotInstance.destroy();
         uplotInstance = undefined;
       }
-
-      const data = spectrumData();
-      const el = container();
-      if (!data || !el) return;
+      lastFreqs = data.freqs;
 
       const theme = getThemeColors();
 
@@ -166,8 +183,8 @@ export function SpectrumPanel() {
         plugins: [
           filterBandPlugin(
             filterEnabled,
-            () => data.highPassHz,
-            () => data.lowPassHz,
+            () => spectrumData()?.highPassHz ?? 0,
+            () => spectrumData()?.lowPassHz ?? Number.POSITIVE_INFINITY,
             theme,
           ),
         ],
@@ -218,7 +235,8 @@ export function SpectrumPanel() {
     }),
   );
 
-  // Redraw (not rebuild) when filter toggle changes — plugin reads filterEnabled() live
+  // Redraw when filter toggle changes — plugin reads filterEnabled() live.
+  // Cutoff changes are handled by the main effect above (redraw fast path).
   createEffect(
     on(filterEnabled, () => {
       if (uplotInstance) uplotInstance.redraw();
