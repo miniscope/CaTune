@@ -3,7 +3,7 @@
  * Uses uPlot following ScatterPlot.tsx patterns (ResizeObserver, dark theme, canvas plugins).
  */
 
-import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, onCleanup, Show } from 'solid-js';
 import { spectrumData } from '../../lib/spectrum/spectrum-store.ts';
 import { filterEnabled } from '../../lib/viz-store.ts';
 import { samplingRate } from '../../lib/data-store.ts';
@@ -125,10 +125,13 @@ export function SpectrumPanel() {
   const [container, setContainer] = createSignal<HTMLDivElement>();
   let uplotInstance: uPlot | undefined;
 
-  // Rebuild chart when spectrum data or container changes.
-  // container is a signal so the effect re-fires when Show renders the div.
+  // Rebuild only when the series data identity changes (new FFT computed).
+  // Cutoff-only updates preserve the freqs reference, so they don't trigger
+  // a full rebuild — they get picked up by the redraw effect below.
+  const seriesKey = createMemo(() => spectrumData()?.freqs);
+
   createEffect(
-    on([spectrumData, container], () => {
+    on([seriesKey, container], () => {
       if (uplotInstance) {
         uplotInstance.destroy();
         uplotInstance = undefined;
@@ -166,8 +169,8 @@ export function SpectrumPanel() {
         plugins: [
           filterBandPlugin(
             filterEnabled,
-            () => data.highPassHz,
-            () => data.lowPassHz,
+            () => spectrumData()?.highPassHz ?? 0,
+            () => spectrumData()?.lowPassHz ?? Number.POSITIVE_INFINITY,
             theme,
           ),
         ],
@@ -218,11 +221,15 @@ export function SpectrumPanel() {
     }),
   );
 
-  // Redraw (not rebuild) when filter toggle changes — plugin reads filterEnabled() live
+  // Redraw (not rebuild) when filter toggle or cutoffs change — plugin reads
+  // filterEnabled() and cutoff accessors live from the store on each draw.
   createEffect(
-    on(filterEnabled, () => {
-      if (uplotInstance) uplotInstance.redraw();
-    }),
+    on(
+      [filterEnabled, () => spectrumData()?.highPassHz, () => spectrumData()?.lowPassHz],
+      () => {
+        if (uplotInstance) uplotInstance.redraw();
+      },
+    ),
   );
 
   // ResizeObserver for sidebar open/close reflow
