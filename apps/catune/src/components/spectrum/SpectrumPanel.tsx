@@ -3,7 +3,7 @@
  * Uses uPlot following ScatterPlot.tsx patterns (ResizeObserver, dark theme, canvas plugins).
  */
 
-import { createEffect, createMemo, createSignal, on, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { spectrumData } from '../../lib/spectrum/spectrum-store.ts';
 import { filterEnabled } from '../../lib/viz-store.ts';
 import { samplingRate } from '../../lib/data-store.ts';
@@ -124,22 +124,36 @@ function filterBandPlugin(
 export function SpectrumPanel() {
   const [container, setContainer] = createSignal<HTMLDivElement>();
   let uplotInstance: uPlot | undefined;
-
-  // Rebuild only when the series data identity changes (new FFT computed).
-  // Cutoff-only updates preserve the freqs reference, so they don't trigger
-  // a full rebuild — they get picked up by the redraw effect below.
-  const seriesKey = createMemo(() => spectrumData()?.freqs);
+  // Track the freqs typed-array reference across rebuilds. Cutoff-only updates
+  // from Effect 1 in spectrum-store.ts preserve the freqs reference, so we can
+  // skip the destroy+rebuild path and just redraw in that case.
+  let lastFreqs: Float64Array | null = null;
 
   createEffect(
-    on([seriesKey, container], () => {
+    on([spectrumData, container], () => {
+      const data = spectrumData();
+      const el = container();
+      if (!data || !el) {
+        if (uplotInstance) {
+          uplotInstance.destroy();
+          uplotInstance = undefined;
+          lastFreqs = null;
+        }
+        return;
+      }
+
+      // Same underlying freq grid → cutoff-only update. Redraw picks up the
+      // new cutoffs via the live accessors passed to filterBandPlugin.
+      if (uplotInstance && lastFreqs === data.freqs) {
+        uplotInstance.redraw();
+        return;
+      }
+
       if (uplotInstance) {
         uplotInstance.destroy();
         uplotInstance = undefined;
       }
-
-      const data = spectrumData();
-      const el = container();
-      if (!data || !el) return;
+      lastFreqs = data.freqs;
 
       const theme = getThemeColors();
 
@@ -221,10 +235,10 @@ export function SpectrumPanel() {
     }),
   );
 
-  // Redraw (not rebuild) when filter toggle or cutoffs change — plugin reads
-  // filterEnabled() and cutoff accessors live from the store on each draw.
+  // Redraw when filter toggle changes — plugin reads filterEnabled() live.
+  // Cutoff changes are handled by the main effect above (redraw fast path).
   createEffect(
-    on([filterEnabled, () => spectrumData()?.highPassHz, () => spectrumData()?.lowPassHz], () => {
+    on(filterEnabled, () => {
       if (uplotInstance) uplotInstance.redraw();
     }),
   );
