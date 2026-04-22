@@ -224,12 +224,9 @@ export function SpectrumPanel() {
   // Redraw (not rebuild) when filter toggle or cutoffs change — plugin reads
   // filterEnabled() and cutoff accessors live from the store on each draw.
   createEffect(
-    on(
-      [filterEnabled, () => spectrumData()?.highPassHz, () => spectrumData()?.lowPassHz],
-      () => {
-        if (uplotInstance) uplotInstance.redraw();
-      },
-    ),
+    on([filterEnabled, () => spectrumData()?.highPassHz, () => spectrumData()?.lowPassHz], () => {
+      if (uplotInstance) uplotInstance.redraw();
+    }),
   );
 
   // ResizeObserver for sidebar open/close reflow

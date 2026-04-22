@@ -111,8 +111,7 @@ export function ParameterSlider(props: ParameterSliderProps) {
             const sliderMax = () => (props.toSlider ? 1 : props.max);
             const mappedValue = () =>
               props.toSlider ? props.toSlider(props.trueValue!) : props.trueValue!;
-            const pct = () =>
-              ((mappedValue() - sliderMin()) / (sliderMax() - sliderMin())) * 100;
+            const pct = () => ((mappedValue() - sliderMin()) / (sliderMax() - sliderMin())) * 100;
             // Thumb center insets by half-thumb-width at each end of the track,
             // so at pct=0 the thumb is at +7px, at pct=100 it's at -7px. Offset
             // the marker so it aligns with the thumb center at the same value.
