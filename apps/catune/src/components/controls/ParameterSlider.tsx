@@ -6,6 +6,13 @@ import { Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import { notifyTutorialAction, isTutorialActive } from '@calab/tutorials';
 
+// Mirrors the range-input thumb size in controls.css — required for accurate
+// true-value marker positioning (the thumb center insets from the track edges
+// by half its own width).
+const THUMB_WIDTH_PX = 14;
+const THUMB_HALF_WIDTH_PX = THUMB_WIDTH_PX / 2;
+const THUMB_OFFSET_SLOPE = THUMB_WIDTH_PX / 100;
+
 export interface ParameterSliderProps {
   label: string;
   value: Accessor<number>;
@@ -100,20 +107,23 @@ export function ParameterSlider(props: ParameterSliderProps) {
         />
         <Show when={props.trueValue !== undefined}>
           {(() => {
-            const sliderMin = props.toSlider ? 0 : props.min;
-            const sliderMax = props.toSlider ? 1 : props.max;
-            const mappedValue = props.toSlider
-              ? props.toSlider(props.trueValue!)
-              : props.trueValue!;
-            const pct = ((mappedValue - sliderMin) / (sliderMax - sliderMin)) * 100;
-            const formattedValue = props.format
-              ? props.format(props.trueValue!)
-              : props.trueValue!.toString();
+            const sliderMin = () => (props.toSlider ? 0 : props.min);
+            const sliderMax = () => (props.toSlider ? 1 : props.max);
+            const mappedValue = () =>
+              props.toSlider ? props.toSlider(props.trueValue!) : props.trueValue!;
+            const pct = () =>
+              ((mappedValue() - sliderMin()) / (sliderMax() - sliderMin())) * 100;
+            // Thumb center insets by half-thumb-width at each end of the track,
+            // so at pct=0 the thumb is at +7px, at pct=100 it's at -7px. Offset
+            // the marker so it aligns with the thumb center at the same value.
+            const thumbOffsetPx = () => THUMB_HALF_WIDTH_PX - pct() * THUMB_OFFSET_SLOPE;
+            const formattedValue = () =>
+              props.format ? props.format(props.trueValue!) : props.trueValue!.toString();
             return (
               <div
                 class="param-slider__true-marker"
-                style={{ left: `${pct}%` }}
-                title={`True value: ${formattedValue}${props.unit ? ' ' + props.unit : ''}`}
+                style={{ left: `calc(${pct()}% + ${thumbOffsetPx()}px)` }}
+                title={`True value: ${formattedValue()}${props.unit ? ' ' + props.unit : ''}`}
               />
             );
           })()}
