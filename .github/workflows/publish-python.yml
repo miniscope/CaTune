@@ -95,7 +95,7 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'   # abi3 floor; the wheel it emits runs on 3.11+
+          python-version: '3.11' # abi3 floor; the wheel it emits runs on 3.11+
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
