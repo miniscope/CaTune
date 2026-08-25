@@ -57,12 +57,20 @@ jobs:
         run: .venv/bin/pytest -m "not integration"
         working-directory: python
 
+  # One abi3 wheel per platform: `abi3-py311` (crates/solver/Cargo.toml) targets
+  # CPython's stable ABI, so a single cp311-abi3 wheel covers 3.11 and every
+  # later interpreter. That's why there is no python-version axis here.
+  #
+  # The `include` entries are deliberately the ONLY matrix keys. Adding a base
+  # axis alongside them does NOT create a cross product: each include applies to
+  # every combination and the last one wins, silently collapsing the whole job
+  # to windows-latest/x64. See "Expanding or adding matrix configurations" in
+  # the GitHub Actions matrix docs.
   build-wheels:
     needs: test
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
         include:
           - os: ubuntu-latest
             target: x86_64
@@ -87,20 +95,20 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'   # abi3 floor; the wheel it emits runs on 3.11+
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features pybindings -i python${{ matrix.python-version }}
+          args: --release --out dist --features pybindings
           sccache: 'true'
           manylinux: auto
           working-directory: python
 
       - uses: actions/upload-artifact@v7
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}-py${{ matrix.python-version }}
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
           path: python/dist
 
   build-sdist:
@@ -127,8 +135,14 @@ jobs:
           name: wheels-sdist
           path: python/dist
 
+  # Tag-gated. `Set version from tag` above is itself tag-gated, so on a
+  # workflow_dispatch run the version stays at the 0.0.0 placeholder — without
+  # this guard a manual dry run would publish `calab 0.0.0` to PyPI, which can
+  # never be re-uploaded or reused. Dispatch builds the wheels and uploads them
+  # as artifacts; only a `py/v*` tag actually publishes.
   publish:
     needs: [build-wheels, build-sdist]
+    if: startsWith(github.ref, 'refs/tags/py/v')
     runs-on: ubuntu-latest
     environment: pypi
     steps:
