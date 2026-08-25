@@ -57,12 +57,20 @@ jobs:
         run: .venv/bin/pytest -m "not integration"
         working-directory: python
 
+  # One abi3 wheel per platform: `abi3-py311` (crates/solver/Cargo.toml) targets
+  # CPython's stable ABI, so a single cp311-abi3 wheel covers 3.11 and every
+  # later interpreter. That's why there is no python-version axis here.
+  #
+  # The `include` entries are deliberately the ONLY matrix keys. Adding a base
+  # axis alongside them does NOT create a cross product: each include applies to
+  # every combination and the last one wins, silently collapsing the whole job
+  # to windows-latest/x64. See "Expanding or adding matrix configurations" in
+  # the GitHub Actions matrix docs.
   build-wheels:
     needs: test
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
         include:
           - os: ubuntu-latest
             target: x86_64
@@ -87,20 +95,20 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11' # abi3 floor; the wheel it emits runs on 3.11+
 
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features pybindings -i python${{ matrix.python-version }}
+          args: --release --out dist --features pybindings
           sccache: 'true'
           manylinux: auto
           working-directory: python
 
       - uses: actions/upload-artifact@v7
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}-py${{ matrix.python-version }}
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
           path: python/dist
 
   build-sdist:
@@ -127,8 +135,97 @@ jobs:
           name: wheels-sdist
           path: python/dist
 
+  # Installs the built wheel on every interpreter the abi3 tag claims to cover
+  # and runs a real computation through the Rust extension.
+  #
+  # This is the check whose absence let calab ship cp312-only wheels for four
+  # releases: the `test` job compiles from source, so it proves the code works
+  # on 3.11-3.13 — not that a *published wheel* is installable. `--only-binary`
+  # is load-bearing: without it pip would quietly fall back to the sdist and
+  # build from source, which is the exact failure this job exists to catch.
+  smoke-test-wheels:
+    needs: build-wheels
+    name: smoke py${{ matrix.python-version }} on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the built wheel (never from PyPI)
+        shell: bash
+        run: |
+          # Runtime deps come from PyPI...
+          python -m pip install --only-binary=:all: numpy pydantic
+          # ...but calab itself MUST be the wheel we just built. --no-index is
+          # load-bearing: dispatch runs carry the 0.0.0 placeholder version, so
+          # without it pip resolves calab from PyPI (a higher version always
+          # wins) and this job silently green-lights an already-released build
+          # instead of the one under test.
+          python -m pip install --no-index --no-deps --find-links dist calab
+
+      - name: Exercise the Rust extension
+        shell: bash
+        run: |
+          python - <<'PY'
+          import sys
+          import numpy as np
+          import calab
+          from calab import _solver, build_kernel, run_deconvolution
+
+          print(f"python  {sys.version.split()[0]}")
+          print(f"calab   {calab.__version__}")
+
+          # Prove we loaded the compiled abi3 extension and not a pure-Python
+          # build. calab 0.1.0 on PyPI is py3-none-any with no _solver at all,
+          # so this is the assertion that catches a resolver falling back to
+          # the index.
+          ext = _solver.__file__ or ""
+          assert ext.endswith((".so", ".pyd", ".dylib")), f"not a compiled extension: {ext!r}"
+          print(f"solver  {ext.rsplit('/', 1)[-1].rsplit(chr(92), 1)[-1]}")
+
+          k = build_kernel(0.1, 0.5, 30.0)
+          assert k.ndim == 1 and k.size > 0, f"bad kernel shape: {k.shape}"
+          assert np.all(np.isfinite(k)), "kernel has non-finite values"
+
+          # A clean synthetic trace: two well-separated spikes convolved with
+          # the kernel. Deconvolution must recover non-negative activity that
+          # is sparser than the input.
+          rng = np.random.default_rng(0)
+          spikes = np.zeros(600, dtype=np.float32)
+          spikes[[150, 400]] = 1.0
+          trace = np.convolve(spikes, k, mode="full")[:600].astype(np.float32)
+          trace += rng.normal(0, 0.01, trace.size).astype(np.float32)
+
+          act = run_deconvolution(trace, 30.0, 0.1, 0.5, 0.1)
+          act = np.asarray(act).ravel()
+          assert act.size == trace.size, f"size mismatch: {act.size} vs {trace.size}"
+          assert np.all(np.isfinite(act)), "solver returned non-finite values"
+          assert act.min() >= -1e-6, f"nonneg constraint violated: min={act.min()}"
+          assert act.max() > 0, "solver returned an all-zero solution"
+          print(f"kernel  {k.size} taps, activity peak {act.max():.4f}")
+          print("OK")
+          PY
+
+  # Tag-gated. `Set version from tag` above is itself tag-gated, so on a
+  # workflow_dispatch run the version stays at the 0.0.0 placeholder — without
+  # this guard a manual dry run would publish `calab 0.0.0` to PyPI, which can
+  # never be re-uploaded or reused. Dispatch builds the wheels and uploads them
+  # as artifacts; only a `py/v*` tag actually publishes.
   publish:
-    needs: [build-wheels, build-sdist]
+    needs: [build-wheels, build-sdist, smoke-test-wheels]
+    if: startsWith(github.ref, 'refs/tags/py/v')
     runs-on: ubuntu-latest
     environment: pypi
     steps:

@@ -22,7 +22,12 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 serde_json = { version = "1", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
-pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
+# `abi3-py311` builds against CPython's stable ABI, so one wheel per platform
+# serves 3.11 and every later interpreter. Without it, each new CPython release
+# has no matching wheel and pip falls back to this sdist — which forces a Rust
+# toolchain download on the user's machine. Keep in sync with
+# `requires-python` in python/pyproject.toml.
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py311"], optional = true }
 numpy = { version = "0.23", optional = true }
 
 [dev-dependencies]

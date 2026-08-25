@@ -8,7 +8,9 @@ pip install calab
 
 This installs the core package with numpy, pydantic, and the compiled Rust solver extension. You get deconvolution, simulation, and the interactive `tune()` bridge out of the box.
 
-Requires **Python 3.10+**.
+Requires **Python 3.11+**. Wheels are built against CPython's stable ABI
+(`cp311-abi3`), so a single wheel per platform covers 3.11 and every later
+release — including ones published after this version of CaLab.
 
 ## Optional dependencies
 
