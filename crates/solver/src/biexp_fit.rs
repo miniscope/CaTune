@@ -592,21 +592,81 @@ fn eval_two_component(
     (best_bs, best_bf, best_res)
 }
 
-/// Run one golden-section narrowing pass on a 1D interval [lo, hi].
-/// `cost` takes a candidate value and returns the residual.
-/// Returns the midpoint of the narrowed interval.
-fn golden_bracket(mut lo: f64, mut hi: f64, cost: impl Fn(f64) -> f64) -> f64 {
+/// Run one golden-section narrowing pass on a 1D interval [lo, hi], starting
+/// from the current value `start`. `cost` takes a candidate value and returns
+/// the residual.
+///
+/// Returns the best point it actually evaluated, and never one worse than
+/// `start` (clamped into the interval, so the result always respects the
+/// caller's bounds).
+///
+/// Both guarantees are load-bearing. Golden section only converges to a
+/// minimum if the cost is unimodal on the interval, and the two-component
+/// objective is not: `eval_two_component` switches between active sets
+/// (fast-off, bs == bf, interior), and each switch kinks the curve. Returning
+/// the narrowed interval's midpoint unconditionally — without comparing it to
+/// where the search began — let a single step land far uphill. Coordinate
+/// descent in `golden_section_refine` then drifted (measured: residual 6x
+/// worse after 40 steps on real 20 Hz kernels, individual steps up to 27x
+/// worse), `refine_candidate` discarded the refinement as not-an-improvement,
+/// and the raw cold-grid node survived as the reported tau_decay — quantising
+/// results to the 20 grid values and making them insensitive to input noise.
+fn golden_bracket(start: f64, mut lo: f64, mut hi: f64, cost: impl Fn(f64) -> f64) -> f64 {
     const PHI: f64 = 0.6180339887498949; // (sqrt(5) - 1) / 2
-    for _ in 0..10 {
+
+    // Stop once the interval is this small relative to its own midpoint.
+    //
+    // This replaces a fixed 10 iterations, which only shrank [v/2, 2v] to ~1.2%
+    // of v. Grid nodes are 27.4% apart, so whenever the true optimum sat closer
+    // to a node than that (measured: 0.25% on real 20 Hz kernels) nothing the
+    // search evaluated could beat the node, and the node was returned unchanged
+    // — which is what kept the reported tau quantised to the grid.
+    //
+    // 1e-4 was tried as a cheaper setting and was worse on both counts: the
+    // coarser per-iteration estimates made the outer spike/kernel loop need
+    // more iterations, so it ran *longer* (SNR 4: 44s over 19 iterations vs
+    // 25s over 11), and the recovered taus sat further from the synthetic
+    // ground truth. The refinement cost is not where the runtime goes.
+    const REL_TOL: f64 = 1e-5;
+
+    // Backstop so a pathological interval cannot spin. PHI^50 is ~8e-11, well
+    // past REL_TOL for any bracket this is called with.
+    const MAX_ITERS: usize = 50;
+
+    // Clamp so the returned value always honours the caller's bounds even when
+    // the incoming value sits outside them.
+    let mut best_x = start.clamp(lo, hi);
+    let mut best_cost = cost(best_x);
+
+    for _ in 0..MAX_ITERS {
+        if hi - lo <= REL_TOL * (hi + lo).abs() * 0.5 {
+            break;
+        }
         let x1 = hi - PHI * (hi - lo);
         let x2 = lo + PHI * (hi - lo);
-        if cost(x1) < cost(x2) {
+        let c1 = cost(x1);
+        let c2 = cost(x2);
+        if c1 < best_cost {
+            best_cost = c1;
+            best_x = x1;
+        }
+        if c2 < best_cost {
+            best_cost = c2;
+            best_x = x2;
+        }
+        if c1 < c2 {
             hi = x2;
         } else {
             lo = x1;
         }
     }
-    (lo + hi) / 2.0
+
+    let mid = (lo + hi) / 2.0;
+    if cost(mid) < best_cost {
+        mid
+    } else {
+        best_x
+    }
 }
 
 /// Golden-section refinement around the best grid point.
@@ -633,7 +693,7 @@ fn golden_section_refine(
                 let lo = (tau_r * 0.5).max(dt);
                 let hi = (tau_r * 2.0).min(tau_d * 0.99);
                 if lo < hi {
-                    tau_r = golden_bracket(lo, hi, |x| {
+                    tau_r = golden_bracket(tau_r, lo, hi, |x| {
                         eval_two_component(h_free, x, tau_d, tau_r_fast, tau_d_fast, dt, skip).2
                     });
                 }
@@ -647,7 +707,7 @@ fn golden_section_refine(
                 let lo = (tau_d * 0.5).max(tau_r * 1.01);
                 let hi = (tau_d * 2.0).min(TAU_D_HI);
                 if lo < hi {
-                    tau_d = golden_bracket(lo, hi, |x| {
+                    tau_d = golden_bracket(tau_d, lo, hi, |x| {
                         eval_two_component(h_free, tau_r, x, tau_r_fast, tau_d_fast, dt, skip).2
                     });
                 }
@@ -658,7 +718,7 @@ fn golden_section_refine(
                 let lo = (tau_r_fast * 0.5).max(TRF_LO_FACTOR * dt);
                 let hi = (tau_r_fast * 2.0).min((TRF_HI_FACTOR * dt).min(tau_d_fast * 0.99));
                 if lo < hi {
-                    tau_r_fast = golden_bracket(lo, hi, |x| {
+                    tau_r_fast = golden_bracket(tau_r_fast, lo, hi, |x| {
                         eval_two_component(h_free, tau_r, tau_d, x, tau_d_fast, dt, skip).2
                     });
                 }
@@ -671,7 +731,7 @@ fn golden_section_refine(
                     .max(TDF_LO_FACTOR * dt);
                 let hi = (tau_d_fast * 2.0).min((TDF_HI_FACTOR * dt).min(tau_d * TDF_REL_CAP));
                 if lo < hi {
-                    tau_d_fast = golden_bracket(lo, hi, |x| {
+                    tau_d_fast = golden_bracket(tau_d_fast, lo, hi, |x| {
                         eval_two_component(h_free, tau_r, tau_d, tau_r_fast, x, dt, skip).2
                     });
                 }
@@ -685,6 +745,116 @@ fn golden_section_refine(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+
+
+
+
+    /// `golden_bracket` must never hand back a point worse than the one it
+    /// started from. Golden section assumes one minimum on the interval; the
+    /// two-component objective breaks that assumption via its active-set
+    /// switches, and an unguarded search then returns the narrowed interval's
+    /// midpoint — which can sit in a completely different basin.
+
+    /// The search must resolve finely enough to leave a cold-grid node when the
+    /// true optimum is close to one. A fixed 10 golden iterations on [v/2, 2v]
+    /// only resolves ~1.2% of v; grid nodes are 27.4% apart, so an optimum a
+    /// fraction of a percent from a node was unreachable and the node was
+    /// reported verbatim.
+    #[test]
+    fn golden_bracket_resolves_an_optimum_close_to_its_start() {
+        let target = 1.4919_f64; // 0.25% off the 1.488176 grid node
+        let cost = |x: f64| (x - target).powi(2);
+        let node = 1.4881757208156596_f64;
+        let got = golden_bracket(node, node * 0.5, node * 2.0, cost);
+        let err = (got - target).abs() / target;
+        assert!(
+            err < 1e-4,
+            "golden_bracket resolved only to {:.3}% (returned {got}, target {target}) \
+             — too coarse to leave a grid node",
+            100.0 * err
+        );
+        assert!(
+            (got - node).abs() > 1e-9,
+            "golden_bracket returned the grid node unchanged"
+        );
+    }
+
+    #[test]
+    fn golden_bracket_never_returns_worse_than_its_start() {
+        // Non-unimodal on purpose: a narrow deep well at x = 1, and a wide
+        // shallow basin around x = 2.5 that the narrowing will walk into.
+        let cost = |x: f64| {
+            if (x - 1.0).abs() < 0.05 {
+                0.001
+            } else {
+                1.0 + (x - 2.5).abs()
+            }
+        };
+        let start = 1.0;
+        let got = golden_bracket(start, 0.5, 4.0, cost);
+        assert!(
+            cost(got) <= cost(start),
+            "golden_bracket moved uphill: returned x={got} (cost {}) from start \
+             x={start} (cost {})",
+            cost(got),
+            cost(start)
+        );
+    }
+
+    /// The result must stay inside the caller's bracket, which is what enforces
+    /// the ordering constraints (tau_r < tau_d, the fast-component caps).
+    #[test]
+    fn golden_bracket_result_respects_the_interval() {
+        let cost = |x: f64| (x - 100.0).abs(); // minimum far outside the bracket
+        let got = golden_bracket(0.2, 1.0, 2.0, cost);
+        assert!(
+            (1.0..=2.0).contains(&got),
+            "golden_bracket returned {got}, outside [1.0, 2.0]"
+        );
+    }
+
+    /// Refinement must not drift uphill on a two-component kernel. This is the
+    /// condition that produced grid-quantised tau_decay: golden_section_refine
+    /// ended worse than the cold-grid point it was handed, so
+    /// `refine_candidate` threw the refinement away and reported the raw node.
+    #[test]
+    fn golden_section_refine_does_not_end_worse_than_the_grid_point() {
+        let fs = 20.0;
+        let dt = 1.0 / fs;
+        // Shaped like the real 20 Hz kernels: peak at sample 1, ~1.5 s decay,
+        // and a fast component large enough to park the fit near the bs >= bf
+        // gate, which is where the objective kinks.
+        let h = make_two_component(0.05, 1.5, 1.0, 0.0125, 0.0873, 0.95, fs, 156);
+        let (_, cold) = cold_grid_search(&h, fs, dt, 0);
+        assert!(cold.residual < f64::INFINITY, "no two-component candidate found");
+
+        let start = eval_two_component(
+            &h, cold.tau_rise, cold.tau_decay, cold.tau_rise_fast, cold.tau_decay_fast, dt, 0,
+        )
+        .2;
+        let (tr, td, trf, tdf) = golden_section_refine(&h, &cold, dt, 40, 0);
+        let end = eval_two_component(&h, tr, td, trf, tdf, dt, 0).2;
+
+        assert!(
+            end <= start * (1.0 + 1e-12),
+            "refinement drifted uphill: residual {start:.6e} -> {end:.6e} \
+             ({:.2}x worse) — refine_candidate will discard this and report the \
+             raw grid node",
+            end / start
+        );
+    }
+
+
+
+
+
+
+
+
+
+
 
     #[test]
     fn fit_mode_empty_on_empty_input() {
