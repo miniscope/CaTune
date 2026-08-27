@@ -746,11 +746,6 @@ fn golden_section_refine(
 mod tests {
     use super::*;
 
-
-
-
-
-
     /// `golden_bracket` must never hand back a point worse than the one it
     /// started from. Golden section assumes one minimum on the interval; the
     /// two-component objective breaks that assumption via its active-set
@@ -828,10 +823,19 @@ mod tests {
         // gate, which is where the objective kinks.
         let h = make_two_component(0.05, 1.5, 1.0, 0.0125, 0.0873, 0.95, fs, 156);
         let (_, cold) = cold_grid_search(&h, fs, dt, 0);
-        assert!(cold.residual < f64::INFINITY, "no two-component candidate found");
+        assert!(
+            cold.residual < f64::INFINITY,
+            "no two-component candidate found"
+        );
 
         let start = eval_two_component(
-            &h, cold.tau_rise, cold.tau_decay, cold.tau_rise_fast, cold.tau_decay_fast, dt, 0,
+            &h,
+            cold.tau_rise,
+            cold.tau_decay,
+            cold.tau_rise_fast,
+            cold.tau_decay_fast,
+            dt,
+            0,
         )
         .2;
         let (tr, td, trf, tdf) = golden_section_refine(&h, &cold, dt, 40, 0);
@@ -845,16 +849,6 @@ mod tests {
             end / start
         );
     }
-
-
-
-
-
-
-
-
-
-
 
     #[test]
     fn fit_mode_empty_on_empty_input() {

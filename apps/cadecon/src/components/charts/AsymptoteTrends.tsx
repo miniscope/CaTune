@@ -99,8 +99,6 @@ function logYRangeFallback(_u: uPlot, dataMin: number, dataMax: number): [number
   return [Math.max(1e-6, lo), Math.max(hi, lo * 10)];
 }
 
-
-
 /** Compact log-axis tick formatter (e.g. 0.1, 0.01, 1e-3). */
 function logAxisValues(_u: uPlot, splits: number[]): (string | null)[] {
   return (splits ?? []).map((v) => {
