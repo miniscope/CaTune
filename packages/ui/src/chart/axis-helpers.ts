@@ -44,6 +44,56 @@ export function syncCursor(key: string, opts: { drag?: boolean } = {}): uPlot.Cu
 export const staticCursor: uPlot.Cursor = { drag: { x: false, y: false } };
 
 /**
+ * Tick positions for a log-scaled axis (`distr: 3`), replacing uPlot's built-in
+ * `logAxisSplits`.
+ *
+ * uPlot's version can loop without terminating even when handed perfectly valid
+ * bounds; the `splits.push` then throws `RangeError: Invalid array length` from
+ * inside `axesCalc`, which kills the page mid-render. That was reproduced on
+ * this app's only log axis with `scaleMin` and `scaleMax` both positive, finite
+ * and under 12 decades apart on every call — so the bounds were never at fault.
+ *
+ * Emits 1–9 per decade, the same shape uPlot produces, but refuses to run away:
+ * non-finite or non-positive bounds fall back to a two-tick range, an increment
+ * that stops making forward progress breaks the loop, and the tick count is
+ * hard-capped.
+ */
+export function logSplits(
+  _u: uPlot,
+  _axisIdx: number,
+  scaleMin: number,
+  scaleMax: number,
+): number[] {
+  const MAX_TICKS = 2000;
+
+  if (
+    !Number.isFinite(scaleMin) ||
+    !Number.isFinite(scaleMax) ||
+    scaleMin <= 0 ||
+    scaleMax <= scaleMin
+  ) {
+    const lo = Number.isFinite(scaleMin) && scaleMin > 0 ? scaleMin : 1e-6;
+    return [lo, lo * 10];
+  }
+
+  let incr = Math.pow(10, Math.floor(Math.log10(scaleMin)));
+  // Underflow: 10 ** -400 is exactly 0, which would make the loop stand still.
+  if (!(incr > 0)) return [scaleMin, scaleMax];
+
+  const splits: number[] = [];
+  let split = incr;
+  while (split <= scaleMax && splits.length < MAX_TICKS) {
+    splits.push(split);
+    const next = split + incr;
+    if (!(next > split)) break; // no forward progress
+    if (next >= incr * 10) incr = next;
+    split = next;
+  }
+
+  return splits.length > 0 ? splits : [scaleMin, scaleMax];
+}
+
+/**
  * uPlot scale-range fn that never returns a zero span — a degenerate [v, v]
  * range crashes uPlot's drawAxesGrid. Non-finite/absent bounds fall back to
  * [0, 1]; an equal min/max is padded; otherwise the span is padded by

@@ -12,6 +12,7 @@ export {
   hiddenTickValues,
   syncCursor,
   staticCursor,
+  logSplits,
   safeRange,
 } from './axis-helpers.ts';
 export {

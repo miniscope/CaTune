@@ -36,6 +36,7 @@ import {
   safeRange,
   METRIC_COLORS,
   withOpacity,
+  logSplits,
 } from '@calab/ui/chart';
 import { convergenceMarkerPlugin } from '../../lib/chart/convergence-marker-plugin.ts';
 import { drawVerticalMarker } from '../../lib/chart/vertical-marker-plugin.ts';
@@ -97,6 +98,8 @@ function logYRangeFallback(_u: uPlot, dataMin: number, dataMax: number): [number
   const hi = dataMax > 0 && isFinite(dataMax) ? dataMax * 1.5 : 1e-1;
   return [Math.max(1e-6, lo), Math.max(hi, lo * 10)];
 }
+
+
 
 /** Compact log-axis tick formatter (e.g. 0.1, 0.01, 1e-3). */
 function logAxisValues(_u: uPlot, splits: number[]): (string | null)[] {
@@ -314,7 +317,7 @@ function LogDecayTrend(props: {
   ];
   const axes: uPlot.Axis[] = [
     chartAxis({ size: 24, values: integerTickValues }),
-    labeledAxis(props.unit, { size: 44, values: logAxisValues }),
+    labeledAxis(props.unit, { size: 44, values: logAxisValues, splits: logSplits }),
   ];
   const plugins = [
     ...props.extraPlugins,
