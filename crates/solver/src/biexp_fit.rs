@@ -935,15 +935,20 @@ mod tests {
         let tr_err = (result.tau_rise - tau_r_true).abs() / tau_r_true;
         let td_err = (result.tau_decay - tau_d_true).abs() / tau_d_true;
 
+        // 2%, not 15%: cold-grid nodes are 27.4% apart, so the nearest node is
+        // always within 12.88% of any true value — a 15% bound passes even if
+        // refinement is deleted outright. Measured error on this fixture is
+        // 0.5% pre-fix and 0.0% post-fix, so 2% leaves ample headroom while
+        // still failing loudly if refinement ever dies again.
         assert!(
-            tr_err < 0.15,
+            tr_err < 0.02,
             "Tau rise error {:.1}% (got {:.4}, expected {:.4})",
             tr_err * 100.0,
             result.tau_rise,
             tau_r_true
         );
         assert!(
-            td_err < 0.15,
+            td_err < 0.02,
             "Tau decay error {:.1}% (got {:.4}, expected {:.4})",
             td_err * 100.0,
             result.tau_decay,
@@ -1315,6 +1320,56 @@ mod tests {
              on a clean kernel with no artifact",
             result.beta_fast,
             result.beta
+        );
+    }
+
+    /// The reported symptom, asserted directly: a `tau_decay` whose true value
+    /// sits between two cold-grid nodes must be recovered *between* them.
+    ///
+    /// This is the detector the suite was missing. `recovers_known_taus` cannot
+    /// catch quantisation — grid nodes are 27.4% apart, so the nearest node is
+    /// always within 12.9% of any true value and its 15% tolerance passes even
+    /// with refinement deleted outright. Its fixture is also too easy to provoke
+    /// the failure at all.
+    ///
+    /// 1.68 s is the worst case on purpose: it is the log-space midpoint of
+    /// nodes 14 (1.4882) and 15 (1.8963), so a fitter that can only return grid
+    /// nodes is 12.88% wrong here by construction. Measured on the pre-fix
+    /// solver this returned exactly 1.89635; with a working refinement it
+    /// returns ~1.703.
+    #[test]
+    fn tau_decay_is_recovered_between_grid_nodes() {
+        let fs = 20.0;
+        let n = 156;
+        let tau_d_true = 1.68;
+
+        // The cold grid's tau_d nodes: 20 log-spaced points over [0.05, TAU_D_HI].
+        let node_at =
+            |i: usize| (0.05_f64.ln() + (TAU_D_HI.ln() - 0.05_f64.ln()) * i as f64 / 19.0).exp();
+
+        // Shaped like the real 20 Hz kernels this failure was reported on.
+        let h = make_two_component(0.05, tau_d_true, 1.0, 0.0125, 0.0873, 0.95, fs, n);
+        let got = fit_biexponential(&h, fs, true, 0, None).tau_decay;
+
+        let node_dist = (0..20)
+            .map(|i| (got - node_at(i)).abs() / got)
+            .fold(f64::INFINITY, f64::min);
+        assert!(
+            node_dist > 1e-3,
+            "tau_decay {got:.6} is pinned to cold-grid node {:.6} — refinement is \
+             being discarded and a preset is being reported as a measurement",
+            (0..20)
+                .map(node_at)
+                .min_by(|a, b| (a - got).abs().partial_cmp(&(b - got).abs()).unwrap())
+                .unwrap()
+        );
+
+        let err = (got - tau_d_true).abs() / tau_d_true;
+        assert!(
+            err < 0.05,
+            "tau_decay error {:.2}% (got {got:.6}, expected {tau_d_true:.6}) — \
+             grid quantisation alone accounts for 12.88% here",
+            100.0 * err
         );
     }
 }
