@@ -5,7 +5,8 @@
 
 import { computeAR2 } from '@calab/core';
 import { tauToShape } from '@calab/compute';
-import { computeDatasetHash, trackEvent } from '@calab/community';
+import type { IndicatorId } from '@calab/compute';
+import { computeDatasetHash, demoPresetMetadata, trackEvent } from '@calab/community';
 import { submitParameters } from './cadecon-service.ts';
 import type { CadeconSubmissionPayload, CadeconSubmission } from './types.ts';
 import type { DataSource as CommunityDataSource } from '@calab/community';
@@ -49,6 +50,8 @@ export interface CadeconSubmissionContext {
   recordingLengthS: number | undefined;
   datasetData: ArrayLike<number> | undefined;
   dataSource: AppDataSource;
+  /** Simulated indicator when dataSource is 'demo' (recorded for demo filtering). */
+  demoIndicator: IndicatorId | undefined;
 }
 
 /** Compute the median of a numeric array, or null if empty. */
@@ -172,7 +175,7 @@ export async function submitToSupabase(
     dataset_hash: datasetHash,
     data_source: communitySource,
     app_version: version,
-    extra_metadata: undefined,
+    extra_metadata: isDemo && ctx.demoIndicator ? demoPresetMetadata(ctx.demoIndicator) : undefined,
   };
 
   const result = await submitParameters(payload);

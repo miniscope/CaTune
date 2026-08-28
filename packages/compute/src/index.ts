@@ -22,7 +22,6 @@ export { generateSyntheticTrace } from './mock-traces.ts';
 // into the public API.
 export type { SimulationConfig, SimulationResult } from './simulation-types.ts';
 export type { SimulationPreset } from './simulation-presets.ts';
-export { getSimulationPresetLabels } from './simulation-presets.ts';
 // Qualitative presets (per-step level selections for UI)
 export type { QualitativeSimConfig, IndicatorId } from './simulation-quality-presets.ts';
 export {

@@ -4,7 +4,7 @@
 import { createSignal, createMemo } from 'solid-js';
 import type { NpyResult, NpzResult, ValidationResult, ImportStep } from '@calab/core';
 import { buildSimulationConfig, DEFAULT_QUALITATIVE_CONFIG } from '@calab/compute';
-import type { QualitativeSimConfig, SimulationConfig } from '@calab/compute';
+import type { IndicatorId, QualitativeSimConfig, SimulationConfig } from '@calab/compute';
 import { initWasm, simulate_traces } from '@calab/core';
 import type { SimulationResult } from '@calab/compute';
 import { fetchBridgeData, validateTraceData } from '@calab/io';
@@ -21,6 +21,11 @@ const [npzArrays, setNpzArrays] = createSignal<NpzResult | null>(null);
 const [selectedNpzArray, setSelectedNpzArray] = createSignal<string | null>(null);
 const [importError, setImportError] = createSignal<string | null>(null);
 const [demoConfig, setDemoConfig] = createSignal<SimulationConfig | null>(null);
+/** The simulator settings the current demo dataset was generated from. `demoConfig`
+ *  is built from these but drops the indicator id the community browser filters
+ *  on, so keep the source config too. */
+const [demoSimConfig, setDemoSimConfig] = createSignal<QualitativeSimConfig | null>(null);
+const demoIndicator = (): IndicatorId | null => demoSimConfig()?.indicator ?? null;
 const [bridgeUrl, setBridgeUrl] = createSignal<string | null>(null);
 const [bridgeExportDone, setBridgeExportDone] = createSignal(false);
 const [bridgeExportError, setBridgeExportError] = createSignal<string | null>(null);
@@ -136,6 +141,7 @@ async function loadDemoData(opts?: {
   setGroundTruthVisible(false);
   setGroundTruthLocked(false);
   setDemoConfig(cfg);
+  setDemoSimConfig(q);
   setDataSource('demo');
   setParsedData({ data, shape: [cellCount, timepointCount], dtype: '<f8', fortranOrder: false });
   setDimensionsConfirmed(true);
@@ -195,6 +201,7 @@ function resetImport(): void {
   setSelectedNpzArray(null);
   setImportError(null);
   setDemoConfig(null);
+  setDemoSimConfig(null);
   setGroundTruthSpikes(null);
   setGroundTruthCalcium(null);
   setGroundTruthVisible(false);
@@ -232,6 +239,7 @@ export {
   importStep,
   isDemo,
   demoConfig,
+  demoIndicator,
   // Ground Truth
   groundTruthSpikes,
   groundTruthCalcium,
