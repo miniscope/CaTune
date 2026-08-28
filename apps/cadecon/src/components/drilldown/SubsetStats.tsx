@@ -10,8 +10,9 @@ export interface SubsetStatsProps {
   timeRange: [number, number];
 }
 
-function fmt(v: number, decimals = 2): string {
-  return v.toFixed(decimals);
+/** Format a metric, rendering a missing one as '--' rather than a number. */
+function fmt(v: number | null | undefined, decimals = 2): string {
+  return v == null ? '--' : v.toFixed(decimals);
 }
 
 export function SubsetStats(props: SubsetStatsProps): JSX.Element {

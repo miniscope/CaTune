@@ -37,13 +37,19 @@ class CaDeconResult(NamedTuple):
     pves : np.ndarray
         Per-cell proportion of variance explained, shape ``(n_cells,)``, float64.
     kernel_slow : np.ndarray
-        Slow biexponential kernel waveform, float32.
+        Slow biexponential kernel waveform, float32. Empty when the run
+        produced no bi-exponential fit (see ``metadata``).
     kernel_fast : np.ndarray
         Fast biexponential kernel waveform, float32 (empty if single-component).
     fs : float
         Sampling rate in Hz.
     metadata : dict
         Extensible dict with biexp params, convergence info, h_free, etc.
+
+        ``tau_rise``, ``tau_decay``, ``beta`` and ``residual`` are ``None`` when
+        the run stopped before completing an iteration, so no fit was ever made.
+        Check them before using them: a ``residual`` of 0 would otherwise be
+        read as a perfect fit. ``num_iterations`` is 0 in that case too.
     """
 
     activity: np.ndarray

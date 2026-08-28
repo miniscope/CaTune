@@ -547,7 +547,8 @@ export async function startRun(): Promise<void> {
       tauRise: tauR,
       tauDecay: tauD,
       beta: 0,
-      residual: 0,
+      // No fit has run yet; this snapshot records the seed kernel only.
+      residual: null,
       tauRiseFast: 0,
       tauDecayFast: 0,
       betaFast: 0,

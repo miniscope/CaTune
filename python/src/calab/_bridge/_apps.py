@@ -195,6 +195,96 @@ def tune(
     return None
 
 
+def _build_cadecon_result(
+    results: dict, activity: object, fs: float,
+) -> CaDeconResult:
+    """Assemble a :class:`CaDeconResult` from the browser's results payload.
+
+    Split out of :func:`decon` so the null-handling below is reachable from
+    tests without standing up a bridge server and a browser.
+    """
+    # Imported here rather than at module scope: `_compute` imports the
+    # compiled extension, and importing it eagerly would make `_bridge` depend
+    # on it circularly.
+    from .._compute import CaDeconResult, _build_biexp_waveform
+
+    # Build kernel waveforms from biexp params.
+    #
+    # Schema 2 sends null for these when the run produced no fit at all -- it
+    # stopped before completing an iteration, so nothing was ever fitted.
+    # Missing keys land in the same place. Either way there is nothing to build
+    # a kernel from, and the previous defaults (0.2 / 1.0 / 1.0) manufactured
+    # here exactly the fit the browser had declined to claim.
+    result_fs = results.get("fs", fs)
+    tau_rise = results.get("tau_rise")
+    tau_decay = results.get("tau_decay")
+    beta = results.get("beta")
+    if tau_rise is None or tau_decay is None or beta is None:
+        print(
+            "Warning: CaDecon reported no bi-exponential fit (the run stopped before "
+            "completing an iteration). Kernel waveforms are empty and the tau_*, beta, "
+            "and residual metadata is None."
+        )
+        kernel_slow = np.empty(0, dtype=np.float32)
+    else:
+        kernel_length = int(KERNEL_LENGTH_DECAY_MULTIPLES * tau_decay * result_fs)
+        kernel_slow = _build_biexp_waveform(tau_rise, tau_decay, beta, result_fs, kernel_length)
+
+    tau_rise_fast = results.get("tau_rise_fast")
+    tau_decay_fast = results.get("tau_decay_fast")
+    beta_fast = results.get("beta_fast")
+    has_fast = (
+        tau_rise_fast is not None
+        and tau_decay_fast is not None
+        and beta_fast is not None
+        and tau_decay_fast > 0
+        and beta_fast != 0
+    )
+    if has_fast:
+        kernel_length_fast = int(KERNEL_LENGTH_DECAY_MULTIPLES * tau_decay_fast * result_fs)
+        kernel_fast = _build_biexp_waveform(
+            tau_rise_fast, tau_decay_fast, beta_fast, result_fs, kernel_length_fast,
+        )
+    else:
+        kernel_fast = np.empty(0, dtype=np.float32)
+
+    # Assemble per-cell arrays
+    alphas = np.array(results.get("alphas", []), dtype=np.float64)
+    baselines = np.array(results.get("baselines", []), dtype=np.float64)
+    pves = np.array(results.get("pves", []), dtype=np.float64)
+
+    # Build metadata dict
+    metadata = {
+        "tau_rise": tau_rise,
+        "tau_decay": tau_decay,
+        "beta": beta,
+        "tau_rise_fast": tau_rise_fast,
+        "tau_decay_fast": tau_decay_fast,
+        "beta_fast": beta_fast,
+    }
+    for key in (
+        "residual", "h_free", "num_iterations", "converged",
+        "converged_at_iteration", "schema_version", "calab_version",
+        "export_date",
+    ):
+        if key in results:
+            value = results[key]
+            if key == "h_free" and not isinstance(value, list):
+                value = list(value)
+            metadata[key] = value
+
+    return CaDeconResult(
+        activity=np.asarray(activity, dtype=np.float32),
+        alphas=alphas,
+        baselines=baselines,
+        pves=pves,
+        kernel_slow=kernel_slow,
+        kernel_fast=kernel_fast,
+        fs=result_fs,
+        metadata=metadata,
+    )
+
+
 def decon(
     traces: np.ndarray,
     fs: float = 30.0,
@@ -265,8 +355,6 @@ def decon(
     CaDeconResult or None
         Deconvolution results if received, None if timeout/cancelled.
     """
-    from .._compute import CaDeconResult, _build_biexp_waveform
-
     # Build and validate config via pydantic
     config = DeconConfig(
         autorun=autorun,
@@ -300,57 +388,4 @@ def decon(
         print("Warning: results received but activity matrix was missing.")
         return None
 
-    # Build kernel waveforms from biexp params
-    result_fs = results.get("fs", fs)
-    tau_rise = results.get("tau_rise", 0.2)
-    tau_decay = results.get("tau_decay", 1.0)
-    beta = results.get("beta", 1.0)
-    kernel_length = int(KERNEL_LENGTH_DECAY_MULTIPLES * tau_decay * result_fs)
-    kernel_slow = _build_biexp_waveform(tau_rise, tau_decay, beta, result_fs, kernel_length)
-
-    tau_rise_fast = results.get("tau_rise_fast", 0.0)
-    tau_decay_fast = results.get("tau_decay_fast", 0.0)
-    beta_fast = results.get("beta_fast", 0.0)
-    if tau_decay_fast > 0 and beta_fast != 0:
-        kernel_length_fast = int(KERNEL_LENGTH_DECAY_MULTIPLES * tau_decay_fast * result_fs)
-        kernel_fast = _build_biexp_waveform(
-            tau_rise_fast, tau_decay_fast, beta_fast, result_fs, kernel_length_fast,
-        )
-    else:
-        kernel_fast = np.empty(0, dtype=np.float32)
-
-    # Assemble per-cell arrays
-    alphas = np.array(results.get("alphas", []), dtype=np.float64)
-    baselines = np.array(results.get("baselines", []), dtype=np.float64)
-    pves = np.array(results.get("pves", []), dtype=np.float64)
-
-    # Build metadata dict
-    metadata = {
-        "tau_rise": tau_rise,
-        "tau_decay": tau_decay,
-        "beta": beta,
-        "tau_rise_fast": tau_rise_fast,
-        "tau_decay_fast": tau_decay_fast,
-        "beta_fast": beta_fast,
-    }
-    for key in (
-        "residual", "h_free", "num_iterations", "converged",
-        "converged_at_iteration", "schema_version", "calab_version",
-        "export_date",
-    ):
-        if key in results:
-            value = results[key]
-            if key == "h_free" and not isinstance(value, list):
-                value = list(value)
-            metadata[key] = value
-
-    return CaDeconResult(
-        activity=np.asarray(activity, dtype=np.float32),
-        alphas=alphas,
-        baselines=baselines,
-        pves=pves,
-        kernel_slow=kernel_slow,
-        kernel_fast=kernel_fast,
-        fs=result_fs,
-        metadata=metadata,
-    )
+    return _build_cadecon_result(results, activity, fs)
