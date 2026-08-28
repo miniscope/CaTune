@@ -303,6 +303,11 @@ fn refine_candidate(
 /// search and the golden-section refinement so the two stages cannot drift.
 const TAU_D_HI: f64 = 5.0;
 
+/// Slow-component rise upper bound (seconds). Same contract as [`TAU_D_HI`]:
+/// the cold grid and the golden-section refinement share it so refinement
+/// cannot wander outside the range the grid searched.
+const TAU_R_HI: f64 = 0.5;
+
 /// Fast-component grid bounds. Expressed as multipliers of `dt` (the sample
 /// interval) except `TDF_REL_CAP`, which is relative to the slow `tau_d`.
 ///
@@ -322,7 +327,7 @@ const TDF_REL_CAP: f64 = 0.15; // tau_d_fast ≤ tau_d × 0.15 (relative ceiling
 fn cold_grid_search(h_free: &[f32], fs: f64, dt: f64, skip: usize) -> (BiexpResult, BiexpResult) {
     // Slow component grid ranges (in seconds).
     let tau_r_lo = (1.0 / fs).max(0.005_f64);
-    let tau_r_hi = 0.5_f64;
+    let tau_r_hi = TAU_R_HI;
     let tau_d_lo = 0.05_f64;
     let tau_d_hi = TAU_D_HI;
 
@@ -689,9 +694,16 @@ fn golden_section_refine(
     for step in 0..max_steps {
         match step % n_phases {
             0 => {
-                // Refine tau_r
+                // Refine tau_r — cap to the grid-search upper bound, mirroring
+                // the tau_d branch below. tau_d alone bounds tau_r here, and
+                // tau_d reaches 5.0, so without this a warm-started tau_r can
+                // walk past the 0.5 s ceiling the grid searched — and past the
+                // community DB's valid_tau_rise CHECK.
+                if tau_r > TAU_R_HI {
+                    tau_r = TAU_R_HI;
+                }
                 let lo = (tau_r * 0.5).max(dt);
-                let hi = (tau_r * 2.0).min(tau_d * 0.99);
+                let hi = (tau_r * 2.0).min(tau_d * 0.99).min(TAU_R_HI);
                 if lo < hi {
                     tau_r = golden_bracket(tau_r, lo, hi, |x| {
                         eval_two_component(h_free, x, tau_d, tau_r_fast, tau_d_fast, dt, skip).2
