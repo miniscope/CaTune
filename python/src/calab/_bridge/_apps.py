@@ -233,14 +233,15 @@ def _build_cadecon_result(
     tau_rise_fast = results.get("tau_rise_fast")
     tau_decay_fast = results.get("tau_decay_fast")
     beta_fast = results.get("beta_fast")
-    has_fast = (
+    # Inline rather than via a `has_fast` flag: mypy narrows Optional through a
+    # condition, not through an intermediate bool.
+    if (
         tau_rise_fast is not None
         and tau_decay_fast is not None
         and beta_fast is not None
         and tau_decay_fast > 0
         and beta_fast != 0
-    )
-    if has_fast:
+    ):
         kernel_length_fast = int(KERNEL_LENGTH_DECAY_MULTIPLES * tau_decay_fast * result_fs)
         kernel_fast = _build_biexp_waveform(
             tau_rise_fast, tau_decay_fast, beta_fast, result_fs, kernel_length_fast,
