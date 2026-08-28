@@ -758,12 +758,6 @@ fn golden_section_refine(
 mod tests {
     use super::*;
 
-    /// `golden_bracket` must never hand back a point worse than the one it
-    /// started from. Golden section assumes one minimum on the interval; the
-    /// two-component objective breaks that assumption via its active-set
-    /// switches, and an unguarded search then returns the narrowed interval's
-    /// midpoint — which can sit in a completely different basin.
-
     /// The search must resolve finely enough to leave a cold-grid node when the
     /// true optimum is close to one. A fixed 10 golden iterations on [v/2, 2v]
     /// only resolves ~1.2% of v; grid nodes are 27.4% apart, so an optimum a
@@ -788,6 +782,11 @@ mod tests {
         );
     }
 
+    /// `golden_bracket` must never hand back a point worse than the one it
+    /// started from. Golden section assumes one minimum on the interval; the
+    /// two-component objective breaks that assumption via its active-set
+    /// switches, and an unguarded search then returns the narrowed interval's
+    /// midpoint — which can sit in a completely different basin.
     #[test]
     fn golden_bracket_never_returns_worse_than_its_start() {
         // Non-unimodal on purpose: a narrow deep well at x = 1, and a wide
