@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesSourceBucket } from '../source-bucket.ts';
+import { matchesSourceBucket, matchesDemoPreset } from '../source-bucket.ts';
 
 describe('matchesSourceBucket', () => {
   // Regression: the browser source toggle only ever selects 'demo' or 'user'.
@@ -32,5 +32,44 @@ describe('matchesSourceBucket', () => {
     expect(matchesSourceBucket('user', 'demo')).toBe(false);
     expect(matchesSourceBucket('bridge', 'demo')).toBe(false);
     expect(matchesSourceBucket('training', 'demo')).toBe(false);
+  });
+});
+
+describe('matchesDemoPreset', () => {
+  // Regression: demo submissions record the simulated indicator id in
+  // extra_metadata. A refactor removed that write while leaving the filter in
+  // place, so selecting any indicator matched nothing at all.
+  const demoRow = (preset?: string) => ({
+    data_source: 'demo' as const,
+    extra_metadata: preset ? { demo_preset: preset } : {},
+  });
+
+  it('passes every row when nothing is selected', () => {
+    expect(matchesDemoPreset(demoRow('gcamp6f'), null)).toBe(true);
+    expect(matchesDemoPreset({ data_source: 'user', extra_metadata: undefined }, null)).toBe(true);
+  });
+
+  it('matches a demo row recorded under the selected indicator', () => {
+    expect(matchesDemoPreset(demoRow('gcamp6f'), 'gcamp6f')).toBe(true);
+  });
+
+  it('rejects a demo row recorded under a different indicator', () => {
+    expect(matchesDemoPreset(demoRow('gcamp6s'), 'gcamp6f')).toBe(false);
+  });
+
+  it('rejects demo rows with no recorded indicator', () => {
+    expect(matchesDemoPreset(demoRow(), 'gcamp6f')).toBe(false);
+    expect(matchesDemoPreset({ data_source: 'demo', extra_metadata: undefined }, 'gcamp6f')).toBe(
+      false,
+    );
+  });
+
+  it('leaves non-demo rows to the source-bucket filter', () => {
+    expect(matchesDemoPreset({ data_source: 'user', extra_metadata: undefined }, 'gcamp6f')).toBe(
+      true,
+    );
+    expect(matchesDemoPreset({ data_source: 'bridge', extra_metadata: undefined }, 'gcamp6f')).toBe(
+      true,
+    );
   });
 });

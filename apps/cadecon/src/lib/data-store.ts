@@ -1,7 +1,12 @@
 import { createSignal, createMemo } from 'solid-js';
 import type { NpyResult, NpzResult, ValidationResult, ImportStep } from '@calab/core';
 import { buildSimulationConfig, DEFAULT_QUALITATIVE_CONFIG } from '@calab/compute';
-import type { QualitativeSimConfig, SimulationConfig, SimulationResult } from '@calab/compute';
+import type {
+  IndicatorId,
+  QualitativeSimConfig,
+  SimulationConfig,
+  SimulationResult,
+} from '@calab/compute';
 import { initWasm, simulate_traces } from '@calab/core';
 import { fetchBridgeData, validateTraceData } from '@calab/io';
 
@@ -25,6 +30,11 @@ const [dataSource, setDataSource] = createSignal<DataSource>(null);
 // ── Phase 2: ground truth & advanced features (not yet wired to UI) ────────
 
 const [demoConfig, setDemoConfig] = createSignal<SimulationConfig | null>(null);
+/** The simulator settings the current demo dataset was generated from. `demoConfig`
+ *  is built from these but drops the indicator id the community browser filters
+ *  on, so keep the source config too. */
+const [demoSimConfig, setDemoSimConfig] = createSignal<QualitativeSimConfig | null>(null);
+const demoIndicator = (): IndicatorId | null => demoSimConfig()?.indicator ?? null;
 const [bridgeExportDone, setBridgeExportDone] = createSignal(false);
 const [bridgeExportError, setBridgeExportError] = createSignal<string | null>(null);
 const [groundTruthSpikes, setGroundTruthSpikes] = createSignal<Float64Array | null>(null);
@@ -136,6 +146,7 @@ async function loadDemoData(opts?: {
   setGroundTruthTauRise(cfg.kernel.tau_rise_s);
   setGroundTruthTauDecay(cfg.kernel.tau_decay_s);
   setDemoConfig(cfg);
+  setDemoSimConfig(q);
   setDataSource('demo');
   setParsedData({ data, shape: [cellCount, timepointCount], dtype: '<f8', fortranOrder: false });
   setDimensionsConfirmed(true);
@@ -195,6 +206,7 @@ function resetImport(): void {
   setSelectedNpzArray(null);
   setImportError(null);
   setDemoConfig(null);
+  setDemoSimConfig(null);
   setGroundTruthSpikes(null);
   setGroundTruthCalcium(null);
   setGroundTruthVisible(false);
@@ -245,6 +257,7 @@ export {
   // ── Phase 2: ground truth & advanced features (not yet wired to UI) ──
   selectedNpzArray,
   demoConfig,
+  demoIndicator,
   bridgeExportDone,
   setBridgeExportDone,
   bridgeExportError,

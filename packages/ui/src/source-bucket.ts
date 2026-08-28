@@ -1,6 +1,7 @@
-// Data-source bucket matching for the community browser.
+// Row matching for the community browser's data-source and demo-preset filters.
 
-import type { DataSource } from '@calab/community';
+import type { BaseSubmission, DataSource } from '@calab/community';
+import { readDemoPreset } from '@calab/community';
 
 /**
  * Does a submission's stored `data_source` belong in the currently selected
@@ -13,4 +14,21 @@ import type { DataSource } from '@calab/community';
  */
 export function matchesSourceBucket(rowSource: DataSource, bucket: DataSource): boolean {
   return bucket === 'demo' ? rowSource === 'demo' : rowSource !== 'demo';
+}
+
+/**
+ * Does a submission match the selected simulated-indicator filter?
+ *
+ * Only demo rows carry a recorded indicator, so non-demo rows always pass —
+ * the source bucket already keeps them out of the demo view. Demo rows
+ * submitted before the id was recorded can't be attributed to an indicator, so
+ * they drop out once a specific one is selected.
+ */
+export function matchesDemoPreset(
+  row: Pick<BaseSubmission, 'data_source' | 'extra_metadata'>,
+  selectedPreset: string | null,
+): boolean {
+  if (!selectedPreset) return true;
+  if (row.data_source !== 'demo') return true;
+  return readDemoPreset(row.extra_metadata) === selectedPreset;
 }

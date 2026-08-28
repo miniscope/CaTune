@@ -145,12 +145,3 @@ export const DEFAULT_SIMULATION_PRESET_ID = 'gcamp6f';
 export function getSimulationPresetById(id: string): SimulationPreset | undefined {
   return SIMULATION_PRESETS.find((p) => p.id === id);
 }
-
-const SIMULATION_PRESET_LABELS: { id: string; label: string }[] = SIMULATION_PRESETS.map((p) => ({
-  id: p.id,
-  label: p.label,
-}));
-
-export function getSimulationPresetLabels(): { id: string; label: string }[] {
-  return SIMULATION_PRESET_LABELS;
-}

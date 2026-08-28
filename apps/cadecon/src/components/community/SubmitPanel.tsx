@@ -40,6 +40,7 @@ import {
   durationSeconds,
   isDemo,
   dataSource,
+  demoIndicator,
   groundTruthLocked,
 } from '../../lib/data-store.ts';
 import { SubmitForm } from './SubmitForm.tsx';
@@ -146,6 +147,7 @@ export function SubmitPanel() {
           recordingLengthS: durationSeconds() ?? undefined,
           datasetData: parsedData()?.data,
           dataSource: dataSource(),
+          demoIndicator: demoIndicator() ?? undefined,
         },
         APP_VERSION,
       );

@@ -35,6 +35,7 @@ export { PrivacyNotice } from './PrivacyNotice.tsx';
 export type { PrivacyNoticeProps } from './PrivacyNotice.tsx';
 export { FilterBar } from './FilterBar.tsx';
 export type { FilterBarProps, ExtraFilter } from './FilterBar.tsx';
+export { DEMO_PRESET_FILTER } from './filter-state.ts';
 export { SubmissionSummary } from './SubmissionSummary.tsx';
 export type { SubmissionSummaryProps } from './SubmissionSummary.tsx';
 export { SidebarTabs } from './SidebarTabs.tsx';
