@@ -1,8 +1,13 @@
 name: CI
 
 on:
+  # No `branches:` filter on pull_request, deliberately. Filtering to [main]
+  # meant a PR stacked on another PR — a base of anything but main — got no CI
+  # at all, silently: no checks reported, nothing red, nothing to notice. The
+  # cost of running CI on every PR is one workflow run per stacked branch; the
+  # cost of not running it is merging an untested change into a base that is
+  # itself about to merge into main.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
