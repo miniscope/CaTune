@@ -14,19 +14,24 @@
  * Guards on supabaseEnabled — does not render when Supabase is not configured.
  */
 
-import { createSignal, createEffect, createMemo, Show, on } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show, on, batch } from 'solid-js';
 import type { JSX, Accessor } from 'solid-js';
 import type { BaseSubmission, BaseFilterState, DataSource } from '@calab/community';
 import { supabaseEnabled, user, fieldOptions, loadFieldOptions } from '@calab/community';
-import { matchesSourceBucket } from './source-bucket.ts';
+import { matchesSourceBucket, matchesDemoPreset } from './source-bucket.ts';
+import { clearedFilterState } from './filter-state.ts';
 import './styles/community.css';
 
 /** Stale-while-revalidate threshold: 5 minutes in milliseconds. */
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
+/** Base filters plus the optional demo-preset filter both apps declare
+ *  (see DEMO_PRESET_FILTER) — optional, so shapes without it still fit. */
+type BrowserFilterState = BaseFilterState & { demoPreset?: string | null };
+
 export interface CommunityBrowserShellProps<
   T extends BaseSubmission,
-  F extends BaseFilterState,
+  F extends BrowserFilterState,
   P = Record<string, unknown>,
 > {
   /** Fetch all submissions for this app's table. */
@@ -79,7 +84,7 @@ export interface CommunityBrowserShellProps<
 
 export function CommunityBrowserShell<
   T extends BaseSubmission,
-  F extends BaseFilterState,
+  F extends BrowserFilterState,
   P = Record<string, unknown>,
 >(props: CommunityBrowserShellProps<T, F, P>) {
   // --- State signals ---
@@ -95,12 +100,27 @@ export function CommunityBrowserShell<
   const [lastFetched, setLastFetched] = createSignal<number | null>(null);
   const [error, setError] = createSignal<string | null>(null);
 
+  /**
+   * Switch the browser's source bucket, resetting the filter state: each view
+   * hides the other's filter controls, so a leftover filter would narrow the
+   * new view with nothing on screen to undo it. Batched so the two writes
+   * rebuild the chart once, and a no-op when the bucket is unchanged — which
+   * also keeps the mount-time run of the effect below from clearing filters.
+   */
+  function selectDataSource(next: DataSource): void {
+    if (dataSource() === next) return;
+    batch(() => {
+      setDataSource(next);
+      props.setFilters(clearedFilterState(props.filters()));
+    });
+  }
+
   // Auto-switch data source filter when app data source changes
   createEffect(
     on(
       () => props.appDataSource(),
       (src) => {
-        setDataSource(src === 'demo' ? 'demo' : 'user');
+        selectDataSource(src === 'demo' ? 'demo' : 'user');
       },
     ),
   );
@@ -110,17 +130,13 @@ export function CommunityBrowserShell<
     const subs = submissions();
     const f = props.filters();
     const ds = dataSource();
+    const selectedPreset = f.demoPreset ?? null;
     return subs.filter((s) => {
       if (!matchesSourceBucket(s.data_source, ds)) return false;
       if (f.indicator && s.indicator !== f.indicator) return false;
       if (f.species && s.species !== f.species) return false;
       if (f.brainRegion && s.brain_region !== f.brainRegion) return false;
-      // Generic demoPreset filter — works for any F that has it
-      const fAny = f as Record<string, unknown>;
-      if (fAny.demoPreset && s.data_source === 'demo') {
-        const preset = (s.extra_metadata as Record<string, unknown> | undefined)?.demo_preset;
-        if (preset !== fAny.demoPreset) return false;
-      }
+      if (!matchesDemoPreset(s, selectedPreset)) return false;
       return true;
     });
   });
@@ -215,13 +231,13 @@ export function CommunityBrowserShell<
               <div class="community-browser__source-toggle">
                 <button
                   class={`community-browser__source-btn ${dataSource() === 'user' ? 'community-browser__source-btn--active' : ''}`}
-                  onClick={() => setDataSource('user')}
+                  onClick={() => selectDataSource('user')}
                 >
                   User data
                 </button>
                 <button
                   class={`community-browser__source-btn ${dataSource() === 'demo' ? 'community-browser__source-btn--active' : ''}`}
-                  onClick={() => setDataSource('demo')}
+                  onClick={() => selectDataSource('demo')}
                 >
                   Demo data
                 </button>

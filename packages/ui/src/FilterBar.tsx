@@ -7,6 +7,7 @@
 
 import { Show } from 'solid-js';
 import type { BaseFilterState } from '@calab/community';
+import { clearedFilterState } from './filter-state.ts';
 import './styles/community.css';
 
 export interface ExtraFilter {
@@ -52,15 +53,7 @@ export function FilterBar<F extends BaseFilterState>(props: FilterBarProps<F>) {
   }
 
   function handleClear(): void {
-    const cleared: Record<string, null> = {
-      indicator: null,
-      species: null,
-      brainRegion: null,
-    };
-    for (const ef of props.extraFilters ?? []) {
-      cleared[ef.id] = null;
-    }
-    props.onFilterChange({ ...props.filters, ...cleared } as F);
+    props.onFilterChange(clearedFilterState(props.filters));
     if (props.highlightMine && props.onHighlightMineChange) {
       props.onHighlightMineChange();
     }

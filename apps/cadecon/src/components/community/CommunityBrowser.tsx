@@ -4,12 +4,12 @@
  */
 
 import { createSignal } from 'solid-js';
-import { CommunityBrowserShell, FilterBar } from '@calab/ui';
+import { CommunityBrowserShell, FilterBar, DEMO_PRESET_FILTER } from '@calab/ui';
 import { fetchSubmissions } from '../../lib/community/index.ts';
 import type { CadeconFilterState } from '../../lib/community/index.ts';
 import { currentTauRise, currentTauDecay } from '../../lib/iteration-store.ts';
 import { isDemo, dataSource as appDataSource } from '../../lib/data-store.ts';
-import { getSimulationPresetLabels, tauToShape } from '@calab/compute';
+import { tauToShape } from '@calab/compute';
 import { ScatterPlot } from './ScatterPlot.tsx';
 import '../../styles/community.css';
 
@@ -44,13 +44,7 @@ export function CommunityBrowser() {
           options={ctx.options}
           filteredCount={ctx.filteredCount}
           totalCount={ctx.totalCount}
-          extraFilters={[
-            {
-              id: 'demoPreset',
-              label: 'All presets',
-              options: getSimulationPresetLabels(),
-            },
-          ]}
+          extraFilters={[DEMO_PRESET_FILTER]}
           showExtraFiltersOnly={ctx.dataSource === 'demo'}
           highlightMine={ctx.highlightMine}
           onHighlightMineChange={ctx.toggleHighlightMine}

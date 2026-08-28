@@ -24,6 +24,7 @@ export type { AnalyticsEventName } from './analytics.ts';
 
 // Utilities
 export { computeDatasetHash } from './dataset-hash.ts';
+export { demoPresetMetadata, readDemoPreset } from './demo-preset.ts';
 
 // GitHub URLs
 export {
