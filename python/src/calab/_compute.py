@@ -68,7 +68,13 @@ def _build_biexp_waveform(
     """Build a biexponential waveform: beta * (exp(-t/tau_d) - exp(-t/tau_r)).
 
     Uses the same 5x tau_decay length convention as the browser solver.
+
+    Returns an empty array for a non-positive time constant rather than dividing
+    by it. `tau_decay <= 0` is already safe, but only because callers derive
+    `length` from it. `tau_rise <= 0` is not, and makes the first sample NaN.
     """
+    if not (tau_rise > 0.0 and tau_decay > 0.0) or length <= 0:
+        return np.empty(0, dtype=np.float32)
     t = np.arange(length) / fs
     waveform = beta * (np.exp(-t / tau_decay) - np.exp(-t / tau_rise))
     return waveform.astype(np.float32)

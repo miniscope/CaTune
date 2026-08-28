@@ -175,3 +175,42 @@ def test_build_cadecon_result_treats_absent_keys_like_nulls() -> None:
 
     assert result.kernel_slow.size == 0
     assert result.metadata["tau_decay"] is None
+
+
+def test_build_biexp_waveform_returns_empty_for_non_positive_taus() -> None:
+    """A non-positive time constant yields an empty array, not a NaN kernel.
+
+    Callers derive `length` from `tau_decay`, so `tau_decay <= 0` already gives
+    `length == 0` and an empty result on its own. `tau_rise <= 0` with a positive
+    `tau_decay` is the gap: it divided by zero and put a NaN in the first sample,
+    which then propagated into anything built on the waveform.
+    """
+    # The case the length coincidence did not cover.
+    assert _build_biexp_waveform(0.0, 1.0, 1.0, 20.0, 100).size == 0
+    assert _build_biexp_waveform(-0.05, 1.0, 1.0, 20.0, 100).size == 0
+    # Already safe, kept so a future length change cannot silently reintroduce it.
+    assert _build_biexp_waveform(0.05, 0.0, 1.0, 20.0, 0).size == 0
+    assert _build_biexp_waveform(0.05, -1.0, 1.0, 20.0, 100).size == 0
+    # A valid pair is unaffected and finite throughout.
+    good = _build_biexp_waveform(0.05, 0.4, 1.0, 20.0, 40)
+    assert good.size == 40
+    assert np.all(np.isfinite(good))
+
+
+def test_build_cadecon_result_fast_kernel_never_contains_nan() -> None:
+    """The fast branch guards tau_decay_fast but not tau_rise_fast.
+
+    A payload with tau_rise_fast = 0 and a positive tau_decay_fast passes that
+    guard and reaches the waveform builder, where it used to divide by zero. The
+    solver cannot produce that pair, so this covers an older or hand-edited
+    results file rather than a live fit.
+    """
+    from calab._bridge._apps import _build_cadecon_result
+
+    payload = _results(tau_rise_fast=0.0, tau_decay_fast=0.05, beta_fast=1.0)
+    result = _build_cadecon_result(payload, np.zeros((1, 60), dtype=np.float32), 30.0)
+
+    assert np.all(np.isfinite(result.kernel_fast))
+    assert np.all(np.isfinite(result.kernel_slow))
+    # The slow fit is real and unaffected.
+    assert result.kernel_slow.size > 0
