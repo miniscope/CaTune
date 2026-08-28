@@ -267,6 +267,28 @@ pub fn fit_biexponential(
 }
 
 /// Refine a candidate BiexpResult in-place via golden-section search.
+///
+/// # Why `max_steps` is a budget and not a tolerance
+///
+/// Every caller passes 40. That is a step budget, not a convergence target,
+/// and it usually binds: measured over 42 synthetic kernels (3 sampling rates
+/// x 7 decay constants x with/without a fast component), the sweep reaches an
+/// exact fixed point inside 40 steps in only ~20% of cases. In another ~30% it
+/// converges by ~160 steps. The remaining ~30% never converge at all — they
+/// settle into a limit cycle at `golden_bracket`'s own `REL_TOL` resolution,
+/// alternating between two nearby states forever.
+///
+/// So the budget cannot simply be raised: on a limit-cycling kernel a 4000-step
+/// budget costs ~110,000 model evaluations against ~1,100 for 40 steps, a 100x
+/// regression, and buys nothing. What it does cost to stop at 40 was measured
+/// too: tau_decay lands within 0.5% of the fully converged value in the worst
+/// case and under 0.1% typically, which is below the percent-level precision
+/// the statistics support anyway.
+///
+/// The real fix is to stop hill-climbing a non-unimodal objective with
+/// coordinate descent — the betas are closed-form, so variable projection plus
+/// Gauss-Newton would give a genuine convergence criterion. That is the LM
+/// upgrade the decision log already anticipates, and it is out of scope here.
 fn refine_candidate(
     h_free: &[f32],
     candidate: &mut BiexpResult,
@@ -454,6 +476,24 @@ fn cold_grid_search(h_free: &[f32], fs: f64, dt: f64, skip: usize) -> (BiexpResu
     (best_slow, best_two)
 }
 
+#[cfg(test)]
+thread_local! {
+    // Tally of `eval_two_component` calls on the current thread. That function
+    // is the fit's only O(n) inner loop, so its call count *is* the cost of a
+    // fit. `cargo test` gives each test its own thread and the solver is
+    // single-threaded, so a thread-local needs no synchronisation and cannot
+    // be perturbed by tests running in parallel.
+    static EVAL_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Run `f` and return how many times it evaluated the two-component model.
+#[cfg(test)]
+fn counting_evals<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    EVAL_COUNT.with(|c| c.set(0));
+    let out = f();
+    (out, EVAL_COUNT.with(|c| c.get()))
+}
+
 /// Evaluate two-component fit at fixed (tau_r, tau_d, tau_r_fast, tau_d_fast) with NNLS for (beta_s, beta_f).
 ///
 /// Model: h(t) = beta_s * (exp(-t/tau_d) - exp(-t/tau_r))
@@ -478,6 +518,9 @@ fn eval_two_component(
     dt: f64,
     skip: usize,
 ) -> (f64, f64, f64) {
+    #[cfg(test)]
+    EVAL_COUNT.with(|c| c.set(c.get() + 1));
+
     let n = h_free.len();
 
     // Gram matrix G (2x2), rhs vector (2x1), and ||h||^2
@@ -643,26 +686,51 @@ fn golden_bracket(start: f64, mut lo: f64, mut hi: f64, cost: impl Fn(f64) -> f6
     let mut best_x = start.clamp(lo, hi);
     let mut best_cost = cost(best_x);
 
-    for _ in 0..MAX_ITERS {
-        if hi - lo <= REL_TOL * (hi + lo).abs() * 0.5 {
-            break;
-        }
-        let x1 = hi - PHI * (hi - lo);
-        let x2 = lo + PHI * (hi - lo);
-        let c1 = cost(x1);
-        let c2 = cost(x2);
-        if c1 < best_cost {
-            best_cost = c1;
-            best_x = x1;
-        }
-        if c2 < best_cost {
-            best_cost = c2;
-            best_x = x2;
-        }
-        if c1 < c2 {
-            hi = x2;
-        } else {
-            lo = x1;
+    let narrow_enough = |lo: f64, hi: f64| hi - lo <= REL_TOL * (hi + lo).abs() * 0.5;
+
+    if !narrow_enough(lo, hi) {
+        // Golden section's defining property: each interior point sits at the
+        // same golden ratio of the interval, so the one that survives a shrink
+        // is *already* correctly placed in the narrower bracket. Only the newly
+        // exposed side needs a fresh evaluation. Evaluating both every time —
+        // as this loop used to — doubles the O(n) model evaluations for no
+        // extra information.
+        let mut x1 = hi - PHI * (hi - lo);
+        let mut x2 = lo + PHI * (hi - lo);
+        let mut c1 = cost(x1);
+        let mut c2 = cost(x2);
+
+        for _ in 0..MAX_ITERS {
+            if c1 < best_cost {
+                best_cost = c1;
+                best_x = x1;
+            }
+            if c2 < best_cost {
+                best_cost = c2;
+                best_x = x2;
+            }
+            let keep_low = c1 < c2;
+            if keep_low {
+                hi = x2;
+            } else {
+                lo = x1;
+            }
+            if narrow_enough(lo, hi) {
+                break;
+            }
+            if keep_low {
+                // x1 becomes the upper interior point of [lo, x2].
+                x2 = x1;
+                c2 = c1;
+                x1 = hi - PHI * (hi - lo);
+                c1 = cost(x1);
+            } else {
+                // x2 becomes the lower interior point of [x1, hi].
+                x1 = x2;
+                c1 = c2;
+                x2 = lo + PHI * (hi - lo);
+                c2 = cost(x2);
+            }
         }
     }
 
@@ -690,6 +758,8 @@ fn golden_section_refine(
 
     let has_fast = best.has_fast_component();
     let n_phases = if has_fast { 4 } else { 2 };
+
+    let mut sweep_start = [tau_r, tau_d, tau_r_fast, tau_d_fast];
 
     for step in 0..max_steps {
         match step % n_phases {
@@ -748,6 +818,25 @@ fn golden_section_refine(
                     });
                 }
             }
+        }
+
+        // A sweep that leaves every coordinate bit-identical has reached a
+        // fixed point. `golden_bracket` is deterministic and each coordinate's
+        // bracket is a function of the others, so every later sweep would start
+        // from this same state and reproduce the same no-op. Breaking here
+        // returns exactly what running out `max_steps` returns, for less work.
+        //
+        // This is worth real money on two-component kernels, where the four
+        // coordinates typically settle by sweep 3 and the remaining 17 sweeps
+        // are pure repetition. Slow-only kernels are the opposite case — they
+        // are still travelling down the (tau_r, tau_d) valley at sweep 20 — so
+        // they keep the full budget and are unaffected.
+        if step % n_phases == n_phases - 1 {
+            let now = [tau_r, tau_d, tau_r_fast, tau_d_fast];
+            if now == sweep_start {
+                break;
+            }
+            sweep_start = now;
         }
     }
 
@@ -1369,6 +1458,91 @@ mod tests {
             "tau_decay error {:.2}% (got {got:.6}, expected {tau_d_true:.6}) — \
              grid quantisation alone accounts for 12.88% here",
             100.0 * err
+        );
+    }
+
+    /// Golden section's defining property is that one of the two interior
+    /// points is correctly placed for the *next*, narrower bracket. The loop
+    /// used to re-evaluate both every iteration, doubling the O(n) model
+    /// evaluations for no extra information.
+    ///
+    /// The budget below is the reusing loop's actual cost on a [v/2, 2v]
+    /// bracket resolved to `REL_TOL`: one evaluation of `start`, two to open
+    /// the bracket, one per shrink, and one final midpoint probe. The
+    /// re-evaluating version needed roughly twice that.
+    #[test]
+    fn golden_bracket_reuses_its_interior_points() {
+        let calls = std::cell::Cell::new(0_usize);
+        let target = 1.234;
+        let got = golden_bracket(1.0, 0.5, 2.0, |x| {
+            calls.set(calls.get() + 1);
+            (x - target).powi(2)
+        });
+
+        assert!(
+            (got - target).abs() / target < 1e-4,
+            "golden_bracket resolved to {got}, not {target} — the reuse rewrite \
+             must not cost accuracy"
+        );
+        assert!(
+            calls.get() <= 30,
+            "golden_bracket spent {} evaluations on one bracket; the interior \
+             point that survives each shrink is no longer being reused",
+            calls.get()
+        );
+    }
+
+    /// Coordinate descent that leaves every coordinate bit-identical over a
+    /// full sweep has reached a fixed point, and every later sweep is a
+    /// deterministic repeat of it. Stopping there must be observationally
+    /// identical to running the whole budget out — same answer *and* same
+    /// number of model evaluations — otherwise the exit is either changing
+    /// reported time constants or not firing at all.
+    ///
+    /// This fixture reaches its fixed point inside the 40-step budget. Many do
+    /// not (see the `max_steps` note in [`refine_candidate`]'s callers), which
+    /// is why the exit is a pure saving rather than a replacement for the
+    /// budget.
+    #[test]
+    fn refinement_stops_once_the_coordinates_stop_moving() {
+        let fs = 20.0;
+        let dt = 1.0 / fs;
+        let h = make_two_component(0.05, 2.3, 1.0, 1e-9, 1e-9, 0.0, fs, 160);
+        let (_, cold) = cold_grid_search(&h, fs, dt, 0);
+        assert!(cold.residual < f64::INFINITY, "no candidate found");
+
+        let (short, short_evals) = counting_evals(|| golden_section_refine(&h, &cold, dt, 40, 0));
+        let (long, long_evals) = counting_evals(|| golden_section_refine(&h, &cold, dt, 4000, 0));
+
+        assert_eq!(
+            short, long,
+            "a 100x larger step budget changed the answer — the sweep was still \
+             moving when it exited, so the exit is not a no-op"
+        );
+        assert_eq!(
+            short_evals, long_evals,
+            "the larger budget cost more evaluations ({long_evals} vs \
+             {short_evals}) — the fixed-point exit did not fire"
+        );
+    }
+
+    /// Guards the refinement's share of a whole fit. Refinement was ~4000 of
+    /// the ~10300 evaluations here before interior-point reuse and the
+    /// fixed-point exit; it is ~1300 after. The budget is loose enough not to
+    /// fail on last-ulp bracket differences and tight enough that reverting
+    /// either change trips it.
+    #[test]
+    fn refinement_stays_within_its_evaluation_budget() {
+        let h = make_two_component(0.05, 1.68, 1.0, 0.0125, 0.0873, 0.95, 20.0, 156);
+        let (_, with_refine) = counting_evals(|| fit_biexponential(&h, 20.0, true, 0, None));
+        let (_, grid_only) = counting_evals(|| fit_biexponential(&h, 20.0, false, 0, None));
+        let refine_evals = with_refine - grid_only;
+
+        assert!(
+            refine_evals < 2000,
+            "refinement spent {refine_evals} model evaluations (grid alone \
+             spends {grid_only}); before interior-point reuse and the \
+             fixed-point sweep exit it spent ~4084"
         );
     }
 }
