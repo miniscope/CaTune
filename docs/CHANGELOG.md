@@ -3,9 +3,79 @@
 Repo-level changelog for the CaLab monorepo. Uses [Keep a Changelog](https://keepachangelog.com/) format.
 Versions correspond to git tags (`v*`) and apply to the entire monorepo.
 
-## [2.6.0]
+## [Unreleased]
 
-> Unreleased. Covers every change since `v2.5.0` (PR #168).
+### Fixed
+
+- **CaDecon** the bi-exponential kernel fit reported **cold-grid preset values**
+  for `tau_rise`/`tau_decay` instead of measured ones. `golden_bracket` returned
+  the midpoint of its narrowed interval — a point it never evaluated and never
+  compared against the value it was asked to improve — so on the non-unimodal
+  two-component objective a refinement step could move uphill,
+  `golden_section_refine` drifted, `refine_candidate` discarded the whole
+  refinement, and the raw grid node was reported. The next iteration warm-started
+  from that node and repeated. `golden_bracket` now seeds from the incumbent,
+  tracks the best point it actually evaluated, and can never return worse than
+  its input; the fixed 10 iterations become a relative-width tolerance.
+
+  **Reported time constants change.** Measured against synthetic ground truth,
+  recovered `tau_decay` error improves from 0.5% to 0.0% on the single-component
+  fixture and 0.4% to 0.05% on the two-component fixture. For values falling
+  between grid nodes the pre-fix error reached 12.88% (the grid's worst case);
+  results produced before this release are quantised to the 20 cold-grid nodes
+  and are not comparable with results produced after it (PR #176)
+
+- **CaDecon** `tau_rise` refinement was not clamped to the grid's upper bound,
+  unlike every other refined coordinate, so a warm-started value could compound
+  past the 0.5 s ceiling the grid searched (PR #176)
+
+- **CaDecon** the log-scaled asymptote axis could hang mid-render. uPlot's
+  `logAxisSplits` can loop without terminating on valid bounds — crossing a
+  decade sets a non-canonical increment that is missing from its internal
+  decimal map, the tick then rounds to zero, and the loop never exits — throwing
+  `RangeError: Invalid array length` and killing the page. Replaced with a
+  bounded `logSplits` (PR #176)
+
+## [2.7.2] - 2026-08-27
+
+### Fixed
+
+- **Community** the simulated indicator is now recorded on submission so the
+  demo filter matches (PR #177)
+
+### Changed
+
+- CI builds abi3 wheels for the Python package, repairs the publish matrix, and
+  smoke-tests the result (PR #175)
+
+## [2.7.1] - 2026-08-21
+
+### Added
+
+- **CaDecon** MATLAB `.mat` file import — `parseMat` in `@calab/io` lets the
+  CaDecon GUI accept `.mat` alongside `.npy`/`.npz` (PR #170)
+- **CaDecon** results export — a download button producing a `.zip` containing
+  the activity traces (`.npy`, `.npz`, or `.mat`, matching the input file type)
+  and a JSON of run parameters, enabled once a run completes (PR #172)
+
+### Fixed
+
+- Solver: use `isolate_lowest_one` in the Fenwick tree update (PR #171)
+- **CaDecon** trace-array selection is now meaningful for `.mat` imports (PR #170)
+
+## [2.7.0] - 2026-07-23
+
+### Changed
+
+- **CaDecon** kernel-RMSE convergence metric and reworked asymptote dashboard —
+  convergence is tested on the peak-normalized RMSE between successive
+  iterations' bi-exponential kernels, which avoids the previous
+  (peak time, FWHM) delta's over-sensitivity to jitter on the poorly-constrained
+  rising edge (PR #169)
+
+## [2.6.0] - 2026-07-08
+
+> Covers every change since `v2.5.0` (PR #168).
 
 ### Added
 
