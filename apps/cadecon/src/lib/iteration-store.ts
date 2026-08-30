@@ -23,7 +23,18 @@ export interface KernelSnapshot {
   tauRise: number;
   tauDecay: number;
   beta: number;
-  residual: number;
+  /**
+   * Median bi-exponential fit residual across this iteration's subsets, or
+   * `null` when no fit has been run yet — iteration 0 records the seed kernel,
+   * which was never fitted to anything.
+   *
+   * Nullable rather than 0 because 0 is the *best* value this field can take,
+   * and it is exported with a description telling the reader that lower means
+   * a better fit. A placeholder 0 therefore reads as a perfect fit, which is
+   * the opposite of what it means. Same convention as `kernelRmse` /
+   * `kernelFitR2` below: null is "not measured", never a stand-in number.
+   */
+  residual: number | null;
   tauRiseFast: number;
   tauDecayFast: number;
   betaFast: number;

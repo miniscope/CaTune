@@ -37,13 +37,19 @@ class CaDeconResult(NamedTuple):
     pves : np.ndarray
         Per-cell proportion of variance explained, shape ``(n_cells,)``, float64.
     kernel_slow : np.ndarray
-        Slow biexponential kernel waveform, float32.
+        Slow biexponential kernel waveform, float32. Empty when the run
+        produced no bi-exponential fit (see ``metadata``).
     kernel_fast : np.ndarray
         Fast biexponential kernel waveform, float32 (empty if single-component).
     fs : float
         Sampling rate in Hz.
     metadata : dict
         Extensible dict with biexp params, convergence info, h_free, etc.
+
+        ``tau_rise``, ``tau_decay``, ``beta`` and ``residual`` are ``None`` when
+        the run stopped before completing an iteration, so no fit was ever made.
+        Check them before using them: a ``residual`` of 0 would otherwise be
+        read as a perfect fit. ``num_iterations`` is 0 in that case too.
     """
 
     activity: np.ndarray
@@ -62,7 +68,13 @@ def _build_biexp_waveform(
     """Build a biexponential waveform: beta * (exp(-t/tau_d) - exp(-t/tau_r)).
 
     Uses the same 5x tau_decay length convention as the browser solver.
+
+    Returns an empty array for a non-positive time constant rather than dividing
+    by it. `tau_decay <= 0` is already safe, but only because callers derive
+    `length` from it. `tau_rise <= 0` is not, and makes the first sample NaN.
     """
+    if not (tau_rise > 0.0 and tau_decay > 0.0) or length <= 0:
+        return np.empty(0, dtype=np.float32)
     t = np.arange(length) / fs
     waveform = beta * (np.exp(-t / tau_decay) - np.exp(-t / tau_rise))
     return waveform.astype(np.float32)

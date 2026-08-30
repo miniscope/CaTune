@@ -26,7 +26,12 @@ import { unzipSync } from 'fflate';
 import { parseMat, parseNpy, processNpyResult } from '@calab/io';
 import { downloadResults, FIELD_DESCRIPTIONS } from '../results-export.ts';
 import { buildCaDeconResultsPayload } from '../export-utils.ts';
-import { resetIterationState, updateTraceResult, cellSubsetKey } from '../iteration-store.ts';
+import {
+  resetIterationState,
+  updateTraceResult,
+  cellSubsetKey,
+  addConvergenceSnapshot,
+} from '../iteration-store.ts';
 
 // Hoisted above the imports by vitest, so the mocked data-store is what
 // results-export.ts and export-utils.ts see.
@@ -204,7 +209,7 @@ describe('downloadResults', () => {
       const results = JSON.parse(new TextDecoder().decode(entries['results.json']));
 
       expect(results.fs).toBe(15);
-      expect(results.schema_version).toBe(1);
+      expect(results.schema_version).toBe(2);
       for (const key of Object.keys(buildCaDeconResultsPayload())) {
         expect(results).toHaveProperty(key);
       }
@@ -324,5 +329,78 @@ describe('FIELD_DESCRIPTIONS', () => {
         expect(FIELD_DESCRIPTIONS[key]).toBeTruthy();
       }
     });
+  });
+});
+
+// ── A run that produced no fit ─────────────────────────────────────────────
+
+describe('buildCaDeconResultsPayload: nothing fitted', () => {
+  beforeEach(() => {
+    resetIterationState();
+  });
+
+  /**
+   * Stopping during the seed phase returns before iteration 0 is recorded
+   * (`iteration-manager.ts` sets runState 'complete' and returns above the
+   * snapshot), so the history is empty while the export button is enabled.
+   */
+  it('reports null rather than a plausible number when no snapshot exists', () => {
+    const payload = buildCaDeconResultsPayload();
+
+    for (const key of [
+      'tau_rise',
+      'tau_decay',
+      'beta',
+      'tau_rise_fast',
+      'tau_decay_fast',
+      'beta_fast',
+      'residual',
+    ]) {
+      expect(payload[key]).toBeNull();
+    }
+    expect(payload.num_iterations).toBe(0);
+    expect(payload.converged).toBe(false);
+  });
+
+  /**
+   * The wider window: stopping any time during the first iteration leaves the
+   * iteration-0 snapshot as the latest one. It holds the seed kernel, which was
+   * never fitted, so its residual is null and must stay null through the export.
+   *
+   * `residual: 0` was the old placeholder, and it is the worst possible value
+   * to invent — `field_descriptions` in this same file tells the reader that
+   * lower is a better fit, so a run that fitted nothing claimed the best score
+   * available.
+   */
+  it('keeps the iteration-0 seed snapshot from reporting a residual of 0', () => {
+    addConvergenceSnapshot({
+      iteration: 0,
+      tauRise: 0.2,
+      tauDecay: 1.0,
+      beta: 0,
+      residual: null,
+      tauRiseFast: 0,
+      tauDecayFast: 0,
+      betaFast: 0,
+      fs: 30,
+      tPeak: null,
+      fwhm: null,
+      kernelRmse: null,
+      riseUnresolved: false,
+      kernelFitR2: null,
+      medianPve: null,
+      traceStability: null,
+      degenerateSubsets: 0,
+      totalSubsetFits: 0,
+      subsets: [],
+    });
+
+    const payload = buildCaDeconResultsPayload();
+
+    expect(payload.residual).toBeNull();
+    // The seed taus are real values and do come through — the snapshot records
+    // the kernel the run started from, and that is not a fabrication.
+    expect(payload.tau_decay).toBe(1.0);
+    expect(payload.num_iterations).toBe(1);
   });
 });

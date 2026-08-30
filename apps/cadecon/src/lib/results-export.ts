@@ -51,7 +51,9 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = {
     'to a single bi-exponential).',
   residual:
     'Residual of the two-component bi-exponential fit to the free-form kernel h_free ' +
-    '(lower is a better fit; very large/infinite indicates a degenerate or empty fit).',
+    '(lower is a better fit; very large/infinite indicates a degenerate or empty fit). ' +
+    'null when the run stopped before completing an iteration, so no fit was ever made — ' +
+    'as are tau_rise, tau_decay and beta in that case. Check for null before comparing.',
   h_free:
     'Free-form (nonparametric) calcium kernel re-estimated from the current spike solution ' +
     'each iteration; the parametric bi-exponential (tau_*, beta) is fit to this shape.',
@@ -59,7 +61,10 @@ export const FIELD_DESCRIPTIONS: Record<string, string> = {
   converged: 'Whether the run met the convergence criterion.',
   converged_at_iteration:
     'Iteration index at which convergence was reached, or null if the iteration cap was hit.',
-  schema_version: 'Version of this results JSON schema.',
+  schema_version:
+    'Version of this results JSON schema. 2 made the kernel-fit fields (tau_rise, ' +
+    'tau_decay, beta, tau_rise_fast, tau_decay_fast, beta_fast, residual) nullable, so a ' +
+    'run that produced no fit reports null instead of a plausible-looking placeholder.',
   export_date: 'ISO 8601 timestamp of when this file was exported.',
 };
 

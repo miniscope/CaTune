@@ -93,3 +93,124 @@ def test_build_biexp_waveform_beta_scaling() -> None:
     w1 = _build_biexp_waveform(tau_rise=0.02, tau_decay=0.4, beta=1.0, fs=100.0, length=50)
     w2 = _build_biexp_waveform(tau_rise=0.02, tau_decay=0.4, beta=2.0, fs=100.0, length=50)
     npt.assert_allclose(w2, 2.0 * w1, atol=1e-6)
+
+
+# ── Result assembly: a run that produced no fit ─────────────────────────────
+
+
+def _results(**overrides: object) -> dict:
+    """A minimal CaDecon results payload, overridable per test."""
+    payload: dict = {
+        "fs": 30.0,
+        "tau_rise": 0.05,
+        "tau_decay": 0.4,
+        "beta": 1.0,
+        "tau_rise_fast": 0.0,
+        "tau_decay_fast": 0.0,
+        "beta_fast": 0.0,
+        "residual": 0.02,
+        "alphas": [1.0],
+        "baselines": [0.0],
+        "pves": [0.9],
+        "num_iterations": 4,
+        "converged": True,
+        "schema_version": 2,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_build_cadecon_result_normal_payload() -> None:
+    from calab._bridge._apps import _build_cadecon_result
+
+    result = _build_cadecon_result(_results(), np.zeros((1, 60), dtype=np.float32), 30.0)
+
+    assert result.kernel_slow.size > 0
+    assert result.metadata["tau_decay"] == 0.4
+    assert result.metadata["residual"] == 0.02
+
+
+def test_build_cadecon_result_passes_a_missing_fit_through_as_none() -> None:
+    """A run stopped before completing an iteration reports null, not a number.
+
+    The browser sends null for the kernel-fit fields in that case. Substituting
+    a plausible default here would manufacture exactly the fit the browser
+    declined to claim -- and `residual` is the dangerous one, because 0 is its
+    best possible value and the export documents lower as a better fit.
+    """
+    from calab._bridge._apps import _build_cadecon_result
+
+    payload = _results(
+        tau_rise=None, tau_decay=None, beta=None,
+        tau_rise_fast=None, tau_decay_fast=None, beta_fast=None,
+        residual=None, num_iterations=0, converged=False,
+    )
+    result = _build_cadecon_result(payload, np.zeros((1, 60), dtype=np.float32), 30.0)
+
+    assert result.metadata["tau_rise"] is None
+    assert result.metadata["tau_decay"] is None
+    assert result.metadata["beta"] is None
+    assert result.metadata["residual"] is None
+    # No kernel can be built from nothing, and none is invented.
+    assert result.kernel_slow.size == 0
+    assert result.kernel_fast.size == 0
+    # The per-cell arrays are still real data and still come through.
+    assert result.alphas.tolist() == [1.0]
+    assert result.fs == 30.0
+
+
+def test_build_cadecon_result_treats_absent_keys_like_nulls() -> None:
+    """Older or truncated payloads must not be filled in with defaults either.
+
+    This previously substituted tau_rise=0.2 / tau_decay=1.0 / beta=1.0 for any
+    payload missing them, producing a kernel out of nothing.
+    """
+    from calab._bridge._apps import _build_cadecon_result
+
+    payload = _results()
+    for key in ("tau_rise", "tau_decay", "beta"):
+        del payload[key]
+
+    result = _build_cadecon_result(payload, np.zeros((1, 60), dtype=np.float32), 30.0)
+
+    assert result.kernel_slow.size == 0
+    assert result.metadata["tau_decay"] is None
+
+
+def test_build_biexp_waveform_returns_empty_for_non_positive_taus() -> None:
+    """A non-positive time constant yields an empty array, not a NaN kernel.
+
+    Callers derive `length` from `tau_decay`, so `tau_decay <= 0` already gives
+    `length == 0` and an empty result on its own. `tau_rise <= 0` with a positive
+    `tau_decay` is the gap: it divided by zero and put a NaN in the first sample,
+    which then propagated into anything built on the waveform.
+    """
+    # The case the length coincidence did not cover.
+    assert _build_biexp_waveform(0.0, 1.0, 1.0, 20.0, 100).size == 0
+    assert _build_biexp_waveform(-0.05, 1.0, 1.0, 20.0, 100).size == 0
+    # Already safe, kept so a future length change cannot silently reintroduce it.
+    assert _build_biexp_waveform(0.05, 0.0, 1.0, 20.0, 0).size == 0
+    assert _build_biexp_waveform(0.05, -1.0, 1.0, 20.0, 100).size == 0
+    # A valid pair is unaffected and finite throughout.
+    good = _build_biexp_waveform(0.05, 0.4, 1.0, 20.0, 40)
+    assert good.size == 40
+    assert np.all(np.isfinite(good))
+
+
+def test_build_cadecon_result_fast_kernel_never_contains_nan() -> None:
+    """The fast branch guards tau_decay_fast but not tau_rise_fast.
+
+    A payload with tau_rise_fast = 0 and a positive tau_decay_fast passes that
+    guard and reaches the waveform builder, where it used to divide by zero. The
+    solver cannot produce that pair, so this covers an older or hand-edited
+    results file rather than a live fit.
+    """
+    from calab._bridge._apps import _build_cadecon_result
+
+    payload = _results(tau_rise_fast=0.0, tau_decay_fast=0.05, beta_fast=1.0)
+    result = _build_cadecon_result(payload, np.zeros((1, 60), dtype=np.float32), 30.0)
+
+    assert np.all(np.isfinite(result.kernel_fast))
+    assert np.all(np.isfinite(result.kernel_slow))
+    # The slow fit is real and unaffected.
+    assert result.kernel_slow.size > 0
