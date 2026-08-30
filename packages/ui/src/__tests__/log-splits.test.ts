@@ -25,6 +25,23 @@ describe('logSplits', () => {
     expect(s.length).toBeLessThanOrEqual(20);
   });
 
+  it('never emits a tick below scaleMin', () => {
+    // The decade floor for 3.2e-4 is 1e-4, so an unguarded implementation
+    // emits 1e-4/2e-4/3e-4 below the axis minimum. uPlot does not clip splits
+    // to the scale range, so those draw outside the plot rect. Every case here
+    // uses a non-decade lower bound — with an exact decade the bug vanishes.
+    for (const [lo, hi] of [
+      [3.2e-4, 4.5e-2],
+      [9.8e-3, 1.4e-2],
+      [0.55, 7],
+      [2.5, 900],
+    ] as [number, number][]) {
+      const s = logSplits(U, 1, lo, hi);
+      expect(s.length).toBeGreaterThan(0);
+      for (const v of s) expect(v).toBeGreaterThanOrEqual(lo);
+    }
+  });
+
   it('terminates and stays bounded across a very wide range', () => {
     // The regression: an unbounded tick loop. 300 decades must not blow up.
     const s = logSplits(U, 1, 1e-150, 1e150);

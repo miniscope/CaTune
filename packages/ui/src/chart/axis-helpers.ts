@@ -53,10 +53,10 @@ export const staticCursor: uPlot.Cursor = { drag: { x: false, y: false } };
  * this app's only log axis with `scaleMin` and `scaleMax` both positive, finite
  * and under 12 decades apart on every call — so the bounds were never at fault.
  *
- * Emits 1–9 per decade, the same shape uPlot produces, but refuses to run away:
- * non-finite or non-positive bounds fall back to a two-tick range, an increment
- * that stops making forward progress breaks the loop, and the tick count is
- * hard-capped.
+ * Emits 1–9 per decade within [scaleMin, scaleMax], the same shape uPlot
+ * produces, but refuses to run away: non-finite or non-positive bounds fall back
+ * to a two-tick range, an increment that stops making forward progress breaks
+ * the loop, and the tick count is hard-capped.
  */
 export function logSplits(
   _u: uPlot,
@@ -83,7 +83,11 @@ export function logSplits(
   const splits: number[] = [];
   let split = incr;
   while (split <= scaleMax && splits.length < MAX_TICKS) {
-    splits.push(split);
+    // `incr` starts at the decade floor, which can sit up to a full decade
+    // below scaleMin. uPlot does not clip splits to the scale range — axesCalc
+    // feeds them straight to getPos — so an out-of-range tick draws its label
+    // and gridline outside the plot rect.
+    if (split >= scaleMin) splits.push(split);
     const next = split + incr;
     if (!(next > split)) break; // no forward progress
     if (next >= incr * 10) incr = next;
