@@ -17,6 +17,7 @@ vi.mock('../cadecon-pool.ts', () => {
 });
 
 import type { CaDeconPoolJob } from '../cadecon-pool.ts';
+import type { KernelResult } from '../../workers/cadecon-types.ts';
 import { pauseRun, resumeRun, stopRun, resetRun, startRun } from '../iteration-manager.ts';
 import {
   runState,
@@ -55,6 +56,15 @@ interface FakePool {
 }
 
 let fakePool: FakePool | null = null;
+
+/**
+ * Per-call override for the fake pool's kernel results, so a test can hand
+ * individual subsets a chosen `fitMode` / tau. Receives the 0-based index of
+ * the kernel job across the whole run: the first `numSubsets` calls are the
+ * seed phase, and each iteration consumes `numSubsets` more.
+ */
+let kernelResultOverride: ((callIndex: number) => Partial<KernelResult>) | null = null;
+let kernelCallCount = 0;
 
 function createFakePool(): FakePool {
   const pool: FakePool = {
@@ -97,6 +107,7 @@ function completeJob(job: DispatchedJob): void {
   } else if (job.kind === 'kernel') {
     const hFree = new Float32Array(job.kernelLength);
     hFree[1] = 1;
+    const override = kernelResultOverride?.(kernelCallCount++) ?? {};
     job.onComplete({
       hFree,
       tauRise: 0.05,
@@ -107,6 +118,7 @@ function completeJob(job: DispatchedJob): void {
       tauDecayFast: 0.4,
       betaFast: 1,
       fitMode: 'TwoComponent',
+      ...override,
     });
   } else {
     // seed-trace
@@ -237,6 +249,8 @@ describe('iteration-manager: startRun dispatch sequence', () => {
     resetRun();
     resetImport();
     fakePool = null;
+    kernelResultOverride = null;
+    kernelCallCount = 0;
   });
 
   it('runs through seed → iterate → finalize and reaches complete', async () => {
@@ -310,5 +324,115 @@ describe('iteration-manager: startRun dispatch sequence', () => {
     resetRun();
     expect(pool.disposeCount).toBe(1);
     expect(runState()).toBe('idle');
+  });
+});
+
+// ── Fit provenance ─────────────────────────────────────────────────────────
+
+describe('iteration-manager: only fits that resolved something get a vote', () => {
+  beforeEach(() => {
+    resetIterationState();
+    resetImport();
+  });
+
+  afterEach(() => {
+    resetRun();
+    resetImport();
+    fakePool = null;
+    kernelResultOverride = null;
+    kernelCallCount = 0;
+  });
+
+  /**
+   * Half the subsets report a `Degenerate` fit with a wildly different
+   * tau_decay. A plain median over four values, two of which are 3.0, lands at
+   * 1.7 — a number no subset measured and no kernel has. Excluding the
+   * degenerate pair leaves the 0.4 the real fits agree on.
+   */
+  it('keeps a degenerate subset out of the reported tau', async () => {
+    const subsets = 4;
+    seedMinimalRun({ numCells: 8, numTimepoints: 120 });
+    setNumSubsets(subsets);
+    setMaxIterations(2);
+
+    kernelResultOverride = (i) => {
+      if (i < subsets) return {}; // seed phase: all healthy
+      return (i - subsets) % subsets < 2
+        ? {}
+        : { tauDecay: 3.0, tauRise: 0.3, beta: -1, fitMode: 'Degenerate' as const };
+    };
+
+    await startRun();
+    expect(runState()).toBe('complete');
+
+    const last = convergenceHistory().at(-1)!;
+    expect(last.tauDecay).toBeCloseTo(0.4, 3);
+    expect(last.tauDecay).toBeLessThan(1.0);
+
+    // The count is still reported over every subset — filtering the vote must
+    // not hide the fact that half the subsets failed.
+    expect(last.degenerateSubsets).toBe(2);
+    expect(last.totalSubsetFits).toBe(subsets);
+  });
+
+  /**
+   * `Empty` carries an infinite residual, which reaches both the residual
+   * median and `1 - residual/||h||²`.
+   *
+   * Two of four, not one: a median over four values absorbs a single
+   * infinity, so a one-bad-subset fixture passes with or without the fix and
+   * proves nothing. At two the median is the mean of the middle pair, one of
+   * which is infinite, and both signals go to Infinity / -Infinity — which is
+   * what the asymptote charts were then asked to plot.
+   */
+  it('keeps empty fits out of the residual median and the kernel-fit R²', async () => {
+    const subsets = 4;
+    seedMinimalRun({ numCells: 8, numTimepoints: 120 });
+    setNumSubsets(subsets);
+    setMaxIterations(2);
+
+    kernelResultOverride = (i) => {
+      if (i < subsets) return {};
+      return (i - subsets) % subsets < 2
+        ? { residual: Number.POSITIVE_INFINITY, beta: 0, fitMode: 'Empty' as const }
+        : {};
+    };
+
+    await startRun();
+
+    const last = convergenceHistory().at(-1)!;
+    expect(last.kernelFitR2).not.toBeNull();
+    expect(Number.isFinite(last.kernelFitR2!)).toBe(true);
+    // The two healthy subsets: 1 - 0.01/1 = 0.99.
+    expect(last.kernelFitR2!).toBeCloseTo(0.99, 2);
+    expect(Number.isFinite(last.residual)).toBe(true);
+    expect(last.residual).toBeCloseTo(0.01, 5);
+  });
+
+  /**
+   * When nothing is trustworthy there is no honest kernel to report, but the
+   * run still has to finish and record what happened. The snapshot says so by
+   * having every subset counted as degenerate.
+   */
+  it('still completes, and says so, when no subset resolved a fit', async () => {
+    const subsets = 2;
+    seedMinimalRun({ numCells: 4, numTimepoints: 120 });
+    setNumSubsets(subsets);
+    setMaxIterations(2);
+
+    kernelResultOverride = (i) => (i < subsets ? {} : { beta: -1, fitMode: 'Degenerate' as const });
+
+    await startRun();
+    expect(runState()).toBe('complete');
+
+    const last = convergenceHistory().at(-1)!;
+    expect(last.degenerateSubsets).toBe(last.totalSubsetFits);
+    expect(last.totalSubsetFits).toBeGreaterThan(0);
+    // The fallback has to produce a real number: filtering every subset out
+    // and then taking a median of nothing would yield NaN and poison the
+    // convergence metric from here on.
+    expect(Number.isFinite(last.tauDecay)).toBe(true);
+    expect(last.tauDecay).toBeGreaterThan(0);
+    expect(last.tauRise).toBeLessThan(last.tauDecay);
   });
 });

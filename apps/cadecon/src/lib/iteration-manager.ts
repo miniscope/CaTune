@@ -21,6 +21,7 @@ import type {
   KernelResult,
   SeedTraceResult,
   WarmBiexp,
+  FitMode,
 } from '../workers/cadecon-types.ts';
 import {
   runState,
@@ -84,6 +85,25 @@ export const BIEXP_FIT_SKIP = 0;
  * bound to the wrong subset when jobs finish out of order.
  */
 type KernelJobResult = KernelResult & { subsetIdx: number };
+
+/**
+ * Whether a subset's bi-exponential fit is entitled to vote on the reported
+ * kernel.
+ *
+ * `Degenerate` means the fit found no positive slow amplitude (beta <= 0) — the
+ * free kernel it was handed was noise or flat, with no real transient in it.
+ * `Empty` means no fit was produced at all, leaving sentinel time constants and
+ * an infinite residual. Neither describes a calcium kernel, so neither belongs
+ * in a median that becomes the number CaDecon reports and submits.
+ *
+ * The median is not a defence here. Subset counts are small (4 by default), so
+ * two degenerate subsets out of four decide the median outright, and even one
+ * shifts it. `Empty` is worse than a shift: its infinite residual poisons any
+ * mean or median it reaches.
+ */
+function isTrustworthyFit(r: { fitMode: FitMode }): boolean {
+  return r.fitMode !== 'Degenerate' && r.fitMode !== 'Empty';
+}
 
 /** Absolute floor of the Rust tau_rise clamp (mirrors biexp_fit.rs tau_r_lo). */
 const RISE_CLAMP_FLOOR_S = 0.005;
@@ -494,19 +514,36 @@ export async function startRun(): Promise<void> {
     seedKernelLength,
   );
 
-  if (seedKernelResults.length > 0) {
-    const seedTauRises: number[] = new Array(seedKernelResults.length);
-    const seedTauDecays: number[] = new Array(seedKernelResults.length);
-    for (let i = 0; i < seedKernelResults.length; i++) {
-      seedTauRises[i] = seedKernelResults[i].tauRise;
-      seedTauDecays[i] = seedKernelResults[i].tauDecay;
+  // Seed only from subsets whose fit resolved a real transient. A degenerate
+  // seed is worse than no seed: it is not merely inaccurate, it points the
+  // first spike solve at a kernel shape derived from noise, and every later
+  // iteration warm-starts from there. When nothing is trustworthy, keep the
+  // generic fallback taus — a known-generic starting point the loop can climb
+  // out of, rather than a specific wrong one it will trust.
+  const trustworthySeeds = seedKernelResults.filter(isTrustworthyFit);
+  if (trustworthySeeds.length > 0) {
+    const seedTauRises: number[] = new Array(trustworthySeeds.length);
+    const seedTauDecays: number[] = new Array(trustworthySeeds.length);
+    for (let i = 0; i < trustworthySeeds.length; i++) {
+      seedTauRises[i] = trustworthySeeds[i].tauRise;
+      seedTauDecays[i] = trustworthySeeds[i].tauDecay;
     }
     tauR = median(seedTauRises);
     tauD = median(seedTauDecays);
     setCurrentTauRise(tauR);
     setCurrentTauDecay(tauD);
+    const discarded = seedKernelResults.length - trustworthySeeds.length;
     console.log(
-      `[CaDecon] Auto-init kernel: τ_rise=${(tauR * 1000).toFixed(1)}ms, τ_decay=${(tauD * 1000).toFixed(1)}ms`,
+      `[CaDecon] Auto-init kernel: τ_rise=${(tauR * 1000).toFixed(1)}ms, τ_decay=${(tauD * 1000).toFixed(1)}ms` +
+        (discarded > 0
+          ? ` (from ${trustworthySeeds.length}/${seedKernelResults.length} subsets; ${discarded} had no resolvable transient)`
+          : ''),
+    );
+  } else if (seedKernelResults.length > 0) {
+    console.warn(
+      `[CaDecon] Seed kernel estimation produced no usable fit across ` +
+        `${seedKernelResults.length} subset(s); starting from fallback ` +
+        `τ_rise=${TAU_RISE_FALLBACK}s, τ_decay=${TAU_DECAY_FALLBACK}s.`,
     );
   }
 
@@ -780,8 +817,23 @@ export async function startRun(): Promise<void> {
       prevBiexpResults[subsetIdx] = warmFields;
     }
 
-    // Step 3: Merge — median tauRise/tauDecay across subsets
+    // Step 3: Merge — median tauRise/tauDecay across subsets.
+    //
+    // Only subsets that actually resolved a transient get a vote. A degenerate
+    // or empty fit is not a noisy measurement the median can absorb; it is not
+    // a measurement at all, and letting it vote is how a preset gets reported
+    // as if it had been measured. `degenerateSubsets` below still counts them
+    // over every subset, so the UI badge and the export keep the full picture.
+    //
+    // If nothing is trustworthy there is no honest kernel to report, but the
+    // loop still has to make progress and the iteration still has to be
+    // recorded — so fall back to all subsets. That case is exactly
+    // `degenerateSubsets === totalSubsetFits` in the snapshot, which is how a
+    // reader tells a measured kernel from a manufactured one.
     setRunPhase('merge');
+    const trustworthyFits = kernelResults.filter(isTrustworthyFit);
+    const votingFits = trustworthyFits.length > 0 ? trustworthyFits : kernelResults;
+
     // Extract all scalar fields in a single pass for median computation
     const tauRises: number[] = [];
     const tauDecays: number[] = [];
@@ -790,7 +842,7 @@ export async function startRun(): Promise<void> {
     const tauRiseFasts: number[] = [];
     const tauDecayFasts: number[] = [];
     const betaFasts: number[] = [];
-    for (const r of kernelResults) {
+    for (const r of votingFits) {
       tauRises.push(r.tauRise);
       tauDecays.push(r.tauDecay);
       betas.push(r.beta);
@@ -826,9 +878,12 @@ export async function startRun(): Promise<void> {
     // (Raw SSE scales with kernel amplitude, so it is not comparable across
     // iterations/cells; the normalized form asymptotes to a stable plateau.)
     const r2s: number[] = [];
-    for (const r of kernelResults) {
+    for (const r of votingFits) {
       const hh = sumSq(r.hFree);
-      if (hh > 0) r2s.push(1 - r.residual / hh);
+      // An Empty fit carries an infinite residual, which would drag this to
+      // -Infinity; a Degenerate one reports the fit quality of a curve through
+      // noise. Same voting set as the taus, for the same reason.
+      if (hh > 0 && Number.isFinite(r.residual)) r2s.push(1 - r.residual / hh);
     }
     const kernelFitR2 = r2s.length > 0 ? median(r2s) : null;
 

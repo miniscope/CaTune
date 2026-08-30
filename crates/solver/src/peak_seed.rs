@@ -8,7 +8,7 @@
 /// 5. Feed into estimate_free_kernel() → fit_biexponential() (already exist)
 ///
 /// The result provides initial tau_rise, tau_decay for the normal iterative pipeline.
-use crate::biexp_fit::{fit_biexponential, BiexpResult};
+use crate::biexp_fit::{fit_biexponential, BiexpResult, FitMode};
 use crate::kernel_est::estimate_free_kernel;
 
 /// Result of per-trace seed spike detection.
@@ -54,6 +54,17 @@ pub struct SeedKernelResult {
     pub tau_decay_fast: f64,
     pub beta_fast: f64,
     pub n_seed_spikes: usize,
+    /// Outcome of the bi-exponential fit behind `tau_rise` / `tau_decay`.
+    ///
+    /// Load-bearing, not diagnostic. The two failure paths here hand back
+    /// plausible-looking time constants that were never measured: when no seed
+    /// spikes are found this returns the hardcoded (0.02, 0.4) with no fit run
+    /// at all, and a `Degenerate` fit returns constants for a curve through
+    /// noise. Both are indistinguishable from a real result by value alone --
+    /// they are in range, ordered correctly, and physically plausible. This
+    /// field is the only thing that tells them apart, so a caller that seeds a
+    /// solver from this must check it.
+    pub fit_mode: FitMode,
 }
 
 /// Median of a slice (copies + sorts). Returns 0.0 for empty input.
@@ -252,6 +263,7 @@ pub fn seed_kernel_estimate(
             tau_decay_fast: 0.0,
             beta_fast: 0.0,
             n_seed_spikes: 0,
+            fit_mode: FitMode::Empty,
         };
     }
 
@@ -277,6 +289,9 @@ pub fn seed_kernel_estimate(
     }
 
     if total_seed_spikes == 0 {
+        // No events were detected, so there is nothing to estimate a kernel
+        // from. The time constants below are placeholders that keep the struct
+        // well-formed; `fit_mode` is what says so.
         return SeedKernelResult {
             free_kernel: vec![0.0; kernel_length],
             tau_rise: 0.02,
@@ -287,6 +302,7 @@ pub fn seed_kernel_estimate(
             tau_decay_fast: 0.0,
             beta_fast: 0.0,
             n_seed_spikes: 0,
+            fit_mode: FitMode::Empty,
         };
     }
 
@@ -311,7 +327,7 @@ pub fn seed_kernel_estimate(
         tau_rise_fast,
         tau_decay_fast,
         beta_fast,
-        fit_mode: _,
+        fit_mode,
     } = fit_biexponential(&free_kernel, fs, true, 0, None);
 
     SeedKernelResult {
@@ -324,6 +340,7 @@ pub fn seed_kernel_estimate(
         tau_decay_fast,
         beta_fast,
         n_seed_spikes: total_seed_spikes,
+        fit_mode,
     }
 }
 
@@ -445,6 +462,18 @@ mod tests {
             result.tau_rise,
             result.tau_decay
         );
+
+        // Without this the tau assertions above are weaker than they look. The
+        // fixture's ground truth (0.02, 0.4) is exactly the placeholder pair
+        // the no-events path returns, so a fit that never happened lands dead
+        // centre of the 50% band. `n_seed_spikes > 0` rules out that specific
+        // path, but not a Degenerate fit -- spikes found, kernel is noise,
+        // time constants arbitrary. Assert the fit actually resolved something.
+        assert!(
+            matches!(result.fit_mode, FitMode::SlowOnly | FitMode::TwoComponent),
+            "seed fit did not resolve a transient: {:?}",
+            result.fit_mode
+        );
     }
 
     #[test]
@@ -498,6 +527,31 @@ mod tests {
         assert_eq!(result.n_seed_spikes, 0);
         assert_eq!(result.tau_rise, 0.02);
         assert_eq!(result.tau_decay, 0.4);
+    }
+
+    /// The placeholder time constants a fitless path returns are in range,
+    /// correctly ordered, and physically plausible -- nothing about their
+    /// values marks them as unmeasured. `fit_mode` is the only signal, so it
+    /// has to be right on every path that returns without fitting.
+    #[test]
+    fn a_seed_that_never_fit_says_so() {
+        let flat = seed_kernel_estimate(&vec![5.0_f32; 300], &[300], 30.0);
+        assert_eq!(
+            flat.fit_mode,
+            FitMode::Empty,
+            "a flat trace produced no events, but the result claims tau_rise \
+             {} / tau_decay {} without flagging them as unmeasured",
+            flat.tau_rise,
+            flat.tau_decay
+        );
+
+        let empty = seed_kernel_estimate(&[], &[], 30.0);
+        assert_eq!(empty.fit_mode, FitMode::Empty);
+
+        // The third fitless path -- the length-invariant violation that
+        // degrades instead of panicking across the FFI boundary -- is covered
+        // by inspection only: its `debug_assert_eq!` fires first in a test
+        // build, which is the intended behaviour and cannot be exercised here.
     }
 
     #[test]
