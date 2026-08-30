@@ -377,13 +377,28 @@ fn py_seed_trace<'py>(
 /// Auto-estimate kernel from raw traces via peak-seeded free kernel estimation.
 ///
 /// Takes a 2D array (n_cells x n_timepoints) and returns
-/// (free_kernel, tau_rise, tau_decay, tau_rise_fast, tau_decay_fast, beta_fast, n_seed_spikes).
+/// (free_kernel, tau_rise, tau_decay, tau_rise_fast, tau_decay_fast, beta_fast,
+/// n_seed_spikes, fit_mode).
+///
+/// `fit_mode` is "TwoComponent" / "SlowOnly" / "Degenerate" / "Empty". Check it
+/// before using the time constants: on the no-events path this returns the
+/// hardcoded (0.02, 0.4) without fitting anything, and those are not
+/// distinguishable from a measurement by value.
 #[pyfunction]
 fn seed_kernel_estimate<'py>(
     py: Python<'py>,
     traces: PyReadonlyArray2<f64>,
     fs: f64,
-) -> PyResult<(Bound<'py, PyArray1<f32>>, f64, f64, f64, f64, f64, usize)> {
+) -> PyResult<(
+    Bound<'py, PyArray1<f32>>,
+    f64,
+    f64,
+    f64,
+    f64,
+    f64,
+    usize,
+    String,
+)> {
     let shape = traces.shape();
     let n_cells = shape[0];
     let n_timepoints = shape[1];
@@ -412,6 +427,7 @@ fn seed_kernel_estimate<'py>(
         result.tau_decay_fast,
         result.beta_fast,
         result.n_seed_spikes,
+        result.fit_mode.as_str().to_string(),
     ))
 }
 
